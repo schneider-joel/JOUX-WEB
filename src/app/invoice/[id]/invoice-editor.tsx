@@ -140,10 +140,11 @@ export default function InvoiceEditor({
     <>
       <style>{`
         @media print {
+          @page { margin: 10mm; }
           .no-print { display: none !important; }
-          body { background: #fff !important; }
+          html, body { background: #fff !important; height: auto !important; }
           .invoice-table-wrap, .invoice-detail-wrap { overflow: visible !important; }
-          .invoice-card { box-shadow: none !important; max-width: none !important; }
+          .invoice-card { box-shadow: none !important; max-width: none !important; margin: 0 !important; padding: 0 !important; }
         }
         body { background: #f5f5f5; }
         .invoice-card { padding: 56px 64px; }
