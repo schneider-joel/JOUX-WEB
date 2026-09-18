@@ -19,7 +19,7 @@ const textos = {
     guardar: 'Guardar cambios', guardando: 'Guardando...',
     notaFueraUe: 'Operación no sujeta a IVA por el art. 69.Uno.1º LIVA',
     notaTransferencia: 'Pagar por transferencia bancaria al siguiente número de cuenta',
-    detalleHoras: 'Detalle de horas', fechaCol: 'Fecha', horas: 'Horas', standby: 'Standby', tarifa: 'Tarifa/h', diaTotal: 'Total',
+    horas: 'Horas trabajadas', standby: 'Standby',
   },
   en: {
     titulo: 'INVOICE', numero: 'Number', referencia: 'Reference', fecha: 'Date', vencimiento: 'Due date', para: 'To', de: 'From',
@@ -28,7 +28,7 @@ const textos = {
     guardar: 'Save changes', guardando: 'Saving...',
     notaFueraUe: 'Not subject to VAT under art. 69.One.1 of the Spanish VAT Law',
     notaTransferencia: 'Pay by bank transfer to the following account number',
-    detalleHoras: 'Hours detail', fechaCol: 'Date', horas: 'Hours', standby: 'Standby', tarifa: 'Rate/h', diaTotal: 'Total',
+    horas: 'Hours worked', standby: 'Standby',
   },
 }
 
@@ -133,7 +133,8 @@ export default function InvoiceEditor({
     : ''
 
   const mostrarDetalleHoras = proyectoTipo === 'ambushed_boldmove' && dias.length > 0
-  const fmtDiaFecha = (f: string) => new Date(f + 'T00:00:00').toLocaleDateString(idioma === 'es' ? 'es-ES' : 'en-GB', { day: '2-digit', month: '2-digit' })
+  const totalHoras = dias.reduce((s, d) => s + (d.hrs ?? 0), 0)
+  const totalStandby = dias.reduce((s, d) => s + (d.standby_hrs ?? 0), 0)
 
   return (
     <>
@@ -329,30 +330,9 @@ export default function InvoiceEditor({
         </div>
 
         {mostrarDetalleHoras && (
-          <div className="invoice-detail-wrap" style={{ marginTop: 4, marginBottom: 8 }}>
-            <div style={{ fontSize: 10.5, color: '#888', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>{t.detalleHoras}</div>
-            <table className="invoice-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid #eee' }}>
-                  <th style={{ width: '28%', textAlign: 'left', padding: '6px 8px 6px 0', fontSize: 10.5, color: '#888', fontWeight: 500 }}>{t.fechaCol}</th>
-                  <th style={{ width: '18%', textAlign: 'right', padding: '6px 8px', fontSize: 10.5, color: '#888', fontWeight: 500 }}>{t.horas}</th>
-                  <th style={{ width: '18%', textAlign: 'right', padding: '6px 8px', fontSize: 10.5, color: '#888', fontWeight: 500 }}>{t.standby}</th>
-                  <th style={{ width: '18%', textAlign: 'right', padding: '6px 8px', fontSize: 10.5, color: '#888', fontWeight: 500 }}>{t.tarifa}</th>
-                  <th style={{ width: '18%', textAlign: 'right', padding: '6px 0', fontSize: 10.5, color: '#888', fontWeight: 500 }}>{t.diaTotal}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {dias.map(d => (
-                  <tr key={d.id} style={{ borderBottom: '1px solid #f2f2f2' }}>
-                    <td style={{ padding: '5px 8px 5px 0', fontSize: 11.5, color: '#444' }}>{fmtDiaFecha(d.fecha)}</td>
-                    <td style={{ padding: '5px 8px', fontSize: 11.5, color: '#444', textAlign: 'right' }}>{d.hrs ?? 0}h</td>
-                    <td style={{ padding: '5px 8px', fontSize: 11.5, color: '#444', textAlign: 'right' }}>{d.standby_hrs > 0 ? `${d.standby_hrs}h` : '—'}</td>
-                    <td style={{ padding: '5px 8px', fontSize: 11.5, color: '#444', textAlign: 'right' }}>{fmt2(d.rate)}€</td>
-                    <td style={{ padding: '5px 0', fontSize: 11.5, color: '#444', textAlign: 'right' }}>{fmt2(Number(d.total_day))}€</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="invoice-detail-wrap" style={{ marginTop: 4, marginBottom: 8, display: 'flex', gap: 20, fontSize: 12, color: '#444' }}>
+            <span><strong>{t.horas}:</strong> {totalHoras}h</span>
+            <span><strong>{t.standby}:</strong> {totalStandby}h</span>
           </div>
         )}
 
