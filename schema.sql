@@ -219,6 +219,25 @@ ON CONFLICT (cliente) DO NOTHING;
 
 ALTER TABLE clientes_fiscales DISABLE ROW LEVEL SECURITY;
 
+-- MIGRACIÓN: Nº de proyecto (se usa también como Nº de factura)
+ALTER TABLE proyectos ADD COLUMN IF NOT EXISTS numero_proyecto TEXT;
+
+CREATE OR REPLACE FUNCTION crear_factura_desde_proyecto()
+RETURNS TRIGGER AS $$
+DECLARE
+  monto DECIMAL(10,2);
+BEGIN
+  IF NEW.status = 'facturado' AND (OLD.status IS DISTINCT FROM 'facturado') THEN
+    SELECT COALESCE(SUM(total_day), 0) INTO monto FROM dias_trabajados WHERE proyecto_id = NEW.id;
+    IF NOT EXISTS (SELECT 1 FROM facturas WHERE proyecto_id = NEW.id) THEN
+      INSERT INTO facturas (cliente, descripcion, importe, fecha, estado, origen, proyecto_id, numero)
+      VALUES (NEW.cliente, NEW.nombre, monto, CURRENT_DATE, 'pendiente', 'timesheet', NEW.id, NEW.numero_proyecto);
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
 -- Row Level Security (RLS) - desactivado para uso personal
 ALTER TABLE cuentas DISABLE ROW LEVEL SECURITY;
 ALTER TABLE crypto DISABLE ROW LEVEL SECURITY;

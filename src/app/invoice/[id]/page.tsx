@@ -1,3 +1,4 @@
+import { cookies } from 'next/headers'
 import { createClient } from '@supabase/supabase-js'
 import InvoiceEditor from './invoice-editor'
 
@@ -7,6 +8,9 @@ const supabase = createClient(
 )
 
 export default async function InvoicePage({ params }: { params: { id: string } }) {
+  const authCookie = cookies().get('joux_auth')?.value
+  const editable = !!authCookie && !!process.env.APP_PASSWORD && authCookie === process.env.APP_PASSWORD
+
   const { data: factura } = await supabase.from('facturas').select('*').eq('id', params.id).single()
 
   if (!factura) {
@@ -30,5 +34,5 @@ export default async function InvoicePage({ params }: { params: { id: string } }
     telefono: cfgVal('emisor_telefono'),
   }
 
-  return <InvoiceEditor factura={factura} emisor={emisor} clienteFiscalInicial={clienteFiscal} />
+  return <InvoiceEditor factura={factura} emisor={emisor} clienteFiscalInicial={clienteFiscal} editable={editable} />
 }

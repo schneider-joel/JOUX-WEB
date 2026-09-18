@@ -62,6 +62,7 @@ export type Proyecto = {
   tipo: TipoProyecto
   cliente: string
   status: StatusProyecto
+  numero_proyecto?: string
   created_at: string
 }
 

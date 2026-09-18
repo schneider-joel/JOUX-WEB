@@ -520,9 +520,14 @@ function TimesheetTab({ tipo, proyectos, dias, facturas, reload }: { tipo: TipoP
     reload()
   }
 
-  const addProyecto = async (data: { nombre: string; cliente: string }) => {
+  const addProyecto = async (data: { nombre: string; cliente: string; numero_proyecto: string }) => {
     await supabase.from('proyectos').insert([{ ...data, tipo, status: 'activo' }])
     setModal(null)
+    reload()
+  }
+
+  const updateNumeroProyecto = async (id: number, numero: string) => {
+    await supabase.from('proyectos').update({ numero_proyecto: numero }).eq('id', id)
     reload()
   }
 
@@ -572,7 +577,18 @@ function TimesheetTab({ tipo, proyectos, dias, facturas, reload }: { tipo: TipoP
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }} onClick={() => setExpandido(isOpen ? null : p.id)}>
               <div>
                 <div style={{ fontSize: 14, fontWeight: 500 }}>{p.nombre}</div>
-                <div style={{ fontSize: 11, color: 'var(--text3)' }}>{p.cliente}</div>
+                <div style={{ fontSize: 11, color: 'var(--text3)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {p.cliente}
+                  <span>·</span>
+                  <input
+                    key={p.id + (p.numero_proyecto || '')}
+                    defaultValue={p.numero_proyecto || ''}
+                    placeholder="Nº proyecto/factura"
+                    onClick={e => e.stopPropagation()}
+                    onBlur={e => { if (e.target.value !== (p.numero_proyecto || '')) updateNumeroProyecto(p.id, e.target.value) }}
+                    style={{ background: 'none', border: 'none', borderBottom: '1px dotted var(--border)', color: 'var(--text3)', fontSize: 11, fontFamily: 'Inter, sans-serif', outline: 'none', width: 110, padding: 0 }}
+                  />
+                </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 14, fontWeight: 500 }}>€{fmt(total)}</div>
@@ -636,9 +652,10 @@ function TimesheetTab({ tipo, proyectos, dias, facturas, reload }: { tipo: TipoP
   )
 }
 
-function ModalAddProyecto({ tipo, onAdd, onClose }: { tipo: TipoProyecto, onAdd: (d: { nombre: string; cliente: string }) => void, onClose: () => void }) {
+function ModalAddProyecto({ tipo, onAdd, onClose }: { tipo: TipoProyecto, onAdd: (d: { nombre: string; cliente: string; numero_proyecto: string }) => void, onClose: () => void }) {
   const [nombre, setNombre] = useState('')
   const [cliente, setCliente] = useState(tipo === 'ambushed_boldmove' ? 'Ambushed' : '')
+  const [numeroProyecto, setNumeroProyecto] = useState('')
   return (
     <>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, fontSize: 16, fontWeight: 500 }}>
@@ -659,9 +676,13 @@ function ModalAddProyecto({ tipo, onAdd, onClose }: { tipo: TipoProyecto, onAdd:
           <input value={cliente} onChange={e => setCliente(e.target.value)} placeholder="Ej: Hans Emanuel" style={inputStyle} />
         )}
       </div>
+      <div style={{ marginBottom: 14 }}>
+        <label style={labelStyle}>Nº de proyecto (también será el Nº de factura)</label>
+        <input value={numeroProyecto} onChange={e => setNumeroProyecto(e.target.value)} placeholder="Ej: F260099" style={inputStyle} />
+      </div>
       <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
         <button onClick={onClose} style={cancelBtnStyle}>Cancelar</button>
-        <button onClick={() => nombre && cliente && onAdd({ nombre, cliente })} style={confirmBtnStyle}>Crear</button>
+        <button onClick={() => nombre && cliente && onAdd({ nombre, cliente, numero_proyecto: numeroProyecto })} style={confirmBtnStyle}>Crear</button>
       </div>
     </>
   )

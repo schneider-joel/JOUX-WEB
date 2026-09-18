@@ -33,10 +33,12 @@ export default function InvoiceEditor({
   factura: initialFactura,
   emisor,
   clienteFiscalInicial,
+  editable,
 }: {
   factura: Factura
   emisor: { nombre: string; nif: string; direccion: string; email: string; telefono: string }
   clienteFiscalInicial: ClienteFiscal | null
+  editable: boolean
 }) {
   const [factura, setFactura] = useState(initialFactura)
   const [clienteFiscal, setClienteFiscal] = useState<ClienteFiscal>(
@@ -98,8 +100,12 @@ export default function InvoiceEditor({
 
       <div className="no-print" style={{ maxWidth: 680, margin: '24px auto 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontFamily: 'Inter, sans-serif' }}>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={() => setEditMode(false)} style={{ padding: '8px 16px', borderRadius: 7, fontSize: 13, border: 'none', cursor: 'pointer', background: !editMode ? '#111' : '#e5e5e5', color: !editMode ? '#fff' : '#333' }}>{t.vista}</button>
-          <button onClick={() => setEditMode(true)} style={{ padding: '8px 16px', borderRadius: 7, fontSize: 13, border: 'none', cursor: 'pointer', background: editMode ? '#111' : '#e5e5e5', color: editMode ? '#fff' : '#333' }}>{t.editar}</button>
+          {editable && (
+            <>
+              <button onClick={() => setEditMode(false)} style={{ padding: '8px 16px', borderRadius: 7, fontSize: 13, border: 'none', cursor: 'pointer', background: !editMode ? '#111' : '#e5e5e5', color: !editMode ? '#fff' : '#333' }}>{t.vista}</button>
+              <button onClick={() => setEditMode(true)} style={{ padding: '8px 16px', borderRadius: 7, fontSize: 13, border: 'none', cursor: 'pointer', background: editMode ? '#111' : '#e5e5e5', color: editMode ? '#fff' : '#333' }}>{t.editar}</button>
+            </>
+          )}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <select value={idioma} onChange={e => set({ idioma: e.target.value as 'es' | 'en' })}
@@ -113,7 +119,7 @@ export default function InvoiceEditor({
         </div>
       </div>
 
-      {editMode && (
+      {editable && editMode && (
         <div className="no-print" style={{ maxWidth: 680, margin: '16px auto', background: '#fff', border: '1px solid #e5e5e5', borderRadius: 10, padding: 24, fontFamily: 'Inter, sans-serif' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
             <div>
