@@ -263,8 +263,8 @@ BEGIN
   IF actual IS NULL THEN
     RETURN NULL;
   END IF;
-  prefijo := substring(actual FROM '^[A-Za-z-]*');
   digitos := substring(actual FROM '\d+$');
+  prefijo := regexp_replace(actual, '\d+$', '');
   siguiente := prefijo || lpad((digitos::INT + 1)::TEXT, length(digitos), '0');
   UPDATE configuracion SET valor = siguiente WHERE clave = 'ultimo_numero_factura';
   RETURN siguiente;

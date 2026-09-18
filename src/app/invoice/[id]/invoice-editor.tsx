@@ -30,7 +30,7 @@ const inputStyle: React.CSSProperties = { width: '100%', background: '#fff', bor
 const labelStyle: React.CSSProperties = { display: 'block', fontSize: 11, color: '#888', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }
 
 function siguienteNumero(ultimo: string): string {
-  const m = ultimo.match(/^([A-Za-z-]*)(\d+)$/)
+  const m = ultimo.match(/^(.*?)(\d+)$/)
   if (!m) return ''
   const [, prefijo, digitos] = m
   const siguiente = String(Number(digitos) + 1).padStart(digitos.length, '0')
