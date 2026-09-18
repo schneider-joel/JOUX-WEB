@@ -246,6 +246,10 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- MIGRACIÓN: numeración correlativa de facturas (misma secuencia que Holded, F26XXXX)
+INSERT INTO configuracion (clave, valor) VALUES ('ultimo_numero_factura', 'F260020')
+ON CONFLICT (clave) DO NOTHING;
+
 -- Row Level Security (RLS) - desactivado para uso personal
 ALTER TABLE cuentas DISABLE ROW LEVEL SECURITY;
 ALTER TABLE crypto DISABLE ROW LEVEL SECURITY;

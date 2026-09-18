@@ -29,16 +29,26 @@ const textos = {
 const inputStyle: React.CSSProperties = { width: '100%', background: '#fff', border: '1px solid #ddd', borderRadius: 6, padding: '7px 10px', color: '#111', fontSize: 13, fontFamily: 'Inter, sans-serif', outline: 'none' }
 const labelStyle: React.CSSProperties = { display: 'block', fontSize: 11, color: '#888', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }
 
+function siguienteNumero(ultimo: string): string {
+  const m = ultimo.match(/^([A-Za-z-]*)(\d+)$/)
+  if (!m) return ''
+  const [, prefijo, digitos] = m
+  const siguiente = String(Number(digitos) + 1).padStart(digitos.length, '0')
+  return `${prefijo}${siguiente}`
+}
+
 export default function InvoiceEditor({
   factura: initialFactura,
   emisor,
   clienteFiscalInicial,
   editable,
+  ultimoNumero,
 }: {
   factura: Factura
   emisor: { nombre: string; nif: string; direccion: string; email: string; telefono: string }
   clienteFiscalInicial: ClienteFiscal | null
   editable: boolean
+  ultimoNumero: string
 }) {
   const [factura, setFactura] = useState(initialFactura)
   const [clienteFiscal, setClienteFiscal] = useState<ClienteFiscal>(
@@ -52,6 +62,11 @@ export default function InvoiceEditor({
   const t = textos[idioma]
 
   const set = (patch: Partial<Factura>) => setFactura({ ...factura, ...patch })
+
+  const usarSiguienteNumero = () => {
+    const next = siguienteNumero(ultimoNumero)
+    if (next) set({ numero: next })
+  }
 
   const save = async () => {
     setSaving(true)
@@ -81,6 +96,11 @@ export default function InvoiceEditor({
         direccion: clienteFiscal.direccion,
       })
     }
+
+    if (factura.numero && /^[A-Za-z-]*\d+$/.test(factura.numero)) {
+      await supabase.from('configuracion').update({ valor: factura.numero }).eq('clave', 'ultimo_numero_factura')
+    }
+
     setSaving(false)
     setEditMode(false)
   }
@@ -125,7 +145,13 @@ export default function InvoiceEditor({
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
             <div>
               <label style={labelStyle}>Número (para Hacienda)</label>
-              <input value={factura.numero || ''} onChange={e => set({ numero: e.target.value })} placeholder="F260018" style={inputStyle} />
+              <div style={{ display: 'flex', gap: 6 }}>
+                <input value={factura.numero || ''} onChange={e => set({ numero: e.target.value })} placeholder="F260018" style={inputStyle} />
+                <button type="button" onClick={usarSiguienteNumero} title={`Siguiente: ${siguienteNumero(ultimoNumero)}`}
+                  style={{ flexShrink: 0, padding: '0 10px', borderRadius: 6, border: '1px solid #ddd', background: '#f5f5f5', color: '#333', fontSize: 11, cursor: 'pointer', fontFamily: 'Inter, sans-serif', whiteSpace: 'nowrap' }}>
+                  Usar siguiente
+                </button>
+              </div>
             </div>
             <div>
               <label style={labelStyle}>Referencia (para el cliente)</label>

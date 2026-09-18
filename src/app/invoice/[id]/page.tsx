@@ -34,5 +34,7 @@ export default async function InvoicePage({ params }: { params: { id: string } }
     telefono: cfgVal('emisor_telefono'),
   }
 
-  return <InvoiceEditor factura={factura} emisor={emisor} clienteFiscalInicial={clienteFiscal} editable={editable} />
+  const ultimoNumero = cfgVal('ultimo_numero_factura', 'F260000')
+
+  return <InvoiceEditor factura={factura} emisor={emisor} clienteFiscalInicial={clienteFiscal} editable={editable} ultimoNumero={ultimoNumero} />
 }
