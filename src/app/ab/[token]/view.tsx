@@ -71,7 +71,7 @@ export default function PublicTimesheetView({
           <select
             value={cliente}
             onChange={e => setCliente(e.target.value)}
-            style={{ padding: '10px 14px', borderRadius: 8, border: '1px solid #ddd', fontSize: 14, outline: 'none', background: '#fff' }}
+            style={{ padding: '10px 14px', borderRadius: 8, border: '1px solid #ddd', fontSize: 14, outline: 'none', background: '#fff', color: '#111' }}
           >
             <option value="todos">All clients</option>
             <option value="Ambushed">Ambushed</option>

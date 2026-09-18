@@ -48,7 +48,10 @@ button:not(:disabled):active { transform: scale(0.96); }
 
 input, select, textarea { font-family: 'Inter', sans-serif; }
 input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent) !important; box-shadow: 0 0 0 3px var(--accent-dim); }
-select { color-scheme: dark; }
+/* Solo el dashboard (fondo oscuro) usa selects con esquema dark; las páginas
+   de fondo claro (invoice, timesheet público, login) se quedan con el
+   esquema por defecto para que el texto de las <option> no salga invisible. */
+.app select { color-scheme: dark; }
 
 /* ---- App shell ---- */
 .app {

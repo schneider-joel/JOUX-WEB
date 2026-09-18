@@ -172,7 +172,7 @@ export default function InvoiceEditor({
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <select value={idioma} onChange={e => set({ idioma: e.target.value as 'es' | 'en' })}
-            style={{ padding: '8px 10px', borderRadius: 7, fontSize: 13, border: '1px solid #ddd', background: '#fff' }}>
+            style={{ padding: '8px 10px', borderRadius: 7, fontSize: 13, border: '1px solid #ddd', background: '#fff', color: '#111' }}>
             <option value="es">Español</option>
             <option value="en">English</option>
           </select>
