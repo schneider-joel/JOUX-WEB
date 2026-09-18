@@ -711,8 +711,35 @@ function TimesheetTab({ tipo, proyectos, dias, facturas, reload }: { tipo: TipoP
 
 function ModalAddProyecto({ tipo, onAdd, onClose }: { tipo: TipoProyecto, onAdd: (d: { nombre: string; cliente: string; numero_proyecto: string }) => void, onClose: () => void }) {
   const [nombre, setNombre] = useState('')
-  const [cliente, setCliente] = useState(tipo === 'ambushed_boldmove' ? 'Ambushed' : '')
   const [numeroProyecto, setNumeroProyecto] = useState('')
+  const [clientesGuardados, setClientesGuardados] = useState<{ cliente: string }[]>([])
+  const [cliente, setCliente] = useState(tipo === 'ambushed_boldmove' ? 'Ambushed' : '')
+  const [nuevoCliente, setNuevoCliente] = useState(false)
+  const [nuevoNombre, setNuevoNombre] = useState('')
+  const [nuevoIdentificador, setNuevoIdentificador] = useState('')
+  const [nuevoDireccion, setNuevoDireccion] = useState('')
+
+  useEffect(() => {
+    supabase.from('clientes_fiscales').select('cliente').order('cliente').then(({ data }) => {
+      if (data) setClientesGuardados(data)
+      if (tipo !== 'ambushed_boldmove' && data && data.length > 0 && !data.some(c => c.cliente === cliente)) {
+        setCliente(data[0].cliente)
+      }
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const crear = async () => {
+    let clienteFinal = cliente
+    if (nuevoCliente) {
+      if (!nuevoNombre) return
+      clienteFinal = nuevoNombre
+      await supabase.from('clientes_fiscales').upsert({ cliente: nuevoNombre, identificador: nuevoIdentificador, direccion: nuevoDireccion })
+    }
+    if (!nombre || !clienteFinal) return
+    onAdd({ nombre, cliente: clienteFinal, numero_proyecto: numeroProyecto })
+  }
+
   return (
     <>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, fontSize: 16, fontWeight: 500 }}>
@@ -724,13 +751,23 @@ function ModalAddProyecto({ tipo, onAdd, onClose }: { tipo: TipoProyecto, onAdd:
       </div>
       <div style={{ marginBottom: 14 }}>
         <label style={labelStyle}>Cliente</label>
-        {tipo === 'ambushed_boldmove' ? (
-          <select value={cliente} onChange={e => setCliente(e.target.value)} style={inputStyle}>
-            <option value="Ambushed">Ambushed</option>
-            <option value="BoldMove">BoldMove</option>
+        {!nuevoCliente ? (
+          <select value={cliente} onChange={e => {
+            if (e.target.value === '__nuevo__') { setNuevoCliente(true); return }
+            setCliente(e.target.value)
+          }} style={inputStyle}>
+            {tipo === 'ambushed_boldmove' && !clientesGuardados.some(c => c.cliente === 'Ambushed') && <option value="Ambushed">Ambushed</option>}
+            {tipo === 'ambushed_boldmove' && !clientesGuardados.some(c => c.cliente === 'BoldMove') && <option value="BoldMove">BoldMove</option>}
+            {clientesGuardados.map(c => <option key={c.cliente} value={c.cliente}>{c.cliente}</option>)}
+            <option value="__nuevo__">+ Nuevo cliente...</option>
           </select>
         ) : (
-          <input value={cliente} onChange={e => setCliente(e.target.value)} placeholder="Ej: Hans Emanuel" style={inputStyle} />
+          <div style={{ border: '1px solid var(--border)', borderRadius: 7, padding: 12 }}>
+            <input value={nuevoNombre} onChange={e => setNuevoNombre(e.target.value)} placeholder="Nombre del cliente" style={{ ...inputStyle, marginBottom: 8 }} />
+            <input value={nuevoIdentificador} onChange={e => setNuevoIdentificador(e.target.value)} placeholder="Identificador (CIF/VAT/registro)" style={{ ...inputStyle, marginBottom: 8 }} />
+            <textarea value={nuevoDireccion} onChange={e => setNuevoDireccion(e.target.value)} placeholder="Dirección" rows={2} style={{ ...inputStyle, resize: 'vertical' as const, marginBottom: 8 }} />
+            <button type="button" onClick={() => setNuevoCliente(false)} style={{ fontSize: 11, color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>← Elegir cliente guardado</button>
+          </div>
         )}
       </div>
       <div style={{ marginBottom: 14 }}>
@@ -739,7 +776,7 @@ function ModalAddProyecto({ tipo, onAdd, onClose }: { tipo: TipoProyecto, onAdd:
       </div>
       <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
         <button onClick={onClose} style={cancelBtnStyle}>Cancelar</button>
-        <button onClick={() => nombre && cliente && onAdd({ nombre, cliente, numero_proyecto: numeroProyecto })} style={confirmBtnStyle}>Crear</button>
+        <button onClick={crear} style={confirmBtnStyle}>Crear</button>
       </div>
     </>
   )
