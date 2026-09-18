@@ -22,6 +22,7 @@ export default function Home() {
   const [proyectos, setProyectos] = useState<Proyecto[]>([])
   const [dias, setDias] = useState<DiaTrabajado[]>([])
   const [ethPrice, setEthPrice] = useState<number>(2100)
+  const [usdToEur, setUsdToEur] = useState<number>(0.92)
   const [mesActual, setMesActual] = useState('2026-09')
   const [presupuestoTotal, setPresupuestoTotal] = useState(1800)
   const [loading, setLoading] = useState(true)
@@ -64,9 +65,14 @@ export default function Home() {
       .then(r => r.json())
       .then(d => { const p = d?.ethereum?.eur; if (p) setEthPrice(p) })
       .catch(() => {})
+    fetch('https://api.frankfurter.app/latest?from=USD&to=EUR')
+      .then(r => r.json())
+      .then(d => { const r2 = d?.rates?.EUR; if (r2) setUsdToEur(r2) })
+      .catch(() => {})
   }, [])
 
-  const totalLiquidez = cuentas.reduce((s, c) => s + c.saldo, 0)
+  const aEuros = (c: Cuenta) => c.moneda === 'USD' ? c.saldo * usdToEur : c.saldo
+  const totalLiquidez = cuentas.reduce((s, c) => s + aEuros(c), 0)
   const totalCrypto = crypto.reduce((s, c) => c.symbol === 'ETH' ? s + c.cantidad * ethPrice : s, 0)
   const totalPatrimonio = totalLiquidez + totalCrypto
   const facturasPendientes = facturas.filter(f => f.estado === 'pendiente')
@@ -122,9 +128,9 @@ export default function Home() {
   )
 
   return (
-    <div style={{ maxWidth: 1100, margin: '0 auto', padding: '32px 24px' }}>
+    <div className="app-shell">
       {/* Header */}
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 32, paddingBottom: 24, borderBottom: '1px solid var(--border)' }}>
+      <header className="app-header">
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 500, letterSpacing: '-0.5px' }}>JOUX · Finanzas</h1>
           <div style={{ fontSize: 13, color: 'var(--text2)', marginTop: 2 }}>Panel de control personal</div>
@@ -134,28 +140,32 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Patrimonio */}
-      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '28px 32px', marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <div style={{ fontSize: 12, color: 'var(--text2)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Patrimonio total</div>
-          <div style={{ fontSize: 42, fontWeight: 300, fontFamily: 'JetBrains Mono, monospace', letterSpacing: -1, color: 'var(--green)' }}>€{fmt(totalPatrimonio)}</div>
+      {/* Stat cards */}
+      <div className="stat-grid">
+        <div className="stat-card stat-card-primary">
+          <div className="stat-icon">✦</div>
+          <div className="stat-label">Patrimonio total</div>
+          <div className="stat-value">€{fmt(totalPatrimonio)}</div>
         </div>
-        <div style={{ display: 'flex', gap: 24, textAlign: 'right' }}>
-          {[
-            { label: 'Liquidez', val: `€${fmt(totalLiquidez)}`, color: 'var(--green)' },
-            { label: 'Crypto', val: `€${fmt(totalCrypto)}`, color: 'var(--text2)' },
-            { label: 'Por cobrar', val: `€${fmt(totalPendiente)}`, color: 'var(--amber)' },
-          ].map(item => (
-            <div key={item.label}>
-              <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 4 }}>{item.label}</div>
-              <div style={{ fontSize: 15, fontWeight: 500, fontFamily: 'JetBrains Mono, monospace', color: item.color }}>{item.val}</div>
-            </div>
-          ))}
+        <div className="stat-card">
+          <div className="stat-icon">🏦</div>
+          <div className="stat-label">Liquidez</div>
+          <div className="stat-value" style={{ color: 'var(--green)' }}>€{fmt(totalLiquidez)}</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-icon">◈</div>
+          <div className="stat-label">Crypto</div>
+          <div className="stat-value" style={{ color: 'var(--purple)' }}>€{fmt(totalCrypto)}</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-icon">🧾</div>
+          <div className="stat-label">Por cobrar</div>
+          <div className="stat-value" style={{ color: 'var(--amber)' }}>€{fmt(totalPendiente)}</div>
         </div>
       </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: 20, background: 'var(--surface2)', padding: 4, borderRadius: 8, width: 'fit-content', flexWrap: 'wrap' }}>
+      <div className="tab-row">
         {/* 'presupuesto' oculta por ahora: requiere carga manual constante. Datos y código quedan intactos. */}
         {(['dashboard', 'facturas', 'timesheet_ab', 'timesheet_propios'] as Tab[]).map(t => (
           <button key={t} onClick={() => setTab(t)} style={{
@@ -170,35 +180,56 @@ export default function Home() {
 
       {/* Dashboard Tab */}
       {tab === 'dashboard' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        <div className="dashboard-grid">
           {/* Cuentas + Crypto */}
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 20 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
               <span style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Cuentas</span>
               <button onClick={() => setModal({ type: 'editCuentas' })} style={{ fontSize: 11, color: 'var(--text3)', cursor: 'pointer', background: 'none', border: 'none', fontFamily: 'Inter, sans-serif' }}>+ Editar</button>
             </div>
-            {cuentas.map(c => (
-              <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '0.5px solid var(--border)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text2)', fontSize: 13 }}>
-                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: c.color }} />
-                  {c.nombre}
+            {cuentas.map(c => {
+              const eur = aEuros(c)
+              const pct = totalLiquidez > 0 ? Math.max((eur / totalLiquidez) * 100, 3) : 0
+              return (
+                <div key={c.id} className="acct-row">
+                  <div className="acct-avatar" style={{ background: c.color }}>{c.nombre.slice(0, 2).toUpperCase()}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+                      <span style={{ fontSize: 13, color: 'var(--text)' }}>{c.nombre}</span>
+                      <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 13, fontWeight: 500 }}>
+                        {c.moneda === 'USD' ? `$${fmt(c.saldo)}` : `€${fmt(c.saldo)}`}
+                      </span>
+                    </div>
+                    {c.moneda === 'USD' && (
+                      <div style={{ fontSize: 10.5, color: 'var(--text3)', marginTop: 1 }}>≈ €{fmt(eur)}</div>
+                    )}
+                    <div className="acct-bar-track">
+                      <div className="acct-bar-fill" style={{ width: `${pct}%`, background: c.color }} />
+                    </div>
+                  </div>
                 </div>
-                <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 14, fontWeight: 500 }}>€{fmt(c.saldo)}</div>
-              </div>
-            ))}
+              )
+            })}
 
             {/* Crypto section */}
-            <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
-              <div style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>Crypto</div>
+            <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border)' }}>
+              <div style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>Crypto</div>
               {crypto.map(c => {
                 const val = c.symbol === 'ETH' ? c.cantidad * ethPrice : 0
+                const pct = totalCrypto > 0 ? Math.max((val / totalCrypto) * 100, 3) : 0
                 return (
-                  <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0' }}>
-                    <div style={{ fontSize: 13 }}>
-                      <div style={{ color: 'var(--text2)' }}>{c.cantidad} {c.symbol}</div>
-                      <div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'JetBrains Mono, monospace' }}>€{fmt2(ethPrice)}/{c.symbol}</div>
+                  <div key={c.id} className="acct-row">
+                    <div className="acct-avatar" style={{ background: 'var(--purple-dim)', color: 'var(--purple)' }}>{c.symbol}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+                        <span style={{ fontSize: 13, color: 'var(--text)' }}>{c.cantidad} {c.symbol}</span>
+                        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 13, fontWeight: 500, color: 'var(--purple)' }}>€{fmt(val)}</span>
+                      </div>
+                      <div style={{ fontSize: 10.5, color: 'var(--text3)', marginTop: 1 }}>€{fmt2(ethPrice)}/{c.symbol}</div>
+                      <div className="acct-bar-track">
+                        <div className="acct-bar-fill" style={{ width: `${pct}%`, background: 'var(--purple)' }} />
+                      </div>
                     </div>
-                    <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 14, fontWeight: 500, color: 'var(--purple)' }}>€{fmt(val)}</div>
                   </div>
                 )
               })}
@@ -206,7 +237,7 @@ export default function Home() {
           </div>
 
           {/* Facturas pendientes */}
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 20 }}>
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <span style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
                 Próximas facturas · <span style={{ color: 'var(--green)' }}>€{fmt(totalPendiente)}</span>

@@ -12,6 +12,7 @@ export type Cuenta = {
   color: string
   tipo: string
   orden: number
+  moneda?: string
 }
 
 export type Crypto = {

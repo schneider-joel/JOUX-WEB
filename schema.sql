@@ -303,3 +303,6 @@ ALTER TABLE facturas ADD COLUMN IF NOT EXISTS tipo_factura TEXT DEFAULT 'fuera_u
 INSERT INTO configuracion (clave, valor) VALUES
   ('emisor_iban', 'ES67 0182 5322 2702 0400 4921')
 ON CONFLICT (clave) DO NOTHING;
+
+-- MIGRACIÓN: multi-moneda en cuentas + reestructuración de cuentas reales
+ALTER TABLE cuentas ADD COLUMN IF NOT EXISTS moneda TEXT DEFAULT 'EUR';
