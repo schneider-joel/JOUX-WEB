@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
+export const dynamic = 'force-dynamic'
+
 const NOTION_VERSION = '2025-09-03'
 
 export async function GET() {
@@ -24,6 +26,7 @@ export async function GET() {
     body: JSON.stringify({
       filter: { property: 'Status', select: { equals: 'Facturado' } },
     }),
+    cache: 'no-store',
   })
 
   if (!notionRes.ok) {
