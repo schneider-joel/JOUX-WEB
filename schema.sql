@@ -275,12 +275,14 @@ CREATE OR REPLACE FUNCTION crear_factura_desde_proyecto()
 RETURNS TRIGGER AS $$
 DECLARE
   monto DECIMAL(10,2);
+  fecha_emision DATE;
 BEGIN
   IF NEW.status = 'facturado' AND (OLD.status IS DISTINCT FROM 'facturado') THEN
-    SELECT COALESCE(SUM(total_day), 0) INTO monto FROM dias_trabajados WHERE proyecto_id = NEW.id;
+    SELECT COALESCE(SUM(total_day), 0), MAX(fecha) INTO monto, fecha_emision FROM dias_trabajados WHERE proyecto_id = NEW.id;
+    IF fecha_emision IS NULL THEN fecha_emision := CURRENT_DATE; END IF;
     IF NOT EXISTS (SELECT 1 FROM facturas WHERE proyecto_id = NEW.id) THEN
-      INSERT INTO facturas (cliente, descripcion, importe, fecha, estado, origen, proyecto_id, numero_referencia, numero)
-      VALUES (NEW.cliente, NEW.nombre, monto, CURRENT_DATE, 'pendiente', 'timesheet', NEW.id, NEW.numero_proyecto, siguiente_numero_factura());
+      INSERT INTO facturas (cliente, descripcion, importe, fecha, fecha_vencimiento, estado, origen, proyecto_id, numero_referencia, numero)
+      VALUES (NEW.cliente, NEW.nombre, monto, fecha_emision, (fecha_emision + INTERVAL '1 month')::DATE, 'pendiente', 'timesheet', NEW.id, NEW.numero_proyecto, siguiente_numero_factura());
     END IF;
   END IF;
   RETURN NEW;
