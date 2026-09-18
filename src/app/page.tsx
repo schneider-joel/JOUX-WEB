@@ -1,14 +1,14 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { supabase, Cuenta, Crypto, Factura, PresupuestoItem, NotionProyectoPendiente } from '@/lib/supabase'
+import { supabase, Cuenta, Crypto, Factura, PresupuestoItem, Proyecto, DiaTrabajado, TipoProyecto } from '@/lib/supabase'
 
 const fmt = (n: number) => new Intl.NumberFormat('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(Math.round(n))
 const fmt2 = (n: number) => new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
 const fmtDate = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })
 const barColor = (pct: number) => pct >= 90 ? '#f87171' : pct >= 70 ? '#fbbf24' : '#4ade80'
 
-type Tab = 'dashboard' | 'facturas' | 'presupuesto'
+type Tab = 'dashboard' | 'facturas' | 'presupuesto' | 'timesheet_ab' | 'timesheet_propios'
 type Modal = { type: string; data?: any } | null
 
 export default function Home() {
@@ -19,6 +19,8 @@ export default function Home() {
   const [facturas, setFacturas] = useState<Factura[]>([])
   const [fijos, setFijos] = useState<PresupuestoItem[]>([])
   const [variables, setVariables] = useState<PresupuestoItem[]>([])
+  const [proyectos, setProyectos] = useState<Proyecto[]>([])
+  const [dias, setDias] = useState<DiaTrabajado[]>([])
   const [ethPrice, setEthPrice] = useState<number>(2100)
   const [mesActual, setMesActual] = useState('2026-09')
   const [presupuestoTotal, setPresupuestoTotal] = useState(1800)
@@ -26,19 +28,23 @@ export default function Home() {
   const [lastUpdated, setLastUpdated] = useState<string>('')
 
   const loadData = useCallback(async () => {
-    const [c, cr, f, fi, v, cfg] = await Promise.all([
+    const [c, cr, f, fi, v, cfg, pr, di] = await Promise.all([
       supabase.from('cuentas').select('*').order('orden'),
       supabase.from('crypto').select('*'),
       supabase.from('facturas').select('*').order('fecha'),
       supabase.from('presupuesto_fijos').select('*'),
       supabase.from('presupuesto_variables').select('*'),
       supabase.from('configuracion').select('*'),
+      supabase.from('proyectos').select('*').order('created_at'),
+      supabase.from('dias_trabajados').select('*').order('fecha'),
     ])
     if (c.data) setCuentas(c.data)
     if (cr.data) setCrypto(cr.data)
     if (f.data) setFacturas(f.data)
     if (fi.data) setFijos(fi.data)
     if (v.data) setVariables(v.data)
+    if (pr.data) setProyectos(pr.data)
+    if (di.data) setDias(di.data)
     if (cfg.data) {
       const mes = cfg.data.find((x: any) => x.clave === 'mes_actual')?.valor
       const pt = cfg.data.find((x: any) => x.clave === 'presupuesto_total')?.valor
@@ -79,22 +85,6 @@ export default function Home() {
     loadData()
   }
 
-  const importarDeNotion = async (items: (NotionProyectoPendiente & { fecha: string; idioma: 'es' | 'en' })[]) => {
-    await supabase.from('facturas').insert(
-      items.map(it => ({
-        cliente: it.cliente,
-        descripcion: it.proyecto,
-        importe: it.total,
-        fecha: it.fecha,
-        estado: 'pendiente',
-        origen: 'notion',
-        notion_proyecto: it.notionId,
-        idioma: it.idioma,
-      }))
-    )
-    setModal(null)
-    loadData()
-  }
 
   const updateCuentaSaldo = async (id: number, saldo: number) => {
     await supabase.from('cuentas').update({ saldo }).eq('id', id)
@@ -158,14 +148,14 @@ export default function Home() {
       </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: 20, background: 'var(--surface2)', padding: 4, borderRadius: 8, width: 'fit-content' }}>
-        {(['dashboard', 'facturas', 'presupuesto'] as Tab[]).map(t => (
+      <div style={{ display: 'flex', gap: 4, marginBottom: 20, background: 'var(--surface2)', padding: 4, borderRadius: 8, width: 'fit-content', flexWrap: 'wrap' }}>
+        {(['dashboard', 'facturas', 'presupuesto', 'timesheet_ab', 'timesheet_propios'] as Tab[]).map(t => (
           <button key={t} onClick={() => setTab(t)} style={{
-            padding: '6px 16px', borderRadius: 6, fontSize: 13, cursor: 'pointer', border: 'none', fontFamily: 'Inter, sans-serif',
+            padding: '6px 16px', borderRadius: 6, fontSize: 13, cursor: 'pointer', border: 'none', fontFamily: 'Inter, sans-serif', whiteSpace: 'nowrap',
             background: tab === t ? 'var(--surface)' : 'transparent',
             color: tab === t ? 'var(--text)' : 'var(--text2)',
           }}>
-            {t === 'dashboard' ? 'Dashboard' : t === 'facturas' ? 'Facturas' : 'Presupuesto'}
+            {{ dashboard: 'Dashboard', facturas: 'Facturas', presupuesto: 'Presupuesto', timesheet_ab: 'Timesheet AB', timesheet_propios: 'Timesheet Propios' }[t]}
           </button>
         ))}
       </div>
@@ -241,14 +231,9 @@ export default function Home() {
             <span style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
               Facturas pendientes · €{fmt(totalPendiente)} por cobrar
             </span>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={() => setModal({ type: 'syncNotion' })} style={{ fontSize: 11, color: 'var(--text2)', cursor: 'pointer', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 12px', fontFamily: 'Inter, sans-serif' }}>
-                ⟳ Sync Notion
-              </button>
-              <button onClick={() => setModal({ type: 'addFactura' })} style={{ fontSize: 11, color: 'var(--text3)', cursor: 'pointer', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 12px', fontFamily: 'Inter, sans-serif' }}>
-                + Nueva factura
-              </button>
-            </div>
+            <button onClick={() => setModal({ type: 'addFactura' })} style={{ fontSize: 11, color: 'var(--text3)', cursor: 'pointer', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 12px', fontFamily: 'Inter, sans-serif' }}>
+              + Nueva factura
+            </button>
           </div>
           {facturasPendientes.map(f => (
             <div key={f.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '0.5px solid var(--border)' }}>
@@ -353,6 +338,16 @@ export default function Home() {
         </div>
       )}
 
+      {/* Timesheet Ambushed/BoldMove Tab */}
+      {tab === 'timesheet_ab' && (
+        <TimesheetTab tipo="ambushed_boldmove" proyectos={proyectos} dias={dias} reload={loadData} />
+      )}
+
+      {/* Timesheet Clientes Propios Tab */}
+      {tab === 'timesheet_propios' && (
+        <TimesheetTab tipo="propio" proyectos={proyectos} dias={dias} reload={loadData} />
+      )}
+
       {/* Modals */}
       {modal && (
         <div onClick={() => setModal(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, backdropFilter: 'blur(4px)' }}>
@@ -369,9 +364,6 @@ export default function Home() {
             )}
             {modal.type === 'editCuentas' && (
               <ModalEditCuentas cuentas={cuentas} onUpdate={updateCuentaSaldo} onClose={() => { setModal(null); loadData() }} />
-            )}
-            {modal.type === 'syncNotion' && (
-              <ModalSyncNotion onImport={importarDeNotion} onClose={() => setModal(null)} />
             )}
           </div>
         </div>
@@ -496,79 +488,233 @@ function ModalEditCuentas({ cuentas, onUpdate, onClose }: { cuentas: Cuenta[], o
   )
 }
 
-type NotionItemForm = NotionProyectoPendiente & { fecha: string; idioma: 'es' | 'en'; checked: boolean }
+const inputStyle = { width: '100%', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 7, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'Inter, sans-serif', outline: 'none' }
+const labelStyle = { display: 'block', fontSize: 12, color: 'var(--text2)', marginBottom: 6 }
+const cancelBtnStyle = { padding: '9px 18px', borderRadius: 7, fontSize: 13, cursor: 'pointer', background: 'var(--surface2)', color: 'var(--text2)', border: '1px solid var(--border)', fontFamily: 'Inter, sans-serif' }
+const confirmBtnStyle = { flex: 1, padding: '9px 18px', borderRadius: 7, fontSize: 13, cursor: 'pointer', background: 'var(--blue)', color: '#000', border: 'none', fontWeight: 500, fontFamily: 'Inter, sans-serif' }
 
-function ModalSyncNotion({ onImport, onClose }: { onImport: (items: (NotionProyectoPendiente & { fecha: string; idioma: 'es' | 'en' })[]) => void, onClose: () => void }) {
-  const [items, setItems] = useState<NotionItemForm[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [importing, setImporting] = useState(false)
+const statusColor: Record<string, string> = { activo: 'var(--amber)', completado: 'var(--text2)', facturado: 'var(--green)' }
+
+function TimesheetTab({ tipo, proyectos, dias, reload }: { tipo: TipoProyecto, proyectos: Proyecto[], dias: DiaTrabajado[], reload: () => void }) {
+  const [modal, setModal] = useState<Modal>(null)
+  const [expandido, setExpandido] = useState<number | null>(null)
+  const [publicUrl, setPublicUrl] = useState('')
 
   useEffect(() => {
-    fetch('/api/notion-sync')
-      .then(r => r.json())
-      .then(data => {
-        if (data.error) { setError(data.error); return }
-        const hoy = new Date().toISOString().split('T')[0]
-        setItems((data.pendientes || []).map((p: NotionProyectoPendiente) => ({ ...p, fecha: hoy, idioma: 'es', checked: true })))
-      })
-      .catch(() => setError('No se pudo conectar con Notion'))
-      .finally(() => setLoading(false))
-  }, [])
+    if (tipo !== 'ambushed_boldmove') return
+    supabase.from('configuracion').select('valor').eq('clave', 'timesheet_public_token').single()
+      .then(({ data }) => { if (data?.valor) setPublicUrl(`${window.location.origin}/timesheet/${data.valor}`) })
+  }, [tipo])
 
-  const update = (notionId: string, patch: Partial<NotionItemForm>) => {
-    setItems(items.map(it => it.notionId === notionId ? { ...it, ...patch } : it))
+  const proyectosFiltrados = proyectos.filter(p => p.tipo === tipo)
+  const diasDe = (proyectoId: number) => dias.filter(d => d.proyecto_id === proyectoId).sort((a, b) => a.fecha.localeCompare(b.fecha))
+  const totalProyecto = (proyectoId: number) => diasDe(proyectoId).reduce((s, d) => s + Number(d.total_day), 0)
+
+  const cambiarStatus = async (p: Proyecto, status: string) => {
+    if (status === 'facturado') {
+      const monto = totalProyecto(p.id)
+      if (!confirm(`Marcar "${p.nombre}" como Facturado va a crear una factura pendiente por €${fmt(monto)}. ¿Confirmás?`)) return
+    }
+    await supabase.from('proyectos').update({ status }).eq('id', p.id)
+    reload()
   }
 
-  const confirmar = async () => {
-    const seleccionados = items.filter(it => it.checked)
-    if (seleccionados.length === 0) return onClose()
-    setImporting(true)
-    await onImport(seleccionados.map(({ checked, ...rest }) => rest))
+  const addProyecto = async (data: { nombre: string; cliente: string }) => {
+    await supabase.from('proyectos').insert([{ ...data, tipo, status: 'activo' }])
+    setModal(null)
+    reload()
+  }
+
+  const deleteProyecto = async (id: number) => {
+    if (!confirm('¿Borrar este proyecto y todos sus días?')) return
+    await supabase.from('proyectos').delete().eq('id', id)
+    reload()
+  }
+
+  const addDia = async (proyectoId: number, data: any) => {
+    await supabase.from('dias_trabajados').insert([{ proyecto_id: proyectoId, ...data }])
+    setModal(null)
+    reload()
+  }
+
+  const deleteDia = async (id: number) => {
+    await supabase.from('dias_trabajados').delete().eq('id', id)
+    reload()
+  }
+
+  return (
+    <div>
+      {tipo === 'ambushed_boldmove' && publicUrl && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 16px', marginBottom: 16, fontSize: 12, color: 'var(--text2)' }}>
+          <span>Link público de solo lectura para Ambushed / BoldMove</span>
+          <button onClick={() => { navigator.clipboard.writeText(publicUrl) }} style={{ fontSize: 11, background: 'none', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 10px', color: 'var(--text)', cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
+            Copiar link
+          </button>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
+        <button onClick={() => setModal({ type: 'addProyecto' })} style={{ fontSize: 11, color: 'var(--text3)', cursor: 'pointer', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 12px', fontFamily: 'Inter, sans-serif' }}>
+          + Nuevo proyecto
+        </button>
+      </div>
+
+      {proyectosFiltrados.length === 0 && (
+        <div style={{ textAlign: 'center', color: 'var(--text3)', fontSize: 13, padding: '40px 0' }}>No hay proyectos todavía.</div>
+      )}
+
+      {proyectosFiltrados.map(p => {
+        const total = totalProyecto(p.id)
+        const isOpen = expandido === p.id
+        return (
+          <div key={p.id} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 16, marginBottom: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }} onClick={() => setExpandido(isOpen ? null : p.id)}>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 500 }}>{p.nombre}</div>
+                <div style={{ fontSize: 11, color: 'var(--text3)' }}>{p.cliente}</div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 14, fontWeight: 500 }}>€{fmt(total)}</div>
+                <select value={p.status} onClick={e => e.stopPropagation()} onChange={e => cambiarStatus(p, e.target.value)}
+                  style={{ fontSize: 11, padding: '3px 8px', borderRadius: 20, background: 'var(--surface2)', color: statusColor[p.status], border: '1px solid var(--border)', fontFamily: 'Inter, sans-serif' }}>
+                  <option value="activo">Activo</option>
+                  <option value="completado">Completado</option>
+                  <option value="facturado">Facturado</option>
+                </select>
+                <button onClick={e => { e.stopPropagation(); deleteProyecto(p.id) }} style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 16 }}>×</button>
+              </div>
+            </div>
+
+            {isOpen && (
+              <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border)' }}>
+                {diasDe(p.id).length === 0 && (
+                  <div style={{ fontSize: 12, color: 'var(--text3)', padding: '8px 0' }}>Sin días cargados.</div>
+                )}
+                {diasDe(p.id).map(d => (
+                  <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', fontSize: 12, borderBottom: '0.5px solid var(--border)' }}>
+                    <div style={{ color: 'var(--text2)', width: 70 }}>{fmtDate(d.fecha)}</div>
+                    {tipo === 'ambushed_boldmove' ? (
+                      <div style={{ color: 'var(--text3)', flex: 1 }}>{d.hrs}h × €{d.rate}{d.standby_hrs > 0 ? ` · SB ${d.standby_hrs}h` : ''}</div>
+                    ) : (
+                      <div style={{ color: 'var(--text3)', flex: 1 }}>€{d.rate}/día</div>
+                    )}
+                    <div style={{ fontFamily: 'JetBrains Mono, monospace', width: 70, textAlign: 'right' }}>€{fmt2(d.total_day)}</div>
+                    <span style={{ fontSize: 10, color: 'var(--text3)', width: 80, textAlign: 'right' }}>{d.status}</span>
+                    <button onClick={() => deleteDia(d.id)} style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, marginLeft: 8 }}>×</button>
+                  </div>
+                ))}
+                <button onClick={() => setModal({ type: 'addDia', data: { proyectoId: p.id } })} style={{ marginTop: 10, width: '100%', padding: '6px 12px', border: '1px dashed var(--border)', borderRadius: 8, background: 'none', color: 'var(--text3)', fontSize: 11, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
+                  + Nuevo día
+                </button>
+              </div>
+            )}
+          </div>
+        )
+      })}
+
+      {modal && (
+        <div onClick={() => setModal(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, backdropFilter: 'blur(4px)' }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: 28, width: 380, maxWidth: '90vw' }}>
+            {modal.type === 'addProyecto' && (
+              <ModalAddProyecto tipo={tipo} onAdd={addProyecto} onClose={() => setModal(null)} />
+            )}
+            {modal.type === 'addDia' && (
+              <ModalAddDia tipo={tipo} onAdd={(d: any) => addDia(modal.data.proyectoId, d)} onClose={() => setModal(null)} />
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ModalAddProyecto({ tipo, onAdd, onClose }: { tipo: TipoProyecto, onAdd: (d: { nombre: string; cliente: string }) => void, onClose: () => void }) {
+  const [nombre, setNombre] = useState('')
+  const [cliente, setCliente] = useState(tipo === 'ambushed_boldmove' ? 'Ambushed' : '')
+  return (
+    <>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, fontSize: 16, fontWeight: 500 }}>
+        Nuevo proyecto <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', fontSize: 20 }}>×</button>
+      </div>
+      <div style={{ marginBottom: 14 }}>
+        <label style={labelStyle}>Nombre del proyecto</label>
+        <input value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Ej: Verizon x FIFA World Cup" style={inputStyle} />
+      </div>
+      <div style={{ marginBottom: 14 }}>
+        <label style={labelStyle}>Cliente</label>
+        {tipo === 'ambushed_boldmove' ? (
+          <select value={cliente} onChange={e => setCliente(e.target.value)} style={inputStyle}>
+            <option value="Ambushed">Ambushed</option>
+            <option value="BoldMove">BoldMove</option>
+          </select>
+        ) : (
+          <input value={cliente} onChange={e => setCliente(e.target.value)} placeholder="Ej: Hans Emanuel" style={inputStyle} />
+        )}
+      </div>
+      <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+        <button onClick={onClose} style={cancelBtnStyle}>Cancelar</button>
+        <button onClick={() => nombre && cliente && onAdd({ nombre, cliente })} style={confirmBtnStyle}>Crear</button>
+      </div>
+    </>
+  )
+}
+
+function ModalAddDia({ tipo, onAdd, onClose }: { tipo: TipoProyecto, onAdd: (d: any) => void, onClose: () => void }) {
+  const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0])
+  const [rate, setRate] = useState('')
+  const [hrs, setHrs] = useState('')
+  const [standby, setStandby] = useState('')
+  const [status, setStatus] = useState('hecho')
+
+  const submit = () => {
+    if (!rate) return
+    onAdd({
+      fecha,
+      rate: Number(rate),
+      hrs: tipo === 'ambushed_boldmove' ? Number(hrs || 0) : null,
+      standby_hrs: tipo === 'ambushed_boldmove' ? Number(standby || 0) : 0,
+      status,
+    })
   }
 
   return (
     <>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, fontSize: 16, fontWeight: 500 }}>
-        Sync desde Notion <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', fontSize: 20 }}>×</button>
+        Nuevo día <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', fontSize: 20 }}>×</button>
       </div>
-
-      {loading && <div style={{ fontSize: 13, color: 'var(--text3)', padding: '20px 0', textAlign: 'center' }}>Buscando proyectos marcados como Facturado...</div>}
-      {error && <div style={{ fontSize: 13, color: 'var(--amber)', padding: '12px 0' }}>{error}</div>}
-      {!loading && !error && items.length === 0 && (
-        <div style={{ fontSize: 13, color: 'var(--text3)', padding: '20px 0', textAlign: 'center' }}>No hay proyectos nuevos marcados como Facturado en Notion.</div>
+      <div style={{ marginBottom: 14 }}>
+        <label style={labelStyle}>Fecha</label>
+        <input type="date" value={fecha} onChange={e => setFecha(e.target.value)} style={inputStyle} />
+      </div>
+      <div style={{ marginBottom: 14 }}>
+        <label style={labelStyle}>{tipo === 'ambushed_boldmove' ? 'Rate por hora (€)' : 'Rate por día (€)'}</label>
+        <input type="number" value={rate} onChange={e => setRate(e.target.value)} placeholder="0" style={inputStyle} />
+      </div>
+      {tipo === 'ambushed_boldmove' && (
+        <>
+          <div style={{ marginBottom: 14 }}>
+            <label style={labelStyle}>Horas trabajadas</label>
+            <input type="number" value={hrs} onChange={e => setHrs(e.target.value)} placeholder="0" style={inputStyle} />
+          </div>
+          <div style={{ marginBottom: 14 }}>
+            <label style={labelStyle}>Stand by hrs</label>
+            <input type="number" value={standby} onChange={e => setStandby(e.target.value)} placeholder="0" style={inputStyle} />
+          </div>
+        </>
       )}
-
-      {items.map(it => (
-        <div key={it.notionId} style={{ padding: '12px 0', borderBottom: '0.5px solid var(--border)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-            <input type="checkbox" checked={it.checked} onChange={e => update(it.notionId, { checked: e.target.checked })} />
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 13, color: 'var(--text)' }}>{it.proyecto}</div>
-              <div style={{ fontSize: 11, color: 'var(--text3)' }}>{it.cliente}</div>
-            </div>
-            <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 14, fontWeight: 500, color: 'var(--green)' }}>€{fmt(it.total)}</div>
-          </div>
-          <div style={{ display: 'flex', gap: 8, paddingLeft: 26 }}>
-            <input type="date" value={it.fecha} onChange={e => update(it.notionId, { fecha: e.target.value })}
-              style={{ flex: 1, background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 8px', color: 'var(--text)', fontSize: 12, fontFamily: 'Inter, sans-serif', outline: 'none' }} />
-            <select value={it.idioma} onChange={e => update(it.notionId, { idioma: e.target.value as 'es' | 'en' })}
-              style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 8px', color: 'var(--text)', fontSize: 12, fontFamily: 'Inter, sans-serif', outline: 'none' }}>
-              <option value="es">ES</option>
-              <option value="en">EN</option>
-            </select>
-          </div>
-        </div>
-      ))}
-
+      <div style={{ marginBottom: 14 }}>
+        <label style={labelStyle}>Status</label>
+        <select value={status} onChange={e => setStatus(e.target.value)} style={inputStyle}>
+          <option value="pendiente">Pendiente</option>
+          <option value="en_progreso">En progreso</option>
+          <option value="hecho">Hecho</option>
+        </select>
+      </div>
       <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
-        <button onClick={onClose} style={{ padding: '9px 18px', borderRadius: 7, fontSize: 13, cursor: 'pointer', background: 'var(--surface2)', color: 'var(--text2)', border: '1px solid var(--border)', fontFamily: 'Inter, sans-serif' }}>Cancelar</button>
-        {items.length > 0 && (
-          <button onClick={confirmar} disabled={importing} style={{ flex: 1, padding: '9px 18px', borderRadius: 7, fontSize: 13, cursor: importing ? 'default' : 'pointer', opacity: importing ? 0.6 : 1, background: 'var(--blue)', color: '#000', border: 'none', fontWeight: 500, fontFamily: 'Inter, sans-serif' }}>
-            {importing ? 'Importando...' : `Importar ${items.filter(i => i.checked).length} factura(s)`}
-          </button>
-        )}
+        <button onClick={onClose} style={cancelBtnStyle}>Cancelar</button>
+        <button onClick={submit} style={confirmBtnStyle}>Agregar</button>
       </div>
     </>
   )
 }
+

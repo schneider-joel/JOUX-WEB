@@ -139,6 +139,64 @@ INSERT INTO configuracion (clave, valor) VALUES
   ('emisor_email', '')
 ON CONFLICT (clave) DO NOTHING;
 
+-- MIGRACIÓN: Timesheet integrado (reemplaza la sync con Notion)
+-- Ejecutá todo este bloque en el SQL Editor de Supabase.
+
+CREATE TABLE IF NOT EXISTS proyectos (
+  id SERIAL PRIMARY KEY,
+  nombre TEXT NOT NULL,
+  tipo TEXT NOT NULL, -- 'ambushed_boldmove' | 'propio'
+  cliente TEXT NOT NULL,
+  status TEXT DEFAULT 'activo', -- activo, completado, facturado
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS dias_trabajados (
+  id SERIAL PRIMARY KEY,
+  proyecto_id INT REFERENCES proyectos(id) ON DELETE CASCADE,
+  fecha DATE NOT NULL,
+  rate DECIMAL(10,2) NOT NULL DEFAULT 0,
+  hrs DECIMAL(5,2), -- horas trabajadas; NULL = día completo (rate x día, clientes propios)
+  standby_hrs DECIMAL(5,2) DEFAULT 0,
+  status TEXT DEFAULT 'pendiente', -- pendiente, en_progreso, hecho
+  total_day DECIMAL(10,2) GENERATED ALWAYS AS (COALESCE(hrs, 1) * rate) STORED,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE facturas ADD COLUMN IF NOT EXISTS proyecto_id INT REFERENCES proyectos(id);
+
+-- Trigger: cuando un proyecto pasa a status='facturado', crea la factura sola
+CREATE OR REPLACE FUNCTION crear_factura_desde_proyecto()
+RETURNS TRIGGER AS $$
+DECLARE
+  monto DECIMAL(10,2);
+BEGIN
+  IF NEW.status = 'facturado' AND (OLD.status IS DISTINCT FROM 'facturado') THEN
+    SELECT COALESCE(SUM(total_day), 0) INTO monto FROM dias_trabajados WHERE proyecto_id = NEW.id;
+    IF NOT EXISTS (SELECT 1 FROM facturas WHERE proyecto_id = NEW.id) THEN
+      INSERT INTO facturas (cliente, descripcion, importe, fecha, estado, origen, proyecto_id)
+      VALUES (NEW.cliente, NEW.nombre, monto, CURRENT_DATE, 'pendiente', 'timesheet', NEW.id);
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trigger_proyecto_facturado ON proyectos;
+CREATE TRIGGER trigger_proyecto_facturado
+  AFTER UPDATE ON proyectos
+  FOR EACH ROW
+  EXECUTE FUNCTION crear_factura_desde_proyecto();
+
+-- Token secreto para el link público de Timesheet (Ambushed/BoldMove). Guardalo,
+-- lo vas a necesitar para armar la URL: /timesheet/<este-valor>
+INSERT INTO configuracion (clave, valor)
+  SELECT 'timesheet_public_token', gen_random_uuid()::text
+  WHERE NOT EXISTS (SELECT 1 FROM configuracion WHERE clave = 'timesheet_public_token');
+
+ALTER TABLE proyectos DISABLE ROW LEVEL SECURITY;
+ALTER TABLE dias_trabajados DISABLE ROW LEVEL SECURITY;
+
 -- Row Level Security (RLS) - desactivado para uso personal
 ALTER TABLE cuentas DISABLE ROW LEVEL SECURITY;
 ALTER TABLE crypto DISABLE ROW LEVEL SECURITY;

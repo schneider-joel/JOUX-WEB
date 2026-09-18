@@ -10,15 +10,7 @@ Crea `.env.local` en la raíz con:
 ```
 NEXT_PUBLIC_SUPABASE_URL=https://zgcihtipzgihvwyccery.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=tu_publishable_key
-NOTION_API_KEY=tu_notion_integration_token
-NOTION_PROYECTOS_DATA_SOURCE_ID=a7008f96-4e1d-452f-8842-a32fdf301174
 ```
-
-### 2.1 Integración con Notion (sync de facturas)
-1. Andá a [notion.so/my-integrations](https://www.notion.so/my-integrations) → **New integration** → dale un nombre (ej. "JOUX Hub") → copiá el **Internal Integration Secret**, es tu `NOTION_API_KEY`.
-2. Abrí tu base **Proyectos** en Notion (dentro de ⚡ JOUX HUB) → `···` (arriba a la derecha) → **Connections** → conectá la integración que creaste. Esto le da permiso de lectura a esa base.
-3. `NOTION_PROYECTOS_DATA_SOURCE_ID` ya viene precargado apuntando a tu base de Proyectos actual — no hace falta tocarlo salvo que cambies de base.
-4. No olvides agregar las mismas variables (`NOTION_API_KEY`, `NOTION_PROYECTOS_DATA_SOURCE_ID`) en Vercel → Settings → Environment Variables para que funcione en producción.
 
 ### 3. Desarrollo local
 ```bash
@@ -33,15 +25,24 @@ npm run dev
 4. Deploy automático
 
 ## Estructura
-- `src/app/page.tsx` — Dashboard principal
+- `src/app/page.tsx` — Dashboard, Facturas, Presupuesto y Timesheets
+- `src/app/invoice/[id]` — vista de invoice imprimible (bilingüe ES/EN)
+- `src/app/timesheet/[token]` — vista pública de solo lectura del Timesheet Ambushed/BoldMove
 - `src/lib/supabase.ts` — Cliente Supabase y tipos
 - `schema.sql` — Schema de base de datos
 
+## Timesheet integrado
+Todo vive en la app, no depende de Notion.
+
+- **Timesheet AB** (tab): proyectos de Ambushed/BoldMove, rate por hora. Cada día tiene fecha, rate, horas trabajadas, stand by hrs y status.
+- **Timesheet Propios** (tab): proyectos de tus clientes propios, rate por día (no hace falta cargar horas).
+- Cada proyecto tiene un selector de Status: Activo → Completado → **Facturado**. Al marcar Facturado, se crea automáticamente una factura pendiente en la tab Facturas (dispara un trigger en Supabase, sin clicks extra).
+- La tab **Timesheet AB** tiene un botón "Copiar link" con una URL pública de solo lectura (`/timesheet/<token>`) para que Ambushed/BoldMove puedan chequear su timesheet sin acceso al resto de la app. El token vive en la tabla `configuracion` (clave `timesheet_public_token`) — lo genera solo la migración de `schema.sql`.
+
 ## Flujo de facturas
-1. Terminás un proyecto en Notion → marcás su Status como **Facturado** en la base Proyectos.
-2. En la app, tab Facturas → botón **⟳ Sync Notion** → te muestra los proyectos marcados como Facturado que todavía no importaste (usa el "Total €" del proyecto).
-3. Elegís fecha e idioma (ES/EN) por cada una y confirmás → se crean como facturas pendientes.
-4. Click en el ícono 🧾 de cualquier factura para ver/imprimir el invoice (bilingüe, listo para guardar como PDF).
-5. Cuando cobrás → marcás como cobrada → el saldo se actualiza automáticamente en la cuenta destino.
+1. Cargás tus días trabajados en la tab Timesheet correspondiente.
+2. Cuando terminás el proyecto, cambiás su Status a **Facturado** → la factura aparece sola en la tab Facturas (importe = suma de todos los días del proyecto).
+3. Click en el ícono 🧾 de cualquier factura para ver/imprimir el invoice (bilingüe, listo para guardar como PDF).
+4. Cuando cobrás → marcás como cobrada → el saldo se actualiza automáticamente en la cuenta destino.
 
 También podés seguir agregando facturas manualmente con "+ Nueva factura".

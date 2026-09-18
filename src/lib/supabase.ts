@@ -33,14 +33,8 @@ export type Factura = {
   cuenta_destino_id?: number
   origen: string
   notion_proyecto?: string
+  proyecto_id?: number
   idioma?: 'es' | 'en'
-}
-
-export type NotionProyectoPendiente = {
-  notionId: string
-  proyecto: string
-  cliente: string
-  total: number
 }
 
 export type PresupuestoItem = {
@@ -49,4 +43,27 @@ export type PresupuestoItem = {
   limite: number
   gastado: number
   mes: string
+}
+
+export type TipoProyecto = 'ambushed_boldmove' | 'propio'
+export type StatusProyecto = 'activo' | 'completado' | 'facturado'
+
+export type Proyecto = {
+  id: number
+  nombre: string
+  tipo: TipoProyecto
+  cliente: string
+  status: StatusProyecto
+  created_at: string
+}
+
+export type DiaTrabajado = {
+  id: number
+  proyecto_id: number
+  fecha: string
+  rate: number
+  hrs: number | null
+  standby_hrs: number
+  status: 'pendiente' | 'en_progreso' | 'hecho'
+  total_day: number
 }
