@@ -149,7 +149,8 @@ export default function Home() {
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 20, background: 'var(--surface2)', padding: 4, borderRadius: 8, width: 'fit-content', flexWrap: 'wrap' }}>
-        {(['dashboard', 'facturas', 'presupuesto', 'timesheet_ab', 'timesheet_propios'] as Tab[]).map(t => (
+        {/* 'presupuesto' oculta por ahora: requiere carga manual constante. Datos y código quedan intactos. */}
+        {(['dashboard', 'facturas', 'timesheet_ab', 'timesheet_propios'] as Tab[]).map(t => (
           <button key={t} onClick={() => setTab(t)} style={{
             padding: '6px 16px', borderRadius: 6, fontSize: 13, cursor: 'pointer', border: 'none', fontFamily: 'Inter, sans-serif', whiteSpace: 'nowrap',
             background: tab === t ? 'var(--surface)' : 'transparent',
