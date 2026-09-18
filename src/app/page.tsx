@@ -341,12 +341,12 @@ export default function Home() {
 
       {/* Timesheet Ambushed/BoldMove Tab */}
       {tab === 'timesheet_ab' && (
-        <TimesheetTab tipo="ambushed_boldmove" proyectos={proyectos} dias={dias} reload={loadData} />
+        <TimesheetTab tipo="ambushed_boldmove" proyectos={proyectos} dias={dias} facturas={facturas} reload={loadData} />
       )}
 
       {/* Timesheet Clientes Propios Tab */}
       {tab === 'timesheet_propios' && (
-        <TimesheetTab tipo="propio" proyectos={proyectos} dias={dias} reload={loadData} />
+        <TimesheetTab tipo="propio" proyectos={proyectos} dias={dias} facturas={facturas} reload={loadData} />
       )}
 
       {/* Modals */}
@@ -496,7 +496,7 @@ const confirmBtnStyle = { flex: 1, padding: '9px 18px', borderRadius: 7, fontSiz
 
 const statusColor: Record<string, string> = { activo: 'var(--amber)', completado: 'var(--text2)', facturado: 'var(--green)' }
 
-function TimesheetTab({ tipo, proyectos, dias, reload }: { tipo: TipoProyecto, proyectos: Proyecto[], dias: DiaTrabajado[], reload: () => void }) {
+function TimesheetTab({ tipo, proyectos, dias, facturas, reload }: { tipo: TipoProyecto, proyectos: Proyecto[], dias: DiaTrabajado[], facturas: Factura[], reload: () => void }) {
   const [modal, setModal] = useState<Modal>(null)
   const [expandido, setExpandido] = useState<number | null>(null)
   const [publicUrl, setPublicUrl] = useState('')
@@ -576,6 +576,13 @@ function TimesheetTab({ tipo, proyectos, dias, reload }: { tipo: TipoProyecto, p
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 14, fontWeight: 500 }}>€{fmt(total)}</div>
+                {(() => {
+                  const factura = facturas.find(f => f.proyecto_id === p.id)
+                  return factura ? (
+                    <a href={`/invoice/${factura.id}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+                      style={{ color: 'var(--text3)', fontSize: 15, textDecoration: 'none' }} title="Ver/generar factura">🧾</a>
+                  ) : null
+                })()}
                 <select value={p.status} onClick={e => e.stopPropagation()} onChange={e => cambiarStatus(p, e.target.value)}
                   style={{ fontSize: 11, padding: '3px 8px', borderRadius: 20, background: 'var(--surface2)', color: statusColor[p.status], border: '1px solid var(--border)', fontFamily: 'Inter, sans-serif' }}>
                   <option value="activo">Activo</option>

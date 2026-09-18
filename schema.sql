@@ -197,6 +197,28 @@ INSERT INTO configuracion (clave, valor)
 ALTER TABLE proyectos DISABLE ROW LEVEL SECURITY;
 ALTER TABLE dias_trabajados DISABLE ROW LEVEL SECURITY;
 
+-- MIGRACIÓN: Generador de facturas fiscales
+ALTER TABLE facturas ADD COLUMN IF NOT EXISTS fecha_vencimiento DATE;
+ALTER TABLE facturas ADD COLUMN IF NOT EXISTS concepto_detalle TEXT;
+
+INSERT INTO configuracion (clave, valor) VALUES
+  ('emisor_nif', '15464978P'),
+  ('emisor_direccion', E'Carrer del Alcalde Reig, 6\nValencia (46006), Valencia, España'),
+  ('emisor_telefono', '651561230')
+ON CONFLICT (clave) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS clientes_fiscales (
+  cliente TEXT PRIMARY KEY,
+  identificador TEXT,
+  direccion TEXT
+);
+
+INSERT INTO clientes_fiscales (cliente, identificador, direccion) VALUES
+  ('Ambushed', '12810068 · VAT 12810068 · 07752660689', E'The Long Lodge 265-269 Kingston Road\nWimbledon')
+ON CONFLICT (cliente) DO NOTHING;
+
+ALTER TABLE clientes_fiscales DISABLE ROW LEVEL SECURITY;
+
 -- Row Level Security (RLS) - desactivado para uso personal
 ALTER TABLE cuentas DISABLE ROW LEVEL SECURITY;
 ALTER TABLE crypto DISABLE ROW LEVEL SECURITY;

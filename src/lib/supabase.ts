@@ -26,8 +26,10 @@ export type Factura = {
   numero?: string
   cliente: string
   descripcion?: string
+  concepto_detalle?: string
   importe: number
   fecha: string
+  fecha_vencimiento?: string
   fecha_cobro?: string
   estado: 'pendiente' | 'cobrada'
   cuenta_destino_id?: number
@@ -35,6 +37,12 @@ export type Factura = {
   notion_proyecto?: string
   proyecto_id?: number
   idioma?: 'es' | 'en'
+}
+
+export type ClienteFiscal = {
+  cliente: string
+  identificador?: string
+  direccion?: string
 }
 
 export type PresupuestoItem = {

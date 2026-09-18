@@ -1,0 +1,239 @@
+'use client'
+
+import { useState } from 'react'
+import { createClient } from '@supabase/supabase-js'
+import { Factura, ClienteFiscal } from '@/lib/supabase'
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
+
+const fmt2 = (n: number) => new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
+
+const textos = {
+  es: {
+    titulo: 'FACTURA', numero: 'Número', fecha: 'Fecha', vencimiento: 'Vencimiento', para: 'Para', de: 'De',
+    concepto: 'CONCEPTO', precio: 'PRECIO', unidades: 'UNIDADES', subtotal: 'SUBTOTAL', total: 'TOTAL',
+    baseImponible: 'BASE IMPONIBLE', totalLabel: 'Total', imprimir: 'Imprimir / Guardar PDF', editar: 'Editar', vista: 'Vista previa',
+    guardar: 'Guardar cambios', guardando: 'Guardando...',
+  },
+  en: {
+    titulo: 'INVOICE', numero: 'Number', fecha: 'Date', vencimiento: 'Due date', para: 'To', de: 'From',
+    concepto: 'DESCRIPTION', precio: 'PRICE', unidades: 'QTY', subtotal: 'SUBTOTAL', total: 'TOTAL',
+    baseImponible: 'NET AMOUNT', totalLabel: 'Total', imprimir: 'Print / Save PDF', editar: 'Edit', vista: 'Preview',
+    guardar: 'Save changes', guardando: 'Saving...',
+  },
+}
+
+const inputStyle: React.CSSProperties = { width: '100%', background: '#fff', border: '1px solid #ddd', borderRadius: 6, padding: '7px 10px', color: '#111', fontSize: 13, fontFamily: 'Inter, sans-serif', outline: 'none' }
+const labelStyle: React.CSSProperties = { display: 'block', fontSize: 11, color: '#888', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }
+
+export default function InvoiceEditor({
+  factura: initialFactura,
+  emisor,
+  clienteFiscalInicial,
+}: {
+  factura: Factura
+  emisor: { nombre: string; nif: string; direccion: string; email: string; telefono: string }
+  clienteFiscalInicial: ClienteFiscal | null
+}) {
+  const [factura, setFactura] = useState(initialFactura)
+  const [clienteFiscal, setClienteFiscal] = useState<ClienteFiscal>(
+    clienteFiscalInicial || { cliente: initialFactura.cliente, identificador: '', direccion: '' }
+  )
+  const [editMode, setEditMode] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
+
+  const idioma = factura.idioma === 'en' ? 'en' : 'es'
+  const t = textos[idioma]
+
+  const set = (patch: Partial<Factura>) => setFactura({ ...factura, ...patch })
+
+  const save = async () => {
+    setSaving(true)
+    setSaveError('')
+    const { error } = await supabase.from('facturas').update({
+      numero: factura.numero,
+      fecha: factura.fecha,
+      fecha_vencimiento: factura.fecha_vencimiento || null,
+      cliente: factura.cliente,
+      descripcion: factura.descripcion,
+      concepto_detalle: factura.concepto_detalle,
+      importe: factura.importe,
+      idioma: factura.idioma || 'es',
+    }).eq('id', factura.id)
+
+    if (error) {
+      setSaveError(error.message)
+      setSaving(false)
+      return
+    }
+
+    if (clienteFiscal.identificador || clienteFiscal.direccion) {
+      await supabase.from('clientes_fiscales').upsert({
+        cliente: factura.cliente,
+        identificador: clienteFiscal.identificador,
+        direccion: clienteFiscal.direccion,
+      })
+    }
+    setSaving(false)
+    setEditMode(false)
+  }
+
+  const fechaFmt = factura.fecha
+    ? new Date(factura.fecha + 'T00:00:00').toLocaleDateString(idioma === 'es' ? 'es-ES' : 'en-GB')
+    : ''
+  const vencimientoFmt = factura.fecha_vencimiento
+    ? new Date(factura.fecha_vencimiento + 'T00:00:00').toLocaleDateString(idioma === 'es' ? 'es-ES' : 'en-GB')
+    : ''
+
+  return (
+    <>
+      <style>{`
+        @media print { .no-print { display: none !important; } body { background: #fff !important; } }
+        body { background: #f5f5f5; }
+      `}</style>
+
+      <div className="no-print" style={{ maxWidth: 680, margin: '24px auto 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontFamily: 'Inter, sans-serif' }}>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => setEditMode(false)} style={{ padding: '8px 16px', borderRadius: 7, fontSize: 13, border: 'none', cursor: 'pointer', background: !editMode ? '#111' : '#e5e5e5', color: !editMode ? '#fff' : '#333' }}>{t.vista}</button>
+          <button onClick={() => setEditMode(true)} style={{ padding: '8px 16px', borderRadius: 7, fontSize: 13, border: 'none', cursor: 'pointer', background: editMode ? '#111' : '#e5e5e5', color: editMode ? '#fff' : '#333' }}>{t.editar}</button>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <select value={idioma} onChange={e => set({ idioma: e.target.value as 'es' | 'en' })}
+            style={{ padding: '8px 10px', borderRadius: 7, fontSize: 13, border: '1px solid #ddd', background: '#fff' }}>
+            <option value="es">Español</option>
+            <option value="en">English</option>
+          </select>
+          <button onClick={() => window.print()} style={{ padding: '8px 16px', borderRadius: 7, background: '#3b82f6', color: '#fff', border: 'none', fontSize: 13, fontWeight: 500, cursor: 'pointer' }}>
+            {t.imprimir}
+          </button>
+        </div>
+      </div>
+
+      {editMode && (
+        <div className="no-print" style={{ maxWidth: 680, margin: '16px auto', background: '#fff', border: '1px solid #e5e5e5', borderRadius: 10, padding: 24, fontFamily: 'Inter, sans-serif' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+            <div>
+              <label style={labelStyle}>Número</label>
+              <input value={factura.numero || ''} onChange={e => set({ numero: e.target.value })} placeholder="F260018" style={inputStyle} />
+            </div>
+            <div>
+              <label style={labelStyle}>Cliente</label>
+              <input value={factura.cliente} onChange={e => set({ cliente: e.target.value })} style={inputStyle} />
+            </div>
+            <div>
+              <label style={labelStyle}>Fecha</label>
+              <input type="date" value={factura.fecha} onChange={e => set({ fecha: e.target.value })} style={inputStyle} />
+            </div>
+            <div>
+              <label style={labelStyle}>Vencimiento</label>
+              <input type="date" value={factura.fecha_vencimiento || ''} onChange={e => set({ fecha_vencimiento: e.target.value })} style={inputStyle} />
+            </div>
+          </div>
+
+          <div style={{ marginBottom: 14 }}>
+            <label style={labelStyle}>Concepto (título)</label>
+            <input value={factura.descripcion || ''} onChange={e => set({ descripcion: e.target.value })} placeholder="Tratamiento Digital Web" style={inputStyle} />
+          </div>
+          <div style={{ marginBottom: 14 }}>
+            <label style={labelStyle}>Concepto (detalle)</label>
+            <input value={factura.concepto_detalle || ''} onChange={e => set({ concepto_detalle: e.target.value })} placeholder="Presentación / Tratamiento Digital" style={inputStyle} />
+          </div>
+          <div style={{ marginBottom: 14 }}>
+            <label style={labelStyle}>Importe (€)</label>
+            <input type="number" value={factura.importe} onChange={e => set({ importe: Number(e.target.value) })} style={inputStyle} />
+          </div>
+
+          <div style={{ borderTop: '1px solid #eee', margin: '18px 0 14px', paddingTop: 14, fontSize: 12, color: '#888', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Datos fiscales de {factura.cliente}
+          </div>
+          <div style={{ marginBottom: 14 }}>
+            <label style={labelStyle}>Identificador (CIF/VAT/nº registro)</label>
+            <input value={clienteFiscal.identificador || ''} onChange={e => setClienteFiscal({ ...clienteFiscal, identificador: e.target.value })} placeholder="12810068 · VAT 12810068" style={inputStyle} />
+          </div>
+          <div style={{ marginBottom: 4 }}>
+            <label style={labelStyle}>Dirección</label>
+            <textarea value={clienteFiscal.direccion || ''} onChange={e => setClienteFiscal({ ...clienteFiscal, direccion: e.target.value })} rows={2} style={{ ...inputStyle, resize: 'vertical' as const }} />
+          </div>
+
+          {saveError && (
+            <div style={{ marginTop: 12, fontSize: 12, color: '#dc2626' }}>{saveError}</div>
+          )}
+          <button onClick={save} disabled={saving} style={{ marginTop: 18, width: '100%', padding: '10px 16px', borderRadius: 7, background: '#3b82f6', color: '#fff', border: 'none', fontSize: 13, fontWeight: 500, cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.6 : 1 }}>
+            {saving ? t.guardando : t.guardar}
+          </button>
+        </div>
+      )}
+
+      <div style={{
+        maxWidth: 680, margin: '24px auto 48px', background: '#fff', padding: '56px 64px',
+        fontFamily: 'Inter, sans-serif', color: '#111', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', borderRadius: 8,
+      }}>
+        <div style={{ textAlign: 'right', fontSize: 12.5, lineHeight: 1.6, marginBottom: 28 }}>
+          <div style={{ fontWeight: 600 }}>{emisor.nombre}</div>
+          <div>{emisor.nif}</div>
+          {emisor.direccion.split('\n').map((l, i) => <div key={i}>{l}</div>)}
+          <div>{emisor.email}</div>
+          <div>{emisor.telefono}</div>
+        </div>
+
+        <div style={{ borderTop: '1px solid #ddd', paddingTop: 20, display: 'flex', justifyContent: 'space-between', marginBottom: 24 }}>
+          <div style={{ fontSize: 15, fontWeight: 700 }}>{t.titulo} #{factura.numero || `INV-${String(factura.id).padStart(4, '0')}`}</div>
+          <div style={{ textAlign: 'right', fontSize: 12 }}>
+            <div>{t.fecha}: {fechaFmt}</div>
+            {vencimientoFmt && <div>{t.vencimiento}: {vencimientoFmt}</div>}
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
+          <div style={{ fontSize: 12.5, lineHeight: 1.6 }}>
+            <div style={{ fontWeight: 700 }}>{factura.cliente}</div>
+            {clienteFiscal.identificador && <div>{clienteFiscal.identificador}</div>}
+            {clienteFiscal.direccion && clienteFiscal.direccion.split('\n').map((l, i) => <div key={i}>{l}</div>)}
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: 28, fontWeight: 700 }}>{t.totalLabel} {fmt2(factura.importe)}€</div>
+          </div>
+        </div>
+
+        <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 8 }}>
+          <thead>
+            <tr style={{ borderTop: '1px solid #ddd', borderBottom: '1px solid #ddd' }}>
+              <th style={{ textAlign: 'left', padding: '10px 0', fontSize: 11 }}>{t.concepto}</th>
+              <th style={{ textAlign: 'right', padding: '10px 0', fontSize: 11 }}>{t.precio}</th>
+              <th style={{ textAlign: 'right', padding: '10px 0', fontSize: 11 }}>{t.unidades}</th>
+              <th style={{ textAlign: 'right', padding: '10px 0', fontSize: 11 }}>{t.subtotal}</th>
+              <th style={{ textAlign: 'right', padding: '10px 0', fontSize: 11 }}>{t.total}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style={{ padding: '14px 0', fontSize: 13 }}>
+                <div style={{ fontWeight: 600 }}>{factura.descripcion || factura.cliente}</div>
+                {factura.concepto_detalle && <div style={{ color: '#888', fontSize: 12 }}>{factura.concepto_detalle}</div>}
+              </td>
+              <td style={{ padding: '14px 0', fontSize: 13, textAlign: 'right' }}>{fmt2(factura.importe)}€</td>
+              <td style={{ padding: '14px 0', fontSize: 13, textAlign: 'right' }}>1</td>
+              <td style={{ padding: '14px 0', fontSize: 13, textAlign: 'right' }}>{fmt2(factura.importe)}€</td>
+              <td style={{ padding: '14px 0', fontSize: 13, textAlign: 'right' }}>{fmt2(factura.importe)}€</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, marginTop: 20 }}>
+          <div style={{ display: 'flex', gap: 24, fontSize: 12 }}>
+            <span style={{ fontWeight: 600 }}>{t.baseImponible}</span>
+            <span>{fmt2(factura.importe)}€</span>
+          </div>
+          <div style={{ display: 'flex', gap: 24, fontSize: 13, fontWeight: 700 }}>
+            <span>{t.total}</span>
+            <span>{fmt2(factura.importe)}€</span>
+          </div>
+        </div>
+      </div>
+    </>
+  )
+}
