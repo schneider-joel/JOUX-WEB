@@ -36,11 +36,21 @@ export async function GET() {
 
   const notionData = await notionRes.json()
 
+  const parseTotal = (formula: any): number => {
+    if (!formula) return 0
+    if (formula.type === 'number' && typeof formula.number === 'number') return formula.number
+    if (formula.type === 'string' && formula.string) {
+      const parsed = parseFloat(formula.string.replace(/[^\d.,-]/g, '').replace(',', '.'))
+      return isNaN(parsed) ? 0 : parsed
+    }
+    return 0
+  }
+
   const proyectos = (notionData.results || []).map((page: any) => ({
     notionId: page.id as string,
     proyecto: page.properties?.Proyecto?.title?.[0]?.plain_text || 'Sin nombre',
     cliente: page.properties?.Cliente?.select?.name || '',
-    total: page.properties?.['Total €']?.formula?.number ?? 0,
+    total: parseTotal(page.properties?.['Total €']?.formula),
   }))
 
   const supabase = createClient(
