@@ -505,7 +505,7 @@ function TimesheetTab({ tipo, proyectos, dias, facturas, reload }: { tipo: TipoP
   useEffect(() => {
     if (tipo !== 'ambushed_boldmove') return
     supabase.from('configuracion').select('valor').eq('clave', 'timesheet_public_token').single()
-      .then(({ data }) => { if (data?.valor) setPublicUrl(`${window.location.origin}/timesheet/${data.valor}`) })
+      .then(({ data }) => { if (data?.valor) setPublicUrl(`${window.location.origin}/ab/${data.valor}`) })
   }, [tipo])
 
   const diasDe = (proyectoId: number) => dias.filter(d => d.proyecto_id === proyectoId).sort((a, b) => a.fecha.localeCompare(b.fecha))
