@@ -550,6 +550,7 @@ function TimesheetTab({ tipo, proyectos, dias, facturas, reload }: { tipo: TipoP
 
   const updateNumeroProyecto = async (id: number, numero: string) => {
     await supabase.from('proyectos').update({ numero_proyecto: numero }).eq('id', id)
+    await supabase.from('facturas').update({ numero_referencia: numero }).eq('proyecto_id', id)
     reload()
   }
 
