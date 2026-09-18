@@ -129,17 +129,24 @@ export default function InvoiceEditor({
   return (
     <>
       <style>{`
-        @media print { .no-print { display: none !important; } body { background: #fff !important; } }
+        @media print {
+          .no-print { display: none !important; }
+          body { background: #fff !important; }
+          .invoice-table-wrap { overflow: visible !important; }
+          .invoice-card { box-shadow: none !important; max-width: none !important; }
+        }
         body { background: #f5f5f5; }
         .invoice-card { padding: 56px 64px; }
         .invoice-table-wrap { overflow-x: auto; }
-        .invoice-table th, .invoice-table td { white-space: nowrap; }
+        .invoice-table { table-layout: fixed; }
+        .invoice-table th, .invoice-table td { white-space: normal; overflow-wrap: break-word; }
+        .invoice-table .col-concepto { white-space: normal; }
         @media (max-width: 640px) {
           .invoice-card { padding: 28px 20px; }
           .invoice-top { flex-direction: column; align-items: flex-start !important; gap: 16px; }
-          .invoice-top > div:last-child { text-align: left !important; }
+          .invoice-top-right { text-align: left !important; }
           .invoice-parties { flex-direction: column; align-items: flex-start !important; gap: 16px; }
-          .invoice-parties > div:last-child { text-align: left !important; }
+          .invoice-parties-right { text-align: left !important; }
         }
       `}</style>
 
@@ -256,7 +263,7 @@ export default function InvoiceEditor({
             </div>
             {factura.numero_referencia && <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>{t.referencia}: {factura.numero_referencia}</div>}
           </div>
-          <div style={{ textAlign: 'right', fontSize: 12 }}>
+          <div className="invoice-top-right" style={{ textAlign: 'right', fontSize: 12 }}>
             <div>{t.fecha}: {fechaFmt}</div>
             {vencimientoFmt && <div>{t.vencimiento}: {vencimientoFmt}</div>}
           </div>
@@ -268,7 +275,7 @@ export default function InvoiceEditor({
             {clienteFiscal.identificador && <div>{clienteFiscal.identificador}</div>}
             {clienteFiscal.direccion && clienteFiscal.direccion.split('\n').map((l, i) => <div key={i}>{l}</div>)}
           </div>
-          <div style={{ textAlign: 'right' }}>
+          <div className="invoice-parties-right" style={{ textAlign: 'right' }}>
             <div style={{ fontSize: 28, fontWeight: 700 }}>{t.totalLabel} {fmt2(total)}€</div>
           </div>
         </div>
@@ -283,29 +290,29 @@ export default function InvoiceEditor({
         <table className="invoice-table" style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 8 }}>
           <thead>
             <tr style={{ borderTop: '1px solid #ddd', borderBottom: '1px solid #ddd' }}>
-              <th style={{ textAlign: 'left', padding: '10px 12px 10px 0', fontSize: 11 }}>{t.concepto}</th>
-              <th style={{ textAlign: 'right', padding: '10px 12px', fontSize: 11 }}>{t.precio}</th>
-              <th style={{ textAlign: 'right', padding: '10px 12px', fontSize: 11 }}>{t.unidades}</th>
-              <th style={{ textAlign: 'right', padding: '10px 12px', fontSize: 11 }}>{t.subtotal}</th>
-              {dentroUe && <th style={{ textAlign: 'right', padding: '10px 12px', fontSize: 11 }}>{t.iva}</th>}
-              {dentroUe && <th style={{ textAlign: 'right', padding: '10px 12px', fontSize: 11 }}>{t.retencion}</th>}
-              <th style={{ textAlign: 'right', padding: '10px 0', fontSize: 11 }}>{t.total}</th>
+              <th style={{ width: dentroUe ? '28%' : '40%', textAlign: 'left', padding: '10px 8px 10px 0', fontSize: 11 }}>{t.concepto}</th>
+              <th style={{ width: dentroUe ? '12%' : '15%', textAlign: 'right', padding: '10px 8px', fontSize: 11 }}>{t.precio}</th>
+              <th style={{ width: dentroUe ? '10%' : '15%', textAlign: 'right', padding: '10px 8px', fontSize: 11 }}>{t.unidades}</th>
+              <th style={{ width: dentroUe ? '13%' : '15%', textAlign: 'right', padding: '10px 8px', fontSize: 11 }}>{t.subtotal}</th>
+              {dentroUe && <th style={{ width: '11%', textAlign: 'right', padding: '10px 8px', fontSize: 11 }}>{t.iva}</th>}
+              {dentroUe && <th style={{ width: '13%', textAlign: 'right', padding: '10px 8px', fontSize: 11 }}>{t.retencion}</th>}
+              <th style={{ width: dentroUe ? '13%' : '15%', textAlign: 'right', padding: '10px 0', fontSize: 11 }}>{t.total}</th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td style={{ padding: '14px 12px 14px 0', fontSize: 13 }}>
+              <td style={{ padding: '14px 8px 14px 0', fontSize: 13 }}>
                 <div style={{ fontWeight: 600 }}>
                   {factura.descripcion || factura.cliente}
                   {factura.numero_referencia && <span style={{ fontWeight: 400, color: '#888' }}> · #{factura.numero_referencia}</span>}
                 </div>
                 {factura.concepto_detalle && <div style={{ color: '#888', fontSize: 12 }}>{factura.concepto_detalle}</div>}
               </td>
-              <td style={{ padding: '14px 12px', fontSize: 13, textAlign: 'right' }}>{fmt2(base)}€</td>
-              <td style={{ padding: '14px 12px', fontSize: 13, textAlign: 'right' }}>1</td>
-              <td style={{ padding: '14px 12px', fontSize: 13, textAlign: 'right' }}>{fmt2(base)}€</td>
-              {dentroUe && <td style={{ padding: '14px 12px', fontSize: 13, textAlign: 'right' }}>{IVA_PCT}%</td>}
-              {dentroUe && <td style={{ padding: '14px 12px', fontSize: 13, textAlign: 'right' }}>-{RETENCION_PCT}%</td>}
+              <td style={{ padding: '14px 8px', fontSize: 13, textAlign: 'right' }}>{fmt2(base)}€</td>
+              <td style={{ padding: '14px 8px', fontSize: 13, textAlign: 'right' }}>1</td>
+              <td style={{ padding: '14px 8px', fontSize: 13, textAlign: 'right' }}>{fmt2(base)}€</td>
+              {dentroUe && <td style={{ padding: '14px 8px', fontSize: 13, textAlign: 'right' }}>{IVA_PCT}%</td>}
+              {dentroUe && <td style={{ padding: '14px 8px', fontSize: 13, textAlign: 'right' }}>-{RETENCION_PCT}%</td>}
               <td style={{ padding: '14px 0', fontSize: 13, textAlign: 'right' }}>{fmt2(total)}€</td>
             </tr>
           </tbody>
