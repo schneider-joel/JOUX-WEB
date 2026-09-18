@@ -500,6 +500,7 @@ function TimesheetTab({ tipo, proyectos, dias, facturas, reload }: { tipo: TipoP
   const [modal, setModal] = useState<Modal>(null)
   const [expandido, setExpandido] = useState<number | null>(null)
   const [publicUrl, setPublicUrl] = useState('')
+  const [clienteFiltro, setClienteFiltro] = useState('todos')
 
   useEffect(() => {
     if (tipo !== 'ambushed_boldmove') return
@@ -507,9 +508,21 @@ function TimesheetTab({ tipo, proyectos, dias, facturas, reload }: { tipo: TipoP
       .then(({ data }) => { if (data?.valor) setPublicUrl(`${window.location.origin}/timesheet/${data.valor}`) })
   }, [tipo])
 
-  const proyectosFiltrados = proyectos.filter(p => p.tipo === tipo)
   const diasDe = (proyectoId: number) => dias.filter(d => d.proyecto_id === proyectoId).sort((a, b) => a.fecha.localeCompare(b.fecha))
   const totalProyecto = (proyectoId: number) => diasDe(proyectoId).reduce((s, d) => s + Number(d.total_day), 0)
+  const ultimaFecha = (proyectoId: number) => {
+    const ds = diasDe(proyectoId)
+    return ds.length ? ds[ds.length - 1].fecha : ''
+  }
+
+  const proyectosFiltrados = proyectos
+    .filter(p => p.tipo === tipo)
+    .filter(p => clienteFiltro === 'todos' || p.cliente === clienteFiltro)
+    .sort((a, b) => {
+      const fa = ultimaFecha(a.id) || a.created_at
+      const fb = ultimaFecha(b.id) || b.created_at
+      return fb.localeCompare(fa)
+    })
 
   const cambiarStatus = async (p: Proyecto, status: string) => {
     if (status === 'facturado') {
@@ -559,7 +572,15 @@ function TimesheetTab({ tipo, proyectos, dias, facturas, reload }: { tipo: TipoP
         </div>
       )}
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, gap: 8 }}>
+        {tipo === 'ambushed_boldmove' ? (
+          <select value={clienteFiltro} onChange={e => setClienteFiltro(e.target.value)}
+            style={{ fontSize: 11, padding: '4px 10px', borderRadius: 6, background: 'var(--surface2)', color: 'var(--text2)', border: '1px solid var(--border)', fontFamily: 'Inter, sans-serif' }}>
+            <option value="todos">Todos los clientes</option>
+            <option value="Ambushed">Ambushed</option>
+            <option value="BoldMove">BoldMove</option>
+          </select>
+        ) : <div />}
         <button onClick={() => setModal({ type: 'addProyecto' })} style={{ fontSize: 11, color: 'var(--text3)', cursor: 'pointer', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 12px', fontFamily: 'Inter, sans-serif' }}>
           + Nuevo proyecto
         </button>
@@ -583,7 +604,7 @@ function TimesheetTab({ tipo, proyectos, dias, facturas, reload }: { tipo: TipoP
                   <input
                     key={p.id + (p.numero_proyecto || '')}
                     defaultValue={p.numero_proyecto || ''}
-                    placeholder="Nº proyecto/factura"
+                    placeholder="Nº de referencia"
                     onClick={e => e.stopPropagation()}
                     onBlur={e => { if (e.target.value !== (p.numero_proyecto || '')) updateNumeroProyecto(p.id, e.target.value) }}
                     style={{ background: 'none', border: 'none', borderBottom: '1px dotted var(--border)', color: 'var(--text3)', fontSize: 11, fontFamily: 'Inter, sans-serif', outline: 'none', width: 110, padding: 0 }}
@@ -593,6 +614,7 @@ function TimesheetTab({ tipo, proyectos, dias, facturas, reload }: { tipo: TipoP
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 14, fontWeight: 500 }}>€{fmt(total)}</div>
                 {(() => {
+                  if (p.status !== 'facturado') return null
                   const factura = facturas.find(f => f.proyecto_id === p.id)
                   return factura ? (
                     <a href={`/invoice/${factura.id}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
@@ -677,7 +699,7 @@ function ModalAddProyecto({ tipo, onAdd, onClose }: { tipo: TipoProyecto, onAdd:
         )}
       </div>
       <div style={{ marginBottom: 14 }}>
-        <label style={labelStyle}>Nº de proyecto (también será el Nº de factura)</label>
+        <label style={labelStyle}>Nº de referencia (para el cliente, ej: 268)</label>
         <input value={numeroProyecto} onChange={e => setNumeroProyecto(e.target.value)} placeholder="Ej: F260099" style={inputStyle} />
       </div>
       <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>

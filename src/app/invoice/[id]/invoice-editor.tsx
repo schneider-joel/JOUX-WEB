@@ -13,13 +13,13 @@ const fmt2 = (n: number) => new Intl.NumberFormat('en-US', { minimumFractionDigi
 
 const textos = {
   es: {
-    titulo: 'FACTURA', numero: 'Número', fecha: 'Fecha', vencimiento: 'Vencimiento', para: 'Para', de: 'De',
+    titulo: 'FACTURA', numero: 'Número', referencia: 'Referencia', fecha: 'Fecha', vencimiento: 'Vencimiento', para: 'Para', de: 'De',
     concepto: 'CONCEPTO', precio: 'PRECIO', unidades: 'UNIDADES', subtotal: 'SUBTOTAL', total: 'TOTAL',
     baseImponible: 'BASE IMPONIBLE', totalLabel: 'Total', imprimir: 'Imprimir / Guardar PDF', editar: 'Editar', vista: 'Vista previa',
     guardar: 'Guardar cambios', guardando: 'Guardando...',
   },
   en: {
-    titulo: 'INVOICE', numero: 'Number', fecha: 'Date', vencimiento: 'Due date', para: 'To', de: 'From',
+    titulo: 'INVOICE', numero: 'Number', referencia: 'Reference', fecha: 'Date', vencimiento: 'Due date', para: 'To', de: 'From',
     concepto: 'DESCRIPTION', precio: 'PRICE', unidades: 'QTY', subtotal: 'SUBTOTAL', total: 'TOTAL',
     baseImponible: 'NET AMOUNT', totalLabel: 'Total', imprimir: 'Print / Save PDF', editar: 'Edit', vista: 'Preview',
     guardar: 'Save changes', guardando: 'Saving...',
@@ -58,6 +58,7 @@ export default function InvoiceEditor({
     setSaveError('')
     const { error } = await supabase.from('facturas').update({
       numero: factura.numero,
+      numero_referencia: factura.numero_referencia,
       fecha: factura.fecha,
       fecha_vencimiento: factura.fecha_vencimiento || null,
       cliente: factura.cliente,
@@ -123,8 +124,12 @@ export default function InvoiceEditor({
         <div className="no-print" style={{ maxWidth: 680, margin: '16px auto', background: '#fff', border: '1px solid #e5e5e5', borderRadius: 10, padding: 24, fontFamily: 'Inter, sans-serif' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
             <div>
-              <label style={labelStyle}>Número</label>
+              <label style={labelStyle}>Número (para Hacienda)</label>
               <input value={factura.numero || ''} onChange={e => set({ numero: e.target.value })} placeholder="F260018" style={inputStyle} />
+            </div>
+            <div>
+              <label style={labelStyle}>Referencia (para el cliente)</label>
+              <input value={factura.numero_referencia || ''} onChange={e => set({ numero_referencia: e.target.value })} placeholder="268" style={inputStyle} />
             </div>
             <div>
               <label style={labelStyle}>Cliente</label>
@@ -187,7 +192,10 @@ export default function InvoiceEditor({
         </div>
 
         <div style={{ borderTop: '1px solid #ddd', paddingTop: 20, display: 'flex', justifyContent: 'space-between', marginBottom: 24 }}>
-          <div style={{ fontSize: 15, fontWeight: 700 }}>{t.titulo} #{factura.numero || `INV-${String(factura.id).padStart(4, '0')}`}</div>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 700 }}>{t.titulo} #{factura.numero || `INV-${String(factura.id).padStart(4, '0')}`}</div>
+            {factura.numero_referencia && <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>{t.referencia}: {factura.numero_referencia}</div>}
+          </div>
           <div style={{ textAlign: 'right', fontSize: 12 }}>
             <div>{t.fecha}: {fechaFmt}</div>
             {vencimientoFmt && <div>{t.vencimiento}: {vencimientoFmt}</div>}

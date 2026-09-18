@@ -219,8 +219,16 @@ ON CONFLICT (cliente) DO NOTHING;
 
 ALTER TABLE clientes_fiscales DISABLE ROW LEVEL SECURITY;
 
--- MIGRACIÓN: Nº de proyecto (se usa también como Nº de factura)
+-- MIGRACIÓN: Nº de proyecto (número de referencia para el cliente, ej. "268")
 ALTER TABLE proyectos ADD COLUMN IF NOT EXISTS numero_proyecto TEXT;
+
+-- MIGRACIÓN: número de referencia en la factura (distinto del Nº oficial para Hacienda)
+ALTER TABLE facturas ADD COLUMN IF NOT EXISTS numero_referencia TEXT;
+
+-- MIGRACIÓN: fix cálculo de Stand By — se paga a mitad de rate, no gratis
+ALTER TABLE dias_trabajados DROP COLUMN total_day;
+ALTER TABLE dias_trabajados ADD COLUMN total_day DECIMAL(10,2)
+  GENERATED ALWAYS AS (COALESCE(hrs, 1) * rate + COALESCE(standby_hrs, 0) * rate / 2) STORED;
 
 CREATE OR REPLACE FUNCTION crear_factura_desde_proyecto()
 RETURNS TRIGGER AS $$
@@ -230,7 +238,7 @@ BEGIN
   IF NEW.status = 'facturado' AND (OLD.status IS DISTINCT FROM 'facturado') THEN
     SELECT COALESCE(SUM(total_day), 0) INTO monto FROM dias_trabajados WHERE proyecto_id = NEW.id;
     IF NOT EXISTS (SELECT 1 FROM facturas WHERE proyecto_id = NEW.id) THEN
-      INSERT INTO facturas (cliente, descripcion, importe, fecha, estado, origen, proyecto_id, numero)
+      INSERT INTO facturas (cliente, descripcion, importe, fecha, estado, origen, proyecto_id, numero_referencia)
       VALUES (NEW.cliente, NEW.nombre, monto, CURRENT_DATE, 'pendiente', 'timesheet', NEW.id, NEW.numero_proyecto);
     END IF;
   END IF;

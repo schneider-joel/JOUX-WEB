@@ -39,14 +39,19 @@ export default function PublicTimesheetView({
   const [query, setQuery] = useState('')
   const [cliente, setCliente] = useState('todos')
 
-  const diasDe = (proyectoId: number) => dias.filter(d => d.proyecto_id === proyectoId)
+  const diasDe = (proyectoId: number) => dias.filter(d => d.proyecto_id === proyectoId).sort((a, b) => a.fecha.localeCompare(b.fecha))
   const totalProyecto = (proyectoId: number) => diasDe(proyectoId).reduce((s, d) => s + Number(d.total_day), 0)
   const facturaDe = (proyectoId: number) => facturas.find(f => f.proyecto_id === proyectoId)
+  const ultimaFecha = (proyectoId: number) => {
+    const ds = diasDe(proyectoId)
+    return ds.length ? ds[ds.length - 1].fecha : ''
+  }
 
   const q = query.trim().toLowerCase()
   const filtrados = proyectos
     .filter(p => cliente === 'todos' || p.cliente === cliente)
     .filter(p => !q || p.nombre.toLowerCase().includes(q) || (p.numero_proyecto || '').toLowerCase().includes(q))
+    .sort((a, b) => ultimaFecha(b.id).localeCompare(ultimaFecha(a.id)))
 
   return (
     <div style={{ background: '#f5f5f5', minHeight: '100vh', fontFamily: 'Inter, sans-serif', color: '#111', padding: '48px 24px' }}>
@@ -95,7 +100,7 @@ export default function PublicTimesheetView({
                   <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 20, fontWeight: 600, background: statusBg[p.status], color: statusColor[p.status] }}>
                     {statusLabel[p.status] || p.status}
                   </span>
-                  {factura && (
+                  {p.status === 'facturado' && factura && (
                     <a href={`/invoice/${factura.id}`} target="_blank" rel="noopener noreferrer"
                       style={{ fontSize: 11, padding: '3px 10px', borderRadius: 20, background: '#eff6ff', color: '#2563eb', fontWeight: 600, textDecoration: 'none' }}>
                       Invoice ↓

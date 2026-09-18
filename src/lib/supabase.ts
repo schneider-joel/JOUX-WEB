@@ -36,6 +36,7 @@ export type Factura = {
   origen: string
   notion_proyecto?: string
   proyecto_id?: number
+  numero_referencia?: string
   idioma?: 'es' | 'en'
 }
 
