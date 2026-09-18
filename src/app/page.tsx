@@ -59,6 +59,13 @@ export default function Home() {
 
   useEffect(() => { loadData() }, [loadData])
 
+  useEffect(() => {
+    fetch('https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=eur')
+      .then(r => r.json())
+      .then(d => { const p = d?.ethereum?.eur; if (p) setEthPrice(p) })
+      .catch(() => {})
+  }, [])
+
   const totalLiquidez = cuentas.reduce((s, c) => s + c.saldo, 0)
   const totalCrypto = crypto.reduce((s, c) => c.symbol === 'ETH' ? s + c.cantidad * ethPrice : s, 0)
   const totalPatrimonio = totalLiquidez + totalCrypto
@@ -500,6 +507,8 @@ function TimesheetTab({ tipo, proyectos, dias, facturas, reload }: { tipo: TipoP
   const [modal, setModal] = useState<Modal>(null)
   const [expandido, setExpandido] = useState<number | null>(null)
   const [publicUrl, setPublicUrl] = useState('')
+  const [linkCopiado, setLinkCopiado] = useState(false)
+  const [copyHover, setCopyHover] = useState(false)
   const [clienteFiltro, setClienteFiltro] = useState('todos')
 
   useEffect(() => {
@@ -561,13 +570,34 @@ function TimesheetTab({ tipo, proyectos, dias, facturas, reload }: { tipo: TipoP
     reload()
   }
 
+  const updateDia = async (id: number, data: any) => {
+    await supabase.from('dias_trabajados').update(data).eq('id', id)
+    setModal(null)
+    reload()
+  }
+
   return (
     <div>
       {tipo === 'ambushed_boldmove' && publicUrl && (
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 16px', marginBottom: 16, fontSize: 12, color: 'var(--text2)' }}>
           <span>Link público de solo lectura para Ambushed / BoldMove</span>
-          <button onClick={() => { navigator.clipboard.writeText(publicUrl) }} style={{ fontSize: 11, background: 'none', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 10px', color: 'var(--text)', cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
-            Copiar link
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText(publicUrl)
+              setLinkCopiado(true)
+              setTimeout(() => setLinkCopiado(false), 1800)
+            }}
+            onMouseEnter={() => setCopyHover(true)}
+            onMouseLeave={() => setCopyHover(false)}
+            style={{
+              fontSize: 11, borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontFamily: 'Inter, sans-serif',
+              transition: 'background 0.15s, border-color 0.15s, color 0.15s',
+              background: linkCopiado ? 'var(--green-dim)' : copyHover ? 'var(--border)' : 'none',
+              border: `1px solid ${linkCopiado ? 'var(--green)' : 'var(--border)'}`,
+              color: linkCopiado ? 'var(--green)' : 'var(--text)',
+            }}
+          >
+            {linkCopiado ? '✓ Link copiado' : 'Copiar link'}
           </button>
         </div>
       )}
@@ -637,7 +667,8 @@ function TimesheetTab({ tipo, proyectos, dias, facturas, reload }: { tipo: TipoP
                   <div style={{ fontSize: 12, color: 'var(--text3)', padding: '8px 0' }}>Sin días cargados.</div>
                 )}
                 {diasDe(p.id).map(d => (
-                  <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', fontSize: 12, borderBottom: '0.5px solid var(--border)' }}>
+                  <div key={d.id} onClick={() => setModal({ type: 'editDia', data: { dia: d } })}
+                    style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', fontSize: 12, borderBottom: '0.5px solid var(--border)', cursor: 'pointer' }}>
                     <div style={{ color: 'var(--text2)', width: 70 }}>{fmtDate(d.fecha)}</div>
                     {tipo === 'ambushed_boldmove' ? (
                       <div style={{ color: 'var(--text3)', flex: 1 }}>{d.hrs}h × €{d.rate}{d.standby_hrs > 0 ? ` · SB ${d.standby_hrs}h` : ''}</div>
@@ -646,7 +677,7 @@ function TimesheetTab({ tipo, proyectos, dias, facturas, reload }: { tipo: TipoP
                     )}
                     <div style={{ fontFamily: 'JetBrains Mono, monospace', width: 70, textAlign: 'right' }}>€{fmt2(d.total_day)}</div>
                     <span style={{ fontSize: 10, color: 'var(--text3)', width: 80, textAlign: 'right' }}>{d.status}</span>
-                    <button onClick={() => deleteDia(d.id)} style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, marginLeft: 8 }}>×</button>
+                    <button onClick={e => { e.stopPropagation(); deleteDia(d.id) }} style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, marginLeft: 8 }}>×</button>
                   </div>
                 ))}
                 <button onClick={() => setModal({ type: 'addDia', data: { proyectoId: p.id } })} style={{ marginTop: 10, width: '100%', padding: '6px 12px', border: '1px dashed var(--border)', borderRadius: 8, background: 'none', color: 'var(--text3)', fontSize: 11, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
@@ -666,6 +697,9 @@ function TimesheetTab({ tipo, proyectos, dias, facturas, reload }: { tipo: TipoP
             )}
             {modal.type === 'addDia' && (
               <ModalAddDia tipo={tipo} onAdd={(d: any) => addDia(modal.data.proyectoId, d)} onClose={() => setModal(null)} />
+            )}
+            {modal.type === 'editDia' && (
+              <ModalAddDia tipo={tipo} dia={modal.data.dia} onAdd={(d: any) => updateDia(modal.data.dia.id, d)} onClose={() => setModal(null)} />
             )}
           </div>
         </div>
@@ -710,12 +744,12 @@ function ModalAddProyecto({ tipo, onAdd, onClose }: { tipo: TipoProyecto, onAdd:
   )
 }
 
-function ModalAddDia({ tipo, onAdd, onClose }: { tipo: TipoProyecto, onAdd: (d: any) => void, onClose: () => void }) {
-  const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0])
-  const [rate, setRate] = useState('')
-  const [hrs, setHrs] = useState('')
-  const [standby, setStandby] = useState('')
-  const [status, setStatus] = useState('hecho')
+function ModalAddDia({ tipo, dia, onAdd, onClose }: { tipo: TipoProyecto, dia?: DiaTrabajado, onAdd: (d: any) => void, onClose: () => void }) {
+  const [fecha, setFecha] = useState(dia?.fecha || new Date().toISOString().split('T')[0])
+  const [rate, setRate] = useState(dia ? String(dia.rate) : '')
+  const [hrs, setHrs] = useState(dia?.hrs != null ? String(dia.hrs) : '')
+  const [standby, setStandby] = useState(dia ? String(dia.standby_hrs) : '')
+  const [status, setStatus] = useState<string>(dia?.status || 'hecho')
 
   const submit = () => {
     if (!rate) return
@@ -731,7 +765,7 @@ function ModalAddDia({ tipo, onAdd, onClose }: { tipo: TipoProyecto, onAdd: (d: 
   return (
     <>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, fontSize: 16, fontWeight: 500 }}>
-        Nuevo día <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', fontSize: 20 }}>×</button>
+        {dia ? 'Editar día' : 'Nuevo día'} <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', fontSize: 20 }}>×</button>
       </div>
       <div style={{ marginBottom: 14 }}>
         <label style={labelStyle}>Fecha</label>
@@ -763,7 +797,7 @@ function ModalAddDia({ tipo, onAdd, onClose }: { tipo: TipoProyecto, onAdd: (d: 
       </div>
       <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
         <button onClick={onClose} style={cancelBtnStyle}>Cancelar</button>
-        <button onClick={submit} style={confirmBtnStyle}>Agregar</button>
+        <button onClick={submit} style={confirmBtnStyle}>{dia ? 'Guardar' : 'Agregar'}</button>
       </div>
     </>
   )
