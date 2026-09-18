@@ -33,6 +33,14 @@ export type Factura = {
   cuenta_destino_id?: number
   origen: string
   notion_proyecto?: string
+  idioma?: 'es' | 'en'
+}
+
+export type NotionProyectoPendiente = {
+  notionId: string
+  proyecto: string
+  cliente: string
+  total: number
 }
 
 export type PresupuestoItem = {

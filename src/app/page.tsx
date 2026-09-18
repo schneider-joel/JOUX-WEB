@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { supabase, Cuenta, Crypto, Factura, PresupuestoItem } from '@/lib/supabase'
+import { supabase, Cuenta, Crypto, Factura, PresupuestoItem, NotionProyectoPendiente } from '@/lib/supabase'
 
 const fmt = (n: number) => new Intl.NumberFormat('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(Math.round(n))
 const fmt2 = (n: number) => new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
@@ -75,6 +75,23 @@ export default function Home() {
 
   const addFactura = async (data: any) => {
     await supabase.from('facturas').insert([{ ...data, estado: 'pendiente', origen: 'manual' }])
+    setModal(null)
+    loadData()
+  }
+
+  const importarDeNotion = async (items: (NotionProyectoPendiente & { fecha: string; idioma: 'es' | 'en' })[]) => {
+    await supabase.from('facturas').insert(
+      items.map(it => ({
+        cliente: it.cliente,
+        descripcion: it.proyecto,
+        importe: it.total,
+        fecha: it.fecha,
+        estado: 'pendiente',
+        origen: 'notion',
+        notion_proyecto: it.notionId,
+        idioma: it.idioma,
+      }))
+    )
     setModal(null)
     loadData()
   }
@@ -224,19 +241,25 @@ export default function Home() {
             <span style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
               Facturas pendientes · €{fmt(totalPendiente)} por cobrar
             </span>
-            <button onClick={() => setModal({ type: 'addFactura' })} style={{ fontSize: 11, color: 'var(--text3)', cursor: 'pointer', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 12px', fontFamily: 'Inter, sans-serif' }}>
-              + Nueva factura
-            </button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => setModal({ type: 'syncNotion' })} style={{ fontSize: 11, color: 'var(--text2)', cursor: 'pointer', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 12px', fontFamily: 'Inter, sans-serif' }}>
+                ⟳ Sync Notion
+              </button>
+              <button onClick={() => setModal({ type: 'addFactura' })} style={{ fontSize: 11, color: 'var(--text3)', cursor: 'pointer', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 12px', fontFamily: 'Inter, sans-serif' }}>
+                + Nueva factura
+              </button>
+            </div>
           </div>
           {facturasPendientes.map(f => (
             <div key={f.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '0.5px solid var(--border)' }}>
               <div>
                 <div style={{ fontSize: 13, color: 'var(--text)' }}>{f.cliente}{f.descripcion ? ` · ` : ''}<span style={{ color: 'var(--text3)' }}>{f.descripcion}</span></div>
-                <div style={{ fontSize: 11, color: 'var(--text3)' }}>Vence {fmtDate(f.fecha)}</div>
+                <div style={{ fontSize: 11, color: 'var(--text3)' }}>Vence {fmtDate(f.fecha)}{f.origen === 'notion' ? ' · Notion' : ''}</div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 14, fontWeight: 500, color: 'var(--green)' }}>+€{fmt(f.importe)}</div>
                 <span style={{ fontSize: 10, padding: '3px 8px', borderRadius: 20, background: 'var(--amber-dim)', color: 'var(--amber)', fontWeight: 500 }}>pendiente</span>
+                <a href={`/invoice/${f.id}`} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text3)', fontSize: 15, textDecoration: 'none' }} title="Ver invoice">🧾</a>
                 <button onClick={() => marcarCobrada(f)} style={{ color: 'var(--green)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 18 }}>✓</button>
                 <button onClick={() => deleteFactura(f.id)} style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 18 }}>×</button>
               </div>
@@ -256,6 +279,7 @@ export default function Home() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                     <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 14, fontWeight: 500 }}>€{fmt(f.importe)}</div>
                     <span style={{ fontSize: 10, padding: '3px 8px', borderRadius: 20, background: 'var(--green-dim)', color: 'var(--green)', fontWeight: 500 }}>cobrada</span>
+                    <a href={`/invoice/${f.id}`} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text3)', fontSize: 15, textDecoration: 'none' }} title="Ver invoice">🧾</a>
                     <button onClick={() => deleteFactura(f.id)} style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 18 }}>×</button>
                   </div>
                 </div>
@@ -346,6 +370,9 @@ export default function Home() {
             {modal.type === 'editCuentas' && (
               <ModalEditCuentas cuentas={cuentas} onUpdate={updateCuentaSaldo} onClose={() => { setModal(null); loadData() }} />
             )}
+            {modal.type === 'syncNotion' && (
+              <ModalSyncNotion onImport={importarDeNotion} onClose={() => setModal(null)} />
+            )}
           </div>
         </div>
       )}
@@ -354,7 +381,7 @@ export default function Home() {
 }
 
 function ModalAddFactura({ cuentas, onAdd, onClose }: { cuentas: Cuenta[], onAdd: (d: any) => void, onClose: () => void }) {
-  const [form, setForm] = useState({ cliente: '', descripcion: '', importe: '', fecha: new Date().toISOString().split('T')[0], cuenta_destino_id: '' })
+  const [form, setForm] = useState({ cliente: '', descripcion: '', importe: '', fecha: new Date().toISOString().split('T')[0], cuenta_destino_id: '', idioma: 'es' })
   return (
     <>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, fontSize: 16, fontWeight: 500 }}>
@@ -379,6 +406,14 @@ function ModalAddFactura({ cuentas, onAdd, onClose }: { cuentas: Cuenta[], onAdd
           style={{ width: '100%', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 7, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'Inter, sans-serif', outline: 'none' }}>
           <option value="">Seleccionar cuenta...</option>
           {cuentas.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+        </select>
+      </div>
+      <div style={{ marginBottom: 14 }}>
+        <label style={{ display: 'block', fontSize: 12, color: 'var(--text2)', marginBottom: 6 }}>Idioma del invoice</label>
+        <select value={form.idioma} onChange={e => setForm({ ...form, idioma: e.target.value })}
+          style={{ width: '100%', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 7, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'Inter, sans-serif', outline: 'none' }}>
+          <option value="es">Español</option>
+          <option value="en">English</option>
         </select>
       </div>
       <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
@@ -457,6 +492,83 @@ function ModalEditCuentas({ cuentas, onUpdate, onClose }: { cuentas: Cuenta[], o
         style={{ marginTop: 16, width: '100%', padding: '9px 18px', borderRadius: 7, fontSize: 13, cursor: 'pointer', background: 'var(--blue)', color: '#000', border: 'none', fontWeight: 500, fontFamily: 'Inter, sans-serif' }}>
         Guardar todos
       </button>
+    </>
+  )
+}
+
+type NotionItemForm = NotionProyectoPendiente & { fecha: string; idioma: 'es' | 'en'; checked: boolean }
+
+function ModalSyncNotion({ onImport, onClose }: { onImport: (items: (NotionProyectoPendiente & { fecha: string; idioma: 'es' | 'en' })[]) => void, onClose: () => void }) {
+  const [items, setItems] = useState<NotionItemForm[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [importing, setImporting] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/notion-sync')
+      .then(r => r.json())
+      .then(data => {
+        if (data.error) { setError(data.error); return }
+        const hoy = new Date().toISOString().split('T')[0]
+        setItems((data.pendientes || []).map((p: NotionProyectoPendiente) => ({ ...p, fecha: hoy, idioma: 'es', checked: true })))
+      })
+      .catch(() => setError('No se pudo conectar con Notion'))
+      .finally(() => setLoading(false))
+  }, [])
+
+  const update = (notionId: string, patch: Partial<NotionItemForm>) => {
+    setItems(items.map(it => it.notionId === notionId ? { ...it, ...patch } : it))
+  }
+
+  const confirmar = async () => {
+    const seleccionados = items.filter(it => it.checked)
+    if (seleccionados.length === 0) return onClose()
+    setImporting(true)
+    await onImport(seleccionados.map(({ checked, ...rest }) => rest))
+  }
+
+  return (
+    <>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, fontSize: 16, fontWeight: 500 }}>
+        Sync desde Notion <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', fontSize: 20 }}>×</button>
+      </div>
+
+      {loading && <div style={{ fontSize: 13, color: 'var(--text3)', padding: '20px 0', textAlign: 'center' }}>Buscando proyectos marcados como Facturado...</div>}
+      {error && <div style={{ fontSize: 13, color: 'var(--amber)', padding: '12px 0' }}>{error}</div>}
+      {!loading && !error && items.length === 0 && (
+        <div style={{ fontSize: 13, color: 'var(--text3)', padding: '20px 0', textAlign: 'center' }}>No hay proyectos nuevos marcados como Facturado en Notion.</div>
+      )}
+
+      {items.map(it => (
+        <div key={it.notionId} style={{ padding: '12px 0', borderBottom: '0.5px solid var(--border)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+            <input type="checkbox" checked={it.checked} onChange={e => update(it.notionId, { checked: e.target.checked })} />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13, color: 'var(--text)' }}>{it.proyecto}</div>
+              <div style={{ fontSize: 11, color: 'var(--text3)' }}>{it.cliente}</div>
+            </div>
+            <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 14, fontWeight: 500, color: 'var(--green)' }}>€{fmt(it.total)}</div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, paddingLeft: 26 }}>
+            <input type="date" value={it.fecha} onChange={e => update(it.notionId, { fecha: e.target.value })}
+              style={{ flex: 1, background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 8px', color: 'var(--text)', fontSize: 12, fontFamily: 'Inter, sans-serif', outline: 'none' }} />
+            <select value={it.idioma} onChange={e => update(it.notionId, { idioma: e.target.value as 'es' | 'en' })}
+              style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 8px', color: 'var(--text)', fontSize: 12, fontFamily: 'Inter, sans-serif', outline: 'none' }}>
+              <option value="es">ES</option>
+              <option value="en">EN</option>
+            </select>
+          </div>
+        </div>
+      ))}
+
+      <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+        <button onClick={onClose} style={{ padding: '9px 18px', borderRadius: 7, fontSize: 13, cursor: 'pointer', background: 'var(--surface2)', color: 'var(--text2)', border: '1px solid var(--border)', fontFamily: 'Inter, sans-serif' }}>Cancelar</button>
+        {items.length > 0 && (
+          <button onClick={confirmar} disabled={importing} style={{ flex: 1, padding: '9px 18px', borderRadius: 7, fontSize: 13, cursor: importing ? 'default' : 'pointer', opacity: importing ? 0.6 : 1, background: 'var(--blue)', color: '#000', border: 'none', fontWeight: 500, fontFamily: 'Inter, sans-serif' }}>
+            {importing ? 'Importando...' : `Importar ${items.filter(i => i.checked).length} factura(s)`}
+          </button>
+        )}
+      </div>
     </>
   )
 }

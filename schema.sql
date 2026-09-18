@@ -34,6 +34,7 @@ CREATE TABLE facturas (
   cuenta_destino_id INT REFERENCES cuentas(id),
   origen TEXT DEFAULT 'manual', -- manual, notion
   notion_proyecto TEXT,
+  idioma TEXT DEFAULT 'es', -- es, en (idioma del invoice generado)
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -128,6 +129,15 @@ INSERT INTO facturas (cliente, descripcion, importe, fecha, estado) VALUES
   ('Hans Emanuel', '', 400, '2026-09-30', 'pendiente'),
   ('Hans Emanuel', '', 400, '2026-10-10', 'pendiente'),
   ('BoldMove', '', 473, '2026-09-30', 'pendiente');
+
+-- MIGRACIÓN: si tu base ya existía antes de la integración con Notion,
+-- ejecutá esto en el SQL Editor de Supabase (no rompe nada, es seguro re-ejecutar):
+ALTER TABLE facturas ADD COLUMN IF NOT EXISTS idioma TEXT DEFAULT 'es';
+
+INSERT INTO configuracion (clave, valor) VALUES
+  ('emisor_nombre', 'Joel Schneider'),
+  ('emisor_email', '')
+ON CONFLICT (clave) DO NOTHING;
 
 -- Row Level Security (RLS) - desactivado para uso personal
 ALTER TABLE cuentas DISABLE ROW LEVEL SECURITY;
