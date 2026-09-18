@@ -15,6 +15,13 @@ export type Cuenta = {
   moneda?: string
 }
 
+export type PatrimonioSnapshot = {
+  fecha: string
+  total: number
+  liquidez: number
+  crypto: number
+}
+
 export type Crypto = {
   id: number
   symbol: string

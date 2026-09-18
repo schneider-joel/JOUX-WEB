@@ -46,7 +46,7 @@ function LoginForm() {
         <button
           onClick={submit}
           disabled={loading}
-          style={{ width: '100%', padding: '10px 12px', borderRadius: 7, background: 'var(--blue)', color: '#000', border: 'none', fontWeight: 500, fontSize: 14, cursor: loading ? 'default' : 'pointer', opacity: loading ? 0.6 : 1, fontFamily: 'Inter, sans-serif' }}
+          style={{ width: '100%', padding: '10px 12px', borderRadius: 7, background: 'var(--accent)', color: '#000', border: 'none', fontWeight: 500, fontSize: 14, cursor: loading ? 'default' : 'pointer', opacity: loading ? 0.6 : 1, fontFamily: 'Inter, sans-serif' }}
         >
           {loading ? 'Entrando...' : 'Entrar'}
         </button>

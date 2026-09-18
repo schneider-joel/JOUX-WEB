@@ -1,15 +1,161 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
-import { supabase, Cuenta, Crypto, Factura, PresupuestoItem, Proyecto, DiaTrabajado, TipoProyecto } from '@/lib/supabase'
+import { useEffect, useState, useCallback, useRef } from 'react'
+import { supabase, Cuenta, Crypto, Factura, PresupuestoItem, Proyecto, DiaTrabajado, TipoProyecto, PatrimonioSnapshot } from '@/lib/supabase'
 
 const fmt = (n: number) => new Intl.NumberFormat('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(Math.round(n))
 const fmt2 = (n: number) => new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
 const fmtDate = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })
+const fmtMes = (ym: string) => new Date(ym + '-01T00:00:00').toLocaleDateString('es-ES', { month: 'short' }).replace('.', '')
 const barColor = (pct: number) => pct >= 90 ? '#f87171' : pct >= 70 ? '#fbbf24' : '#4ade80'
+const hoyLocal = () => {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+const ultimosMeses = (n: number) => {
+  const out: string[] = []
+  const d = new Date()
+  d.setDate(1)
+  for (let i = n - 1; i >= 0; i--) {
+    const x = new Date(d.getFullYear(), d.getMonth() - i, 1)
+    out.push(`${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}`)
+  }
+  return out
+}
 
 type Tab = 'dashboard' | 'facturas' | 'presupuesto' | 'timesheet_ab' | 'timesheet_propios'
 type Modal = { type: string; data?: any } | null
+
+const svgProps = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, viewBox: '0 0 24 24' }
+const Icon = {
+  home: () => <svg {...svgProps}><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /></svg>,
+  invoice: () => <svg {...svgProps}><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5" /><path d="M9 13h6M9 17h6" /></svg>,
+  clock: () => <svg {...svgProps}><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>,
+  users: () => <svg {...svgProps}><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20a6.5 6.5 0 0 1 13 0" /><path d="M16 4a3.5 3.5 0 0 1 0 7" /><path d="M21.5 20a6.5 6.5 0 0 0-4.5-6.2" /></svg>,
+  check: () => <svg {...svgProps}><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>,
+  x: () => <svg {...svgProps}><path d="M6 6l12 12M18 6L6 18" /></svg>,
+  refresh: () => <svg {...svgProps}><path d="M20 12a8 8 0 1 1-2.3-5.7" /><path d="M20 4v5h-5" /></svg>,
+  wallet: () => <svg {...svgProps}><path d="M3 7a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v2" /><path d="M3 7v10a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-7a1 1 0 0 0-1-1H5a2 2 0 0 1-2-2z" /><circle cx="16.5" cy="14.5" r="1" /></svg>,
+  coin: () => <svg {...svgProps}><path d="M12 3l6 9-6 9-6-9z" /><path d="M6 12h12" /></svg>,
+  trend: () => <svg {...svgProps}><path d="M3 17l6-6 4 4 8-8" /><path d="M14 7h7v7" /></svg>,
+  spark: () => <svg {...svgProps}><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.2 2.2M16.2 16.2l2.2 2.2M5.6 18.4l2.2-2.2M16.2 7.8l2.2-2.2" /></svg>,
+  edit: () => <svg {...svgProps}><path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17z" /><path d="M13.5 6.5l3 3" /></svg>,
+  plus: () => <svg {...svgProps}><path d="M12 5v14M5 12h14" /></svg>,
+  link: () => <svg {...svgProps}><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.5 1.5" /><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.5-1.5" /></svg>,
+}
+
+function useChartSize() {
+  const ref = useRef<HTMLDivElement>(null)
+  const [size, setSize] = useState({ w: 600, h: 200 })
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const update = () => setSize({ w: el.clientWidth || 600, h: el.clientHeight || 200 })
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+  return { ref, ...size }
+}
+
+function PatrimonioChart({ snapshots, actual }: { snapshots: PatrimonioSnapshot[], actual: number }) {
+  const { ref, w: W, h: H } = useChartSize()
+  const meses = ultimosMeses(12)
+  const mesActual = meses[meses.length - 1]
+  const porMes = new Map<string, number>()
+  for (const s of [...snapshots].sort((a, b) => a.fecha.localeCompare(b.fecha))) porMes.set(s.fecha.slice(0, 7), Number(s.total))
+  porMes.set(mesActual, actual)
+  const puntos = meses.map((m, i) => ({ m, i, v: porMes.get(m) })).filter(p => p.v !== undefined) as { m: string, i: number, v: number }[]
+
+  const padL = 44, padR = 12, padT = 14, padB = 26
+  const vals = puntos.map(p => p.v)
+  const min = Math.min(...vals), max = Math.max(...vals)
+  const span = max - min || Math.max(max * 0.1, 1)
+  const lo = min - span * 0.25, hi = max + span * 0.25
+  const x = (i: number) => padL + (i / (meses.length - 1)) * (W - padL - padR)
+  const y = (v: number) => padT + (1 - (v - lo) / (hi - lo)) * (H - padT - padB)
+  const path = puntos.map((p, k) => `${k === 0 ? 'M' : 'L'}${x(p.i)},${y(p.v)}`).join(' ')
+  const area = puntos.length > 1 ? `${path} L${x(puntos[puntos.length - 1].i)},${H - padB} L${x(puntos[0].i)},${H - padB} Z` : ''
+  const ticks = [lo + (hi - lo) * 0.2, lo + (hi - lo) * 0.5, lo + (hi - lo) * 0.8]
+  const tickLabel = (t: number) => (hi - lo) < 6000 ? `${(t / 1000).toFixed(1)}k` : `${fmt(t / 1000)}k`
+  const last = puntos[puntos.length - 1]
+
+  return (
+    <div className="chart-wrap" ref={ref}>
+      <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H}>
+        <defs>
+          <linearGradient id="pgrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#f97316" stopOpacity="0.45" />
+            <stop offset="100%" stopColor="#f97316" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        {ticks.map((t, k) => (
+          <g key={k}>
+            <line x1={padL} x2={W - padR} y1={y(t)} y2={y(t)} stroke="var(--border)" strokeDasharray="3 4" />
+            <text x={padL - 8} y={y(t) + 3} fontSize="9" fill="var(--text3)" textAnchor="end" fontFamily="JetBrains Mono, monospace">{tickLabel(t)}</text>
+          </g>
+        ))}
+        {meses.map((m, i) => (
+          <text key={m} x={x(i)} y={H - 8} fontSize="9" fill={m === mesActual ? 'var(--text2)' : 'var(--text3)'} textAnchor="middle" fontFamily="Inter, sans-serif">{fmtMes(m)}</text>
+        ))}
+        {area && <path d={area} fill="url(#pgrad)" />}
+        {puntos.length > 1 && <path d={path} fill="none" stroke="#fb923c" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />}
+        {puntos.map(p => (
+          <circle key={p.m} cx={x(p.i)} cy={y(p.v)} r={p === last ? 4 : 2.5} fill={p === last ? '#fb923c' : '#0a0908'} stroke="#fb923c" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+        ))}
+        {last && (
+          <g>
+            <line x1={x(last.i)} x2={x(last.i)} y1={y(last.v)} y2={H - padB} stroke="#fb923c" strokeOpacity="0.35" strokeDasharray="2 3" />
+            <rect x={Math.min(x(last.i) - 34, W - padR - 68)} y={y(last.v) - 26} width="68" height="18" rx="5" fill="#1b1917" stroke="var(--border2)" />
+            <text x={Math.min(x(last.i), W - padR - 34)} y={y(last.v) - 14} fontSize="10" fill="var(--text)" textAnchor="middle" fontFamily="JetBrains Mono, monospace">€{fmt(last.v)}</text>
+          </g>
+        )}
+      </svg>
+    </div>
+  )
+}
+
+function IngresosChart({ facturas }: { facturas: Factura[] }) {
+  const { ref, w: W, h: H } = useChartSize()
+  const meses = ultimosMeses(9)
+  const datos = meses.map(m => {
+    const fs = facturas.filter(f => f.fecha.slice(0, 7) === m)
+    return { m, cobrado: fs.filter(f => f.estado === 'cobrada').reduce((s, f) => s + f.importe, 0), pendiente: fs.filter(f => f.estado === 'pendiente').reduce((s, f) => s + f.importe, 0) }
+  })
+  const max = Math.max(...datos.map(d => d.cobrado + d.pendiente), 1)
+  const padL = 36, padR = 6, padT = 14, padB = 26
+  const bw = (W - padL - padR) / meses.length
+  const h = (v: number) => (v / max) * (H - padT - padB)
+  const ticks = [0.25, 0.5, 0.75, 1].map(t => t * max)
+  return (
+    <div className="chart-wrap" ref={ref}>
+      <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H}>
+        {ticks.map((t, k) => (
+          <g key={k}>
+            <line x1={padL} x2={W - padR} y1={H - padB - h(t)} y2={H - padB - h(t)} stroke="var(--border)" strokeDasharray="3 4" />
+            <text x={padL - 8} y={H - padB - h(t) + 3} fontSize="9" fill="var(--text3)" textAnchor="end" fontFamily="JetBrains Mono, monospace">{fmt(t / 1000)}k</text>
+          </g>
+        ))}
+        {datos.map((d, i) => {
+          const cx = padL + bw * i + bw / 2
+          const w = Math.min(bw * 0.5, 28)
+          const hc = h(d.cobrado), hp = h(d.pendiente)
+          return (
+            <g key={d.m}>
+              {hc > 0 && <rect x={cx - w / 2} y={H - padB - hc} width={w} height={hc} rx="3" fill="#f97316" />}
+              {hp > 0 && <rect x={cx - w / 2} y={H - padB - hc - hp} width={w} height={hp} rx="3" fill="#fbbf24" fillOpacity="0.55" />}
+              {d.cobrado + d.pendiente > 0 && (
+                <text x={cx} y={H - padB - hc - hp - 5} fontSize="9" fill="var(--text2)" textAnchor="middle" fontFamily="JetBrains Mono, monospace">{((d.cobrado + d.pendiente) / 1000).toFixed(1)}k</text>
+              )}
+              <text x={cx} y={H - 8} fontSize="9" fill="var(--text3)" textAnchor="middle" fontFamily="Inter, sans-serif">{fmtMes(d.m)}</text>
+            </g>
+          )
+        })}
+      </svg>
+    </div>
+  )
+}
 
 export default function Home() {
   const [tab, setTab] = useState<Tab>('dashboard')
@@ -21,6 +167,7 @@ export default function Home() {
   const [variables, setVariables] = useState<PresupuestoItem[]>([])
   const [proyectos, setProyectos] = useState<Proyecto[]>([])
   const [dias, setDias] = useState<DiaTrabajado[]>([])
+  const [snapshots, setSnapshots] = useState<PatrimonioSnapshot[]>([])
   const [ethPrice, setEthPrice] = useState<number>(2100)
   const [usdToEur, setUsdToEur] = useState<number>(0.92)
   const [mesActual, setMesActual] = useState('2026-09')
@@ -29,7 +176,7 @@ export default function Home() {
   const [lastUpdated, setLastUpdated] = useState<string>('')
 
   const loadData = useCallback(async () => {
-    const [c, cr, f, fi, v, cfg, pr, di] = await Promise.all([
+    const [c, cr, f, fi, v, cfg, pr, di, sn] = await Promise.all([
       supabase.from('cuentas').select('*').order('orden'),
       supabase.from('crypto').select('*'),
       supabase.from('facturas').select('*').order('fecha'),
@@ -38,6 +185,7 @@ export default function Home() {
       supabase.from('configuracion').select('*'),
       supabase.from('proyectos').select('*').order('created_at'),
       supabase.from('dias_trabajados').select('*').order('fecha'),
+      supabase.from('patrimonio_snapshots').select('*').order('fecha'),
     ])
     if (c.data) setCuentas(c.data)
     if (cr.data) setCrypto(cr.data)
@@ -46,13 +194,12 @@ export default function Home() {
     if (v.data) setVariables(v.data)
     if (pr.data) setProyectos(pr.data)
     if (di.data) setDias(di.data)
+    if (sn.data) setSnapshots(sn.data)
     if (cfg.data) {
       const mes = cfg.data.find((x: any) => x.clave === 'mes_actual')?.valor
       const pt = cfg.data.find((x: any) => x.clave === 'presupuesto_total')?.valor
-      const eth = cfg.data.find((x: any) => x.clave === 'eth_price')?.valor
       if (mes) setMesActual(mes)
       if (pt) setPresupuestoTotal(Number(pt))
-      if (eth) setEthPrice(Number(eth))
     }
     setLastUpdated(new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }))
     setLoading(false)
@@ -65,7 +212,7 @@ export default function Home() {
       .then(r => r.json())
       .then(d => { const p = d?.ethereum?.eur; if (p) setEthPrice(p) })
       .catch(() => {})
-    fetch('https://api.frankfurter.app/latest?from=USD&to=EUR')
+    fetch('https://api.frankfurter.dev/v1/latest?from=USD&to=EUR')
       .then(r => r.json())
       .then(d => { const r2 = d?.rates?.EUR; if (r2) setUsdToEur(r2) })
       .catch(() => {})
@@ -78,6 +225,20 @@ export default function Home() {
   const facturasPendientes = facturas.filter(f => f.estado === 'pendiente')
   const facturasCobradas = facturas.filter(f => f.estado === 'cobrada')
   const totalPendiente = facturasPendientes.reduce((s, f) => s + f.importe, 0)
+
+  const mesActualKey = hoyLocal().slice(0, 7)
+  const snapshotMesAnterior = [...snapshots].filter(s => s.fecha.slice(0, 7) < mesActualKey).sort((a, b) => b.fecha.localeCompare(a.fecha))[0]
+  const deltaMes = snapshotMesAnterior ? totalPatrimonio - Number(snapshotMesAnterior.total) : null
+  const deltaPct = snapshotMesAnterior && Number(snapshotMesAnterior.total) > 0 ? (deltaMes! / Number(snapshotMesAnterior.total)) * 100 : null
+
+  useEffect(() => {
+    if (loading || cuentas.length === 0) return
+    const fecha = hoyLocal()
+    const fila = { fecha, total: Math.round(totalPatrimonio * 100) / 100, liquidez: Math.round(totalLiquidez * 100) / 100, crypto: Math.round(totalCrypto * 100) / 100 }
+    supabase.from('patrimonio_snapshots').upsert(fila).then(({ error }) => {
+      if (!error) setSnapshots(prev => [...prev.filter(s => s.fecha !== fecha), fila])
+    })
+  }, [loading, cuentas.length, totalPatrimonio, totalLiquidez, totalCrypto])
 
   const marcarCobrada = async (factura: Factura) => {
     const { error } = await supabase
@@ -122,294 +283,338 @@ export default function Home() {
   }
 
   if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', color: 'var(--text3)', fontFamily: 'Inter, sans-serif' }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', color: 'var(--text3)', gap: 10, fontSize: 13 }}>
+      <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--accent)', boxShadow: '0 0 12px var(--accent-glow)' }} />
       Cargando...
     </div>
   )
 
+  const navItems: { id: Tab; label: string; icon: () => JSX.Element }[] = [
+    { id: 'dashboard', label: 'Overview', icon: Icon.home },
+    { id: 'facturas', label: 'Facturas', icon: Icon.invoice },
+    { id: 'timesheet_ab', label: 'Timesheet AB', icon: Icon.clock },
+    { id: 'timesheet_propios', label: 'Propios', icon: Icon.users },
+  ]
+  const titulos: Record<Tab, [string, string]> = {
+    dashboard: ['Overview', 'Patrimonio, cuentas y facturación'],
+    facturas: ['Facturas', `${facturasPendientes.length} pendientes · €${fmt(totalPendiente)} por cobrar`],
+    presupuesto: ['Presupuesto', 'Gastos del mes'],
+    timesheet_ab: ['Timesheet · Ambushed / BoldMove', 'Horas por proyecto y facturación'],
+    timesheet_propios: ['Timesheet · Clientes propios', 'Días por proyecto y facturación'],
+  }
+
   return (
-    <div className="app-shell">
-      {/* Header */}
-      <header className="app-header">
-        <div>
-          <h1 style={{ fontSize: 22, fontWeight: 500, letterSpacing: '-0.5px' }}>JOUX · Finanzas</h1>
-          <div style={{ fontSize: 13, color: 'var(--text2)', marginTop: 2 }}>Panel de control personal</div>
+    <div className="app">
+      <aside className="sidebar">
+        <div className="brand">
+          <div className="brand-mark">J</div>
+          <div>
+            <div className="brand-name">JOUX Hub</div>
+            <div className="brand-sub">Finanzas</div>
+          </div>
         </div>
-        <div style={{ fontSize: 12, color: 'var(--text3)', fontFamily: 'JetBrains Mono, monospace' }}>
-          {lastUpdated && `Actualizado: ${lastUpdated}`}
-        </div>
-      </header>
-
-      {/* Stat cards */}
-      <div className="stat-grid">
-        <div className="stat-card stat-card-primary">
-          <div className="stat-icon">✦</div>
-          <div className="stat-label">Patrimonio total</div>
-          <div className="stat-value">€{fmt(totalPatrimonio)}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-icon">🏦</div>
-          <div className="stat-label">Liquidez</div>
-          <div className="stat-value" style={{ color: 'var(--green)' }}>€{fmt(totalLiquidez)}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-icon">◈</div>
-          <div className="stat-label">Crypto</div>
-          <div className="stat-value" style={{ color: 'var(--purple)' }}>€{fmt(totalCrypto)}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-icon">🧾</div>
-          <div className="stat-label">Por cobrar</div>
-          <div className="stat-value" style={{ color: 'var(--amber)' }}>€{fmt(totalPendiente)}</div>
-        </div>
-      </div>
-
-      {/* Tabs */}
-      <div className="tab-row">
-        {/* 'presupuesto' oculta por ahora: requiere carga manual constante. Datos y código quedan intactos. */}
-        {(['dashboard', 'facturas', 'timesheet_ab', 'timesheet_propios'] as Tab[]).map(t => (
-          <button key={t} onClick={() => setTab(t)} style={{
-            padding: '6px 16px', borderRadius: 6, fontSize: 13, cursor: 'pointer', border: 'none', fontFamily: 'Inter, sans-serif', whiteSpace: 'nowrap',
-            background: tab === t ? 'var(--surface)' : 'transparent',
-            color: tab === t ? 'var(--text)' : 'var(--text2)',
-          }}>
-            {{ dashboard: 'Dashboard', facturas: 'Facturas', presupuesto: 'Presupuesto', timesheet_ab: 'Timesheet AB', timesheet_propios: 'Timesheet Propios' }[t]}
+        {navItems.map(n => (
+          <button key={n.id} className={`nav-btn${tab === n.id ? ' active' : ''}`} onClick={() => setTab(n.id)}>
+            <n.icon /><span>{n.label}</span>
           </button>
         ))}
-      </div>
+        <div className="nav-foot">{lastUpdated && `sync ${lastUpdated}`}</div>
+      </aside>
 
-      {/* Dashboard Tab */}
-      {tab === 'dashboard' && (
-        <div className="dashboard-grid">
-          {/* Cuentas + Crypto */}
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: 20 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-              <span style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Cuentas</span>
-              <button onClick={() => setModal({ type: 'editCuentas' })} style={{ fontSize: 11, color: 'var(--text3)', cursor: 'pointer', background: 'none', border: 'none', fontFamily: 'Inter, sans-serif' }}>+ Editar</button>
-            </div>
-            {cuentas.map(c => {
-              const eur = aEuros(c)
-              const pct = totalLiquidez > 0 ? Math.max((eur / totalLiquidez) * 100, 3) : 0
-              return (
-                <div key={c.id} className="acct-row">
-                  <div className="acct-avatar" style={{ background: c.color }}>{c.nombre.slice(0, 2).toUpperCase()}</div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
-                      <span style={{ fontSize: 13, color: 'var(--text)' }}>{c.nombre}</span>
-                      <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 13, fontWeight: 500 }}>
-                        {c.moneda === 'USD' ? `$${fmt(c.saldo)}` : `€${fmt(c.saldo)}`}
-                      </span>
-                    </div>
-                    {c.moneda === 'USD' && (
-                      <div style={{ fontSize: 10.5, color: 'var(--text3)', marginTop: 1 }}>≈ €{fmt(eur)}</div>
-                    )}
-                    <div className="acct-bar-track">
-                      <div className="acct-bar-fill" style={{ width: `${pct}%`, background: c.color }} />
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-
-            {/* Crypto section */}
-            <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border)' }}>
-              <div style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>Crypto</div>
-              {crypto.map(c => {
-                const val = c.symbol === 'ETH' ? c.cantidad * ethPrice : 0
-                const pct = totalCrypto > 0 ? Math.max((val / totalCrypto) * 100, 3) : 0
-                return (
-                  <div key={c.id} className="acct-row">
-                    <div className="acct-avatar" style={{ background: 'var(--purple-dim)', color: 'var(--purple)' }}>{c.symbol}</div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
-                        <span style={{ fontSize: 13, color: 'var(--text)' }}>{c.cantidad} {c.symbol}</span>
-                        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 13, fontWeight: 500, color: 'var(--purple)' }}>€{fmt(val)}</span>
-                      </div>
-                      <div style={{ fontSize: 10.5, color: 'var(--text3)', marginTop: 1 }}>€{fmt2(ethPrice)}/{c.symbol}</div>
-                      <div className="acct-bar-track">
-                        <div className="acct-bar-fill" style={{ width: `${pct}%`, background: 'var(--purple)' }} />
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
+      <main className="main">
+        <header className="page-header">
+          <div>
+            <h1 className="page-title">{titulos[tab][0]}</h1>
+            <div className="page-sub">{titulos[tab][1]}</div>
           </div>
+          <div className="header-actions">
+            <button className="btn" onClick={() => loadData()}><Icon.refresh />Actualizar</button>
+            <button className="btn btn-primary" onClick={() => setModal({ type: 'addFactura' })}><Icon.plus />Nueva factura</button>
+          </div>
+        </header>
 
-          {/* Facturas pendientes */}
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: 20 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <span style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                Próximas facturas · <span style={{ color: 'var(--green)' }}>€{fmt(totalPendiente)}</span>
-              </span>
-              <button onClick={() => setTab('facturas')} style={{ fontSize: 11, color: 'var(--text3)', cursor: 'pointer', background: 'none', border: 'none', fontFamily: 'Inter, sans-serif' }}>Ver todas →</button>
+        {/* Dashboard Tab */}
+        {tab === 'dashboard' && (
+          <>
+            <div className="stat-grid">
+              <div className="card stat-card stat-card-primary">
+                <div className="stat-icon"><Icon.spark /></div>
+                <div className="stat-label">Patrimonio total</div>
+                <div className="stat-value">€{fmt(totalPatrimonio)}</div>
+                {deltaMes !== null ? (
+                  <div className={`stat-delta ${deltaMes > 0 ? 'up' : deltaMes < 0 ? 'down' : 'flat'}`}>
+                    {deltaMes > 0 ? '▲' : deltaMes < 0 ? '▼' : '•'} {deltaMes >= 0 ? '+' : '−'}€{fmt(Math.abs(deltaMes))}{deltaPct !== null ? ` (${deltaPct >= 0 ? '+' : ''}${deltaPct.toFixed(1)}%)` : ''} vs mes anterior
+                  </div>
+                ) : (
+                  <div className="stat-delta flat">• registrando historial</div>
+                )}
+              </div>
+              <div className="card stat-card">
+                <div className="stat-icon"><Icon.wallet /></div>
+                <div className="stat-label">Liquidez</div>
+                <div className="stat-value" style={{ color: 'var(--green)' }}>€{fmt(totalLiquidez)}</div>
+                <div className="stat-delta flat">{cuentas.length} cuentas</div>
+              </div>
+              <div className="card stat-card">
+                <div className="stat-icon"><Icon.coin /></div>
+                <div className="stat-label">Crypto</div>
+                <div className="stat-value" style={{ color: 'var(--purple)' }}>€{fmt(totalCrypto)}</div>
+                <div className="stat-delta flat">ETH €{fmt(ethPrice)}</div>
+              </div>
+              <div className="card stat-card">
+                <div className="stat-icon"><Icon.invoice /></div>
+                <div className="stat-label">Por cobrar</div>
+                <div className="stat-value" style={{ color: 'var(--amber)' }}>€{fmt(totalPendiente)}</div>
+                <div className="stat-delta flat">{facturasPendientes.length} facturas</div>
+              </div>
             </div>
-            {facturasPendientes.slice(0, 8).map(f => (
-              <div key={f.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '0.5px solid var(--border)' }}>
-                <div>
-                  <div style={{ fontSize: 13, color: 'var(--text)' }}>{f.cliente}{f.descripcion ? ` · ${f.descripcion}` : ''}</div>
-                  <div style={{ fontSize: 11, color: 'var(--text3)' }}>Vence {fmtDate(f.fecha_vencimiento || f.fecha)}</div>
+
+            <div className="dash-grid">
+              <div className="card card-fill">
+                <div className="card-head">
+                  <div>
+                    <div className="card-title">Evolución del patrimonio</div>
+                    <div className="card-kicker" style={{ marginTop: 2 }}>Últimos 12 meses · un punto por mes</div>
+                  </div>
+                  <div className="chart-legend"><span><i style={{ background: '#fb923c' }} />Patrimonio</span></div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 14, fontWeight: 500, color: 'var(--green)' }}>+€{fmt(f.importe)}</div>
-                  <button onClick={() => marcarCobrada(f)} style={{ color: 'var(--green)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, fontWeight: 'bold' }}>✓</button>
+                <PatrimonioChart snapshots={snapshots} actual={totalPatrimonio} />
+                {snapshots.filter(s => s.fecha.slice(0, 7) !== mesActualKey).length === 0 && (
+                  <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 8 }}>El historial se registra solo: cada día que abrís el hub se guarda un snapshot y el gráfico se va completando mes a mes.</div>
+                )}
+              </div>
+
+              <div className="card">
+                <div className="card-head">
+                  <div className="card-title">Cuentas</div>
+                  <button className="icon-btn accent" onClick={() => setModal({ type: 'editCuentas' })} title="Editar saldos"><Icon.edit /></button>
+                </div>
+                {cuentas.map(c => {
+                  const eur = aEuros(c)
+                  const pct = totalLiquidez > 0 ? Math.max((eur / totalLiquidez) * 100, 2) : 0
+                  return (
+                    <div key={c.id} className="row">
+                      <div className="acct-avatar" style={{ background: `${c.color}22`, color: c.color, borderColor: `${c.color}55` }}>{c.nombre.slice(0, 2).toUpperCase()}</div>
+                      <div className="row-main">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+                          <span className="row-title">{c.nombre}</span>
+                          <span className="row-amount">{c.moneda === 'USD' ? `$${fmt(c.saldo)}` : `€${fmt(c.saldo)}`}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, color: 'var(--text3)', marginTop: 1 }}>
+                          <span>{c.moneda === 'USD' ? `≈ €${fmt(eur)}` : c.tipo}</span>
+                          <span className="mono">{pct.toFixed(0)}%</span>
+                        </div>
+                        <div className="acct-bar-track"><div className="acct-bar-fill" style={{ width: `${pct}%`, background: c.color }} /></div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            <div className="dash-grid-2">
+              <div className="card">
+                <div className="card-head">
+                  <div>
+                    <div className="card-title">Ingresos facturados</div>
+                    <div className="card-kicker" style={{ marginTop: 2 }}>Por mes de emisión</div>
+                  </div>
+                  <div className="chart-legend">
+                    <span><i style={{ background: '#f97316' }} />Cobrado</span>
+                    <span><i style={{ background: '#fbbf24', opacity: 0.6 }} />Pendiente</span>
+                  </div>
+                </div>
+                <IngresosChart facturas={facturas} />
+                <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border)' }}>
+                  <div className="card-kicker" style={{ marginBottom: 6 }}>Crypto</div>
+                  {crypto.map(c => {
+                    const val = c.symbol === 'ETH' ? c.cantidad * ethPrice : 0
+                    return (
+                      <div key={c.id} className="row">
+                        <div className="acct-avatar" style={{ background: 'var(--purple-dim)', color: 'var(--purple)', borderColor: 'rgba(167,139,250,0.35)' }}>{c.symbol}</div>
+                        <div className="row-main">
+                          <div className="row-title">{c.cantidad} {c.symbol}</div>
+                          <div className="row-sub mono">€{fmt2(ethPrice)} / {c.symbol} · precio en vivo</div>
+                        </div>
+                        <div className="row-side"><span className="row-amount" style={{ color: 'var(--purple)' }}>€{fmt(val)}</span></div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              <div className="card">
+                <div className="card-head">
+                  <div>
+                    <div className="card-title">Próximas facturas</div>
+                    <div className="card-kicker" style={{ marginTop: 2 }}>€{fmt(totalPendiente)} por cobrar</div>
+                  </div>
+                  <button className="btn btn-ghost" onClick={() => setTab('facturas')}>Ver todas →</button>
+                </div>
+                {facturasPendientes.length === 0 && <div className="chart-empty">No hay facturas pendientes.</div>}
+                {facturasPendientes.slice(0, 7).map(f => (
+                  <div key={f.id} className="row">
+                    <div className="row-main">
+                      <div className="row-title" title={`${f.cliente}${f.descripcion ? ` · ${f.descripcion}` : ''}`}>{f.cliente}{f.descripcion ? ` · ${f.descripcion}` : ''}</div>
+                      <div className="row-sub">Vence {fmtDate(f.fecha_vencimiento || f.fecha)}{f.numero ? ` · ${f.numero}` : ''}</div>
+                    </div>
+                    <div className="row-side">
+                      <span className="row-amount" style={{ color: 'var(--green)' }}>+€{fmt(f.importe)}</span>
+                      <button className="icon-btn ok" onClick={() => marcarCobrada(f)} title="Marcar como cobrada"><Icon.check /></button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Facturas Tab */}
+        {tab === 'facturas' && (
+          <div className="card">
+            <div className="card-head">
+              <div className="card-title">Pendientes <span style={{ color: 'var(--text3)', fontWeight: 400 }}>· {facturasPendientes.length}</span></div>
+              <span className="row-amount" style={{ color: 'var(--amber)' }}>€{fmt(totalPendiente)}</span>
+            </div>
+            {facturasPendientes.length === 0 && <div className="chart-empty">No hay facturas pendientes.</div>}
+            {facturasPendientes.map(f => (
+              <div key={f.id} className="row">
+                <div className="row-main">
+                  <div className="row-title">{f.cliente}{f.descripcion ? <span style={{ color: 'var(--text3)' }}> · {f.descripcion}</span> : null}</div>
+                  <div className="row-sub">{f.numero ? `${f.numero} · ` : ''}Vence {fmtDate(f.fecha_vencimiento || f.fecha)}{f.origen === 'notion' ? ' · Notion' : ''}</div>
+                </div>
+                <div className="row-side">
+                  <span className="row-amount" style={{ color: 'var(--green)' }}>+€{fmt(f.importe)}</span>
+                  <span className="pill pill-amber">pendiente</span>
+                  <a className="icon-btn accent" href={`/invoice/${f.id}`} target="_blank" rel="noopener noreferrer" title="Ver invoice"><Icon.invoice /></a>
+                  <button className="icon-btn ok" onClick={() => marcarCobrada(f)} title="Marcar como cobrada"><Icon.check /></button>
+                  <button className="icon-btn danger" onClick={() => deleteFactura(f.id)} title="Borrar"><Icon.x /></button>
                 </div>
               </div>
             ))}
-            <button onClick={() => setModal({ type: 'addFactura' })} style={{ marginTop: 12, width: '100%', padding: '8px 14px', border: '1px dashed var(--border)', borderRadius: 8, background: 'none', color: 'var(--text3)', fontSize: 12, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
-              + Nueva factura
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Facturas Tab */}
-      {tab === 'facturas' && (
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 20 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-            <span style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-              Facturas pendientes · €{fmt(totalPendiente)} por cobrar
-            </span>
-            <button onClick={() => setModal({ type: 'addFactura' })} style={{ fontSize: 11, color: 'var(--text3)', cursor: 'pointer', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 12px', fontFamily: 'Inter, sans-serif' }}>
-              + Nueva factura
-            </button>
-          </div>
-          {facturasPendientes.map(f => (
-            <div key={f.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '0.5px solid var(--border)' }}>
-              <div>
-                <div style={{ fontSize: 13, color: 'var(--text)' }}>{f.cliente}{f.descripcion ? ` · ` : ''}<span style={{ color: 'var(--text3)' }}>{f.descripcion}</span></div>
-                <div style={{ fontSize: 11, color: 'var(--text3)' }}>Vence {fmtDate(f.fecha_vencimiento || f.fecha)}{f.origen === 'notion' ? ' · Notion' : ''}</div>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 14, fontWeight: 500, color: 'var(--green)' }}>+€{fmt(f.importe)}</div>
-                <span style={{ fontSize: 10, padding: '3px 8px', borderRadius: 20, background: 'var(--amber-dim)', color: 'var(--amber)', fontWeight: 500 }}>pendiente</span>
-                <a href={`/invoice/${f.id}`} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text3)', fontSize: 15, textDecoration: 'none' }} title="Ver invoice">🧾</a>
-                <button onClick={() => marcarCobrada(f)} style={{ color: 'var(--green)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 18 }}>✓</button>
-                <button onClick={() => deleteFactura(f.id)} style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 18 }}>×</button>
-              </div>
-            </div>
-          ))}
-          {facturasCobradas.length > 0 && (
-            <>
-              <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)', fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>
-                Cobradas
-              </div>
-              {facturasCobradas.map(f => (
-                <div key={f.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '0.5px solid var(--border)', opacity: 0.5 }}>
-                  <div>
-                    <div style={{ fontSize: 13 }}>{f.cliente}{f.descripcion ? ` · ${f.descripcion}` : ''}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text3)' }}>{f.fecha_cobro ? fmtDate(f.fecha_cobro) : fmtDate(f.fecha)}</div>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 14, fontWeight: 500 }}>€{fmt(f.importe)}</div>
-                    <span style={{ fontSize: 10, padding: '3px 8px', borderRadius: 20, background: 'var(--green-dim)', color: 'var(--green)', fontWeight: 500 }}>cobrada</span>
-                    <a href={`/invoice/${f.id}`} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text3)', fontSize: 15, textDecoration: 'none' }} title="Ver invoice">🧾</a>
-                    <button onClick={() => deleteFactura(f.id)} style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 18 }}>×</button>
-                  </div>
-                </div>
-              ))}
-            </>
-          )}
-        </div>
-      )}
-
-      {/* Presupuesto Tab */}
-      {tab === 'presupuesto' && (
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 20 }}>
-          {(() => {
-            const totalFijosGastado = fijos.reduce((s, c) => s + c.gastado, 0)
-            const totalFijosLimite = fijos.reduce((s, c) => s + c.limite, 0)
-            const totalVarsGastado = variables.reduce((s, c) => s + c.gastado, 0)
-            const totalVarsLimite = variables.reduce((s, c) => s + c.limite, 0)
-            const totalGastado = totalFijosGastado + totalVarsGastado
-            const totalPct = Math.min(Math.round(totalGastado / presupuestoTotal * 100), 100)
-
-            const renderItem = (item: PresupuestoItem, tabla: string) => {
-              const pct = item.limite > 0 ? Math.min(Math.round(item.gastado / item.limite * 100), 100) : 0
-              return (
-                <div key={item.id} style={{ padding: '8px 0', borderBottom: '0.5px solid var(--border)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                    <div style={{ fontSize: 13, color: 'var(--text2)' }}>{item.nombre}</div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--text)' }}>€{fmt(item.gastado)}</span>
-                      <span style={{ fontSize: 12, color: 'var(--text3)' }}>/ </span>
-                      <span onClick={() => setModal({ type: 'editLimite', data: { item, tabla } })} style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--text3)', cursor: 'pointer', textDecoration: 'underline dotted' }}>€{fmt(item.limite)}</span>
-                      <button onClick={() => setModal({ type: 'addGasto', data: { item, tabla } })} style={{ fontSize: 11, padding: '2px 8px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text3)', cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>+ Añadir</button>
-                    </div>
-                  </div>
-                  {item.limite > 0 && (
-                    <div style={{ height: 3, background: 'var(--border)', borderRadius: 2, overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${pct}%`, background: barColor(pct), borderRadius: 2 }} />
-                    </div>
-                  )}
-                </div>
-              )
-            }
-
-            return (
+            {facturasCobradas.length > 0 && (
               <>
-                {/* Total */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: 'var(--surface2)', borderRadius: 8, marginBottom: 20 }}>
-                  <div><div style={{ fontSize: 12, color: 'var(--text2)' }}>Gastado</div><div style={{ fontSize: 16, fontWeight: 500, color: barColor(totalPct) }}>€{fmt(totalGastado)}</div></div>
-                  <div style={{ textAlign: 'center' }}><div style={{ fontSize: 12, color: 'var(--text2)' }}>Disponible</div><div style={{ fontSize: 16, fontWeight: 500, color: 'var(--text2)' }}>€{fmt(presupuestoTotal - totalGastado)}</div></div>
-                  <div style={{ textAlign: 'right' }}><div style={{ fontSize: 12, color: 'var(--text2)' }}>Presupuesto mes</div><div style={{ fontSize: 16, fontWeight: 500, color: 'var(--text2)' }}>€{fmt(presupuestoTotal)}</div></div>
+                <div className="card-head" style={{ marginTop: 24, paddingTop: 18, borderTop: '1px solid var(--border)' }}>
+                  <div className="card-title">Cobradas <span style={{ color: 'var(--text3)', fontWeight: 400 }}>· {facturasCobradas.length}</span></div>
+                  <span className="row-amount" style={{ color: 'var(--text2)' }}>€{fmt(facturasCobradas.reduce((s, f) => s + f.importe, 0))}</span>
                 </div>
-                <div style={{ height: 6, background: 'var(--border)', borderRadius: 3, overflow: 'hidden', marginBottom: 24 }}>
-                  <div style={{ height: '100%', width: `${totalPct}%`, background: barColor(totalPct) }} />
-                </div>
-
-                {/* Fijos */}
-                <div style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>
-                  Gastos fijos · €{fmt(totalFijosGastado)} / €{fmt(totalFijosLimite)}
-                </div>
-                {fijos.map(item => renderItem(item, 'fijos'))}
-
-                <div style={{ borderTop: '1px solid var(--border)', margin: '20px 0' }} />
-
-                {/* Variables */}
-                <div style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>
-                  Gastos variables · €{fmt(totalVarsGastado)} / €{fmt(totalVarsLimite)}
-                </div>
-                {variables.map(item => renderItem(item, 'variables'))}
+                {[...facturasCobradas].reverse().map(f => (
+                  <div key={f.id} className="row muted">
+                    <div className="row-main">
+                      <div className="row-title">{f.cliente}{f.descripcion ? <span style={{ color: 'var(--text3)' }}> · {f.descripcion}</span> : null}</div>
+                      <div className="row-sub">{f.numero ? `${f.numero} · ` : ''}Cobrada {f.fecha_cobro ? fmtDate(f.fecha_cobro) : fmtDate(f.fecha)}</div>
+                    </div>
+                    <div className="row-side">
+                      <span className="row-amount">€{fmt(f.importe)}</span>
+                      <span className="pill pill-green">cobrada</span>
+                      <a className="icon-btn accent" href={`/invoice/${f.id}`} target="_blank" rel="noopener noreferrer" title="Ver invoice"><Icon.invoice /></a>
+                      <button className="icon-btn danger" onClick={() => deleteFactura(f.id)} title="Borrar"><Icon.x /></button>
+                    </div>
+                  </div>
+                ))}
               </>
-            )
-          })()}
-        </div>
-      )}
-
-      {/* Timesheet Ambushed/BoldMove Tab */}
-      {tab === 'timesheet_ab' && (
-        <TimesheetTab tipo="ambushed_boldmove" proyectos={proyectos} dias={dias} facturas={facturas} reload={loadData} />
-      )}
-
-      {/* Timesheet Clientes Propios Tab */}
-      {tab === 'timesheet_propios' && (
-        <TimesheetTab tipo="propio" proyectos={proyectos} dias={dias} facturas={facturas} reload={loadData} />
-      )}
-
-      {/* Modals */}
-      {modal && (
-        <div onClick={() => setModal(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, backdropFilter: 'blur(4px)' }}>
-          <div onClick={e => e.stopPropagation()} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: 28, width: 420, maxWidth: '90vw' }}>
-
-            {modal.type === 'addFactura' && (
-              <ModalAddFactura cuentas={cuentas} onAdd={addFactura} onClose={() => setModal(null)} />
-            )}
-            {modal.type === 'addGasto' && (
-              <ModalAddGasto item={modal.data.item} tabla={modal.data.tabla} onAdd={addGasto} onClose={() => setModal(null)} />
-            )}
-            {modal.type === 'editLimite' && (
-              <ModalEditLimite item={modal.data.item} tabla={modal.data.tabla} onSave={editLimite} onClose={() => setModal(null)} />
-            )}
-            {modal.type === 'editCuentas' && (
-              <ModalEditCuentas cuentas={cuentas} onUpdate={updateCuentaSaldo} onClose={() => { setModal(null); loadData() }} />
             )}
           </div>
-        </div>
-      )}
+        )}
+
+        {/* Presupuesto Tab */}
+        {tab === 'presupuesto' && (
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 20 }}>
+            {(() => {
+              const totalFijosGastado = fijos.reduce((s, c) => s + c.gastado, 0)
+              const totalFijosLimite = fijos.reduce((s, c) => s + c.limite, 0)
+              const totalVarsGastado = variables.reduce((s, c) => s + c.gastado, 0)
+              const totalVarsLimite = variables.reduce((s, c) => s + c.limite, 0)
+              const totalGastado = totalFijosGastado + totalVarsGastado
+              const totalPct = Math.min(Math.round(totalGastado / presupuestoTotal * 100), 100)
+
+              const renderItem = (item: PresupuestoItem, tabla: string) => {
+                const pct = item.limite > 0 ? Math.min(Math.round(item.gastado / item.limite * 100), 100) : 0
+                return (
+                  <div key={item.id} style={{ padding: '8px 0', borderBottom: '0.5px solid var(--border)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                      <div style={{ fontSize: 13, color: 'var(--text2)' }}>{item.nombre}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--text)' }}>€{fmt(item.gastado)}</span>
+                        <span style={{ fontSize: 12, color: 'var(--text3)' }}>/ </span>
+                        <span onClick={() => setModal({ type: 'editLimite', data: { item, tabla } })} style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--text3)', cursor: 'pointer', textDecoration: 'underline dotted' }}>€{fmt(item.limite)}</span>
+                        <button onClick={() => setModal({ type: 'addGasto', data: { item, tabla } })} style={{ fontSize: 11, padding: '2px 8px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text3)', cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>+ Añadir</button>
+                      </div>
+                    </div>
+                    {item.limite > 0 && (
+                      <div style={{ height: 3, background: 'var(--border)', borderRadius: 2, overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${pct}%`, background: barColor(pct), borderRadius: 2 }} />
+                      </div>
+                    )}
+                  </div>
+                )
+              }
+
+              return (
+                <>
+                  {/* Total */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: 'var(--surface2)', borderRadius: 8, marginBottom: 20 }}>
+                    <div><div style={{ fontSize: 12, color: 'var(--text2)' }}>Gastado</div><div style={{ fontSize: 16, fontWeight: 500, color: barColor(totalPct) }}>€{fmt(totalGastado)}</div></div>
+                    <div style={{ textAlign: 'center' }}><div style={{ fontSize: 12, color: 'var(--text2)' }}>Disponible</div><div style={{ fontSize: 16, fontWeight: 500, color: 'var(--text2)' }}>€{fmt(presupuestoTotal - totalGastado)}</div></div>
+                    <div style={{ textAlign: 'right' }}><div style={{ fontSize: 12, color: 'var(--text2)' }}>Presupuesto mes</div><div style={{ fontSize: 16, fontWeight: 500, color: 'var(--text2)' }}>€{fmt(presupuestoTotal)}</div></div>
+                  </div>
+                  <div style={{ height: 6, background: 'var(--border)', borderRadius: 3, overflow: 'hidden', marginBottom: 24 }}>
+                    <div style={{ height: '100%', width: `${totalPct}%`, background: barColor(totalPct) }} />
+                  </div>
+
+                  {/* Fijos */}
+                  <div style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>
+                    Gastos fijos · €{fmt(totalFijosGastado)} / €{fmt(totalFijosLimite)}
+                  </div>
+                  {fijos.map(item => renderItem(item, 'fijos'))}
+
+                  <div style={{ borderTop: '1px solid var(--border)', margin: '20px 0' }} />
+
+                  {/* Variables */}
+                  <div style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>
+                    Gastos variables · €{fmt(totalVarsGastado)} / €{fmt(totalVarsLimite)}
+                  </div>
+                  {variables.map(item => renderItem(item, 'variables'))}
+                </>
+              )
+            })()}
+          </div>
+        )}
+
+        {/* Timesheet Ambushed/BoldMove Tab */}
+        {tab === 'timesheet_ab' && (
+          <TimesheetTab tipo="ambushed_boldmove" proyectos={proyectos} dias={dias} facturas={facturas} reload={loadData} />
+        )}
+
+        {/* Timesheet Clientes Propios Tab */}
+        {tab === 'timesheet_propios' && (
+          <TimesheetTab tipo="propio" proyectos={proyectos} dias={dias} facturas={facturas} reload={loadData} />
+        )}
+
+        {/* Modals */}
+        {modal && (
+          <div className="modal-bg" onClick={() => setModal(null)}>
+            <div className="modal" onClick={e => e.stopPropagation()}>
+              {modal.type === 'addFactura' && (
+                <ModalAddFactura cuentas={cuentas} onAdd={addFactura} onClose={() => setModal(null)} />
+              )}
+              {modal.type === 'addGasto' && (
+                <ModalAddGasto item={modal.data.item} tabla={modal.data.tabla} onAdd={addGasto} onClose={() => setModal(null)} />
+              )}
+              {modal.type === 'editLimite' && (
+                <ModalEditLimite item={modal.data.item} tabla={modal.data.tabla} onSave={editLimite} onClose={() => setModal(null)} />
+              )}
+              {modal.type === 'editCuentas' && (
+                <ModalEditCuentas cuentas={cuentas} onUpdate={updateCuentaSaldo} onClose={() => { setModal(null); loadData() }} />
+              )}
+            </div>
+          </div>
+        )}
+      </main>
     </div>
   )
 }
+
 
 function ModalAddFactura({ cuentas, onAdd, onClose }: { cuentas: Cuenta[], onAdd: (d: any) => void, onClose: () => void }) {
   const [form, setForm] = useState({ cliente: '', descripcion: '', importe: '', fecha: new Date().toISOString().split('T')[0], cuenta_destino_id: '', idioma: 'es' })
@@ -450,7 +655,7 @@ function ModalAddFactura({ cuentas, onAdd, onClose }: { cuentas: Cuenta[], onAdd
       <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
         <button onClick={onClose} style={{ padding: '9px 18px', borderRadius: 7, fontSize: 13, cursor: 'pointer', background: 'var(--surface2)', color: 'var(--text2)', border: '1px solid var(--border)', fontFamily: 'Inter, sans-serif' }}>Cancelar</button>
         <button onClick={() => form.cliente && form.importe && onAdd({ ...form, importe: Number(form.importe), cuenta_destino_id: form.cuenta_destino_id ? Number(form.cuenta_destino_id) : null })}
-          style={{ flex: 1, padding: '9px 18px', borderRadius: 7, fontSize: 13, cursor: 'pointer', background: 'var(--blue)', color: '#000', border: 'none', fontWeight: 500, fontFamily: 'Inter, sans-serif' }}>
+          style={{ flex: 1, padding: '9px 18px', borderRadius: 7, fontSize: 13, cursor: 'pointer', background: 'var(--accent)', color: '#000', border: 'none', fontWeight: 500, fontFamily: 'Inter, sans-serif' }}>
           Añadir
         </button>
       </div>
@@ -473,7 +678,7 @@ function ModalAddGasto({ item, tabla, onAdd, onClose }: { item: PresupuestoItem,
       <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
         <button onClick={onClose} style={{ padding: '9px 18px', borderRadius: 7, fontSize: 13, cursor: 'pointer', background: 'var(--surface2)', color: 'var(--text2)', border: '1px solid var(--border)', fontFamily: 'Inter, sans-serif' }}>Cancelar</button>
         <button onClick={() => importe && onAdd(tabla, item.id, Number(importe))}
-          style={{ flex: 1, padding: '9px 18px', borderRadius: 7, fontSize: 13, cursor: 'pointer', background: 'var(--blue)', color: '#000', border: 'none', fontWeight: 500, fontFamily: 'Inter, sans-serif' }}>
+          style={{ flex: 1, padding: '9px 18px', borderRadius: 7, fontSize: 13, cursor: 'pointer', background: 'var(--accent)', color: '#000', border: 'none', fontWeight: 500, fontFamily: 'Inter, sans-serif' }}>
           Añadir
         </button>
       </div>
@@ -496,7 +701,7 @@ function ModalEditLimite({ item, tabla, onSave, onClose }: { item: PresupuestoIt
       <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
         <button onClick={onClose} style={{ padding: '9px 18px', borderRadius: 7, fontSize: 13, cursor: 'pointer', background: 'var(--surface2)', color: 'var(--text2)', border: '1px solid var(--border)', fontFamily: 'Inter, sans-serif' }}>Cancelar</button>
         <button onClick={() => onSave(tabla, item.id, Number(limite))}
-          style={{ flex: 1, padding: '9px 18px', borderRadius: 7, fontSize: 13, cursor: 'pointer', background: 'var(--blue)', color: '#000', border: 'none', fontWeight: 500, fontFamily: 'Inter, sans-serif' }}>
+          style={{ flex: 1, padding: '9px 18px', borderRadius: 7, fontSize: 13, cursor: 'pointer', background: 'var(--accent)', color: '#000', border: 'none', fontWeight: 500, fontFamily: 'Inter, sans-serif' }}>
           Guardar
         </button>
       </div>
@@ -520,7 +725,7 @@ function ModalEditCuentas({ cuentas, onUpdate, onClose }: { cuentas: Cuenta[], o
         </div>
       ))}
       <button onClick={async () => { await Promise.all(cuentas.map(c => onUpdate(c.id, Number(values[c.id])))); onClose() }}
-        style={{ marginTop: 16, width: '100%', padding: '9px 18px', borderRadius: 7, fontSize: 13, cursor: 'pointer', background: 'var(--blue)', color: '#000', border: 'none', fontWeight: 500, fontFamily: 'Inter, sans-serif' }}>
+        style={{ marginTop: 16, width: '100%', padding: '9px 18px', borderRadius: 7, fontSize: 13, cursor: 'pointer', background: 'var(--accent)', color: '#000', border: 'none', fontWeight: 500, fontFamily: 'Inter, sans-serif' }}>
         Guardar todos
       </button>
     </>
@@ -530,7 +735,7 @@ function ModalEditCuentas({ cuentas, onUpdate, onClose }: { cuentas: Cuenta[], o
 const inputStyle = { width: '100%', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 7, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'Inter, sans-serif', outline: 'none' }
 const labelStyle = { display: 'block', fontSize: 12, color: 'var(--text2)', marginBottom: 6 }
 const cancelBtnStyle = { padding: '9px 18px', borderRadius: 7, fontSize: 13, cursor: 'pointer', background: 'var(--surface2)', color: 'var(--text2)', border: '1px solid var(--border)', fontFamily: 'Inter, sans-serif' }
-const confirmBtnStyle = { flex: 1, padding: '9px 18px', borderRadius: 7, fontSize: 13, cursor: 'pointer', background: 'var(--blue)', color: '#000', border: 'none', fontWeight: 500, fontFamily: 'Inter, sans-serif' }
+const confirmBtnStyle = { flex: 1, padding: '9px 18px', borderRadius: 7, fontSize: 13, cursor: 'pointer', background: 'var(--accent)', color: '#000', border: 'none', fontWeight: 500, fontFamily: 'Inter, sans-serif' }
 
 const statusColor: Record<string, string> = { activo: 'var(--amber)', completado: 'var(--text2)', facturado: 'var(--green)' }
 
@@ -643,9 +848,7 @@ function TimesheetTab({ tipo, proyectos, dias, facturas, reload }: { tipo: TipoP
             <option value="BoldMove">BoldMove</option>
           </select>
         ) : <div />}
-        <button onClick={() => setModal({ type: 'addProyecto' })} style={{ fontSize: 11, color: 'var(--text3)', cursor: 'pointer', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 12px', fontFamily: 'Inter, sans-serif' }}>
-          + Nuevo proyecto
-        </button>
+        <button className="btn btn-primary" onClick={() => setModal({ type: 'addProyecto' })}><Icon.plus />Nuevo proyecto</button>
       </div>
 
       {proyectosFiltrados.length === 0 && (
@@ -656,8 +859,8 @@ function TimesheetTab({ tipo, proyectos, dias, facturas, reload }: { tipo: TipoP
         const total = totalProyecto(p.id)
         const isOpen = expandido === p.id
         return (
-          <div key={p.id} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 16, marginBottom: 12 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }} onClick={() => setExpandido(isOpen ? null : p.id)}>
+          <div key={p.id} className="proj-card">
+            <div className="proj-head" onClick={() => setExpandido(isOpen ? null : p.id)}>
               <div>
                 <div style={{ fontSize: 14, fontWeight: 500 }}>{p.nombre}</div>
                 <div style={{ fontSize: 11, color: 'var(--text3)', display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -679,8 +882,7 @@ function TimesheetTab({ tipo, proyectos, dias, facturas, reload }: { tipo: TipoP
                   if (p.status !== 'facturado') return null
                   const factura = facturas.find(f => f.proyecto_id === p.id)
                   return factura ? (
-                    <a href={`/invoice/${factura.id}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
-                      style={{ color: 'var(--text3)', fontSize: 15, textDecoration: 'none' }} title="Ver/generar factura">🧾</a>
+                    <a className="icon-btn accent" href={`/invoice/${factura.id}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} title="Ver/generar factura"><Icon.invoice /></a>
                   ) : null
                 })()}
                 <select value={p.status} onClick={e => e.stopPropagation()} onChange={e => cambiarStatus(p, e.target.value)}
@@ -689,7 +891,7 @@ function TimesheetTab({ tipo, proyectos, dias, facturas, reload }: { tipo: TipoP
                   <option value="completado">Completado</option>
                   <option value="facturado">Facturado</option>
                 </select>
-                <button onClick={e => { e.stopPropagation(); deleteProyecto(p.id) }} style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 16 }}>×</button>
+                <button className="icon-btn danger" onClick={e => { e.stopPropagation(); deleteProyecto(p.id) }} title="Borrar proyecto"><Icon.x /></button>
               </div>
             </div>
 
@@ -709,12 +911,10 @@ function TimesheetTab({ tipo, proyectos, dias, facturas, reload }: { tipo: TipoP
                     )}
                     <div style={{ fontFamily: 'JetBrains Mono, monospace', width: 70, textAlign: 'right' }}>€{fmt2(d.total_day)}</div>
                     <span style={{ fontSize: 10, color: 'var(--text3)', width: 80, textAlign: 'right' }}>{d.status}</span>
-                    <button onClick={e => { e.stopPropagation(); deleteDia(d.id) }} style={{ color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, marginLeft: 8 }}>×</button>
+                    <button className="icon-btn danger" style={{ width: 24, height: 24, marginLeft: 8 }} onClick={e => { e.stopPropagation(); deleteDia(d.id) }} title="Borrar día"><Icon.x /></button>
                   </div>
                 ))}
-                <button onClick={() => setModal({ type: 'addDia', data: { proyectoId: p.id } })} style={{ marginTop: 10, width: '100%', padding: '6px 12px', border: '1px dashed var(--border)', borderRadius: 8, background: 'none', color: 'var(--text3)', fontSize: 11, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
-                  + Nuevo día
-                </button>
+                <button className="btn btn-dashed" style={{ marginTop: 10 }} onClick={() => setModal({ type: 'addDia', data: { proyectoId: p.id } })}><Icon.plus />Nuevo día</button>
               </div>
             )}
           </div>
@@ -722,8 +922,8 @@ function TimesheetTab({ tipo, proyectos, dias, facturas, reload }: { tipo: TipoP
       })}
 
       {modal && (
-        <div onClick={() => setModal(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, backdropFilter: 'blur(4px)' }}>
-          <div onClick={e => e.stopPropagation()} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: 28, width: 380, maxWidth: '90vw' }}>
+        <div className="modal-bg" onClick={() => setModal(null)}>
+          <div className="modal" style={{ width: 380 }} onClick={e => e.stopPropagation()}>
             {modal.type === 'addProyecto' && (
               <ModalAddProyecto tipo={tipo} onAdd={addProyecto} onClose={() => setModal(null)} />
             )}

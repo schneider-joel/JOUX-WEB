@@ -306,3 +306,14 @@ ON CONFLICT (clave) DO NOTHING;
 
 -- MIGRACIÓN: multi-moneda en cuentas + reestructuración de cuentas reales
 ALTER TABLE cuentas ADD COLUMN IF NOT EXISTS moneda TEXT DEFAULT 'EUR';
+
+-- MIGRACIÓN: snapshots diarios del patrimonio (para el gráfico de evolución)
+-- La app guarda un punto por día automáticamente al abrir el dashboard.
+CREATE TABLE IF NOT EXISTS patrimonio_snapshots (
+  fecha DATE PRIMARY KEY,
+  total DECIMAL(12,2) NOT NULL,
+  liquidez DECIMAL(12,2) NOT NULL DEFAULT 0,
+  crypto DECIMAL(12,2) NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE patrimonio_snapshots DISABLE ROW LEVEL SECURITY;
