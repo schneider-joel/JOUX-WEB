@@ -24,6 +24,17 @@ export default async function InvoicePage({ params }: { params: { id: string } }
   const { data: cfg } = await supabase.from('configuracion').select('*')
   const { data: clienteFiscal } = await supabase.from('clientes_fiscales').select('*').eq('cliente', factura.cliente).maybeSingle()
 
+  let dias: any[] = []
+  let proyectoTipo: string | undefined
+  if (factura.proyecto_id) {
+    const [{ data: proyecto }, { data: diasData }] = await Promise.all([
+      supabase.from('proyectos').select('tipo').eq('id', factura.proyecto_id).single(),
+      supabase.from('dias_trabajados').select('*').eq('proyecto_id', factura.proyecto_id).order('fecha'),
+    ])
+    proyectoTipo = proyecto?.tipo
+    dias = diasData || []
+  }
+
   const cfgVal = (clave: string, fallback = '') => cfg?.find((c: any) => c.clave === clave)?.valor || fallback
 
   const emisor = {
@@ -37,5 +48,5 @@ export default async function InvoicePage({ params }: { params: { id: string } }
 
   const ultimoNumero = cfgVal('ultimo_numero_factura', 'F260000')
 
-  return <InvoiceEditor factura={factura} emisor={emisor} clienteFiscalInicial={clienteFiscal} editable={editable} ultimoNumero={ultimoNumero} />
+  return <InvoiceEditor factura={factura} emisor={emisor} clienteFiscalInicial={clienteFiscal} editable={editable} ultimoNumero={ultimoNumero} dias={dias} proyectoTipo={proyectoTipo} />
 }

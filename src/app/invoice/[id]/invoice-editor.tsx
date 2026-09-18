@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { createClient } from '@supabase/supabase-js'
-import { Factura, ClienteFiscal } from '@/lib/supabase'
+import { Factura, ClienteFiscal, DiaTrabajado } from '@/lib/supabase'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -19,6 +19,7 @@ const textos = {
     guardar: 'Guardar cambios', guardando: 'Guardando...',
     notaFueraUe: 'Operación no sujeta a IVA por el art. 69.Uno.1º LIVA',
     notaTransferencia: 'Pagar por transferencia bancaria al siguiente número de cuenta',
+    detalleHoras: 'Detalle de horas', fechaCol: 'Fecha', horas: 'Horas', standby: 'Standby', tarifa: 'Tarifa/h', diaTotal: 'Total',
   },
   en: {
     titulo: 'INVOICE', numero: 'Number', referencia: 'Reference', fecha: 'Date', vencimiento: 'Due date', para: 'To', de: 'From',
@@ -27,6 +28,7 @@ const textos = {
     guardar: 'Save changes', guardando: 'Saving...',
     notaFueraUe: 'Not subject to VAT under art. 69.One.1 of the Spanish VAT Law',
     notaTransferencia: 'Pay by bank transfer to the following account number',
+    detalleHoras: 'Hours detail', fechaCol: 'Date', horas: 'Hours', standby: 'Standby', tarifa: 'Rate/h', diaTotal: 'Total',
   },
 }
 
@@ -50,12 +52,16 @@ export default function InvoiceEditor({
   clienteFiscalInicial,
   editable,
   ultimoNumero,
+  dias = [],
+  proyectoTipo,
 }: {
   factura: Factura
   emisor: { nombre: string; nif: string; direccion: string; email: string; telefono: string; iban: string }
   clienteFiscalInicial: ClienteFiscal | null
   editable: boolean
   ultimoNumero: string
+  dias?: DiaTrabajado[]
+  proyectoTipo?: string
 }) {
   const [factura, setFactura] = useState(initialFactura)
   const [clienteFiscal, setClienteFiscal] = useState<ClienteFiscal>(
@@ -126,18 +132,21 @@ export default function InvoiceEditor({
     ? new Date(factura.fecha_vencimiento + 'T00:00:00').toLocaleDateString(idioma === 'es' ? 'es-ES' : 'en-GB')
     : ''
 
+  const mostrarDetalleHoras = proyectoTipo === 'ambushed_boldmove' && dias.length > 0
+  const fmtDiaFecha = (f: string) => new Date(f + 'T00:00:00').toLocaleDateString(idioma === 'es' ? 'es-ES' : 'en-GB', { day: '2-digit', month: '2-digit' })
+
   return (
     <>
       <style>{`
         @media print {
           .no-print { display: none !important; }
           body { background: #fff !important; }
-          .invoice-table-wrap { overflow: visible !important; }
+          .invoice-table-wrap, .invoice-detail-wrap { overflow: visible !important; }
           .invoice-card { box-shadow: none !important; max-width: none !important; }
         }
         body { background: #f5f5f5; }
         .invoice-card { padding: 56px 64px; }
-        .invoice-table-wrap { overflow-x: auto; }
+        .invoice-table-wrap, .invoice-detail-wrap { overflow-x: auto; }
         .invoice-table { table-layout: fixed; }
         .invoice-table th, .invoice-table td { white-space: normal; overflow-wrap: break-word; }
         .invoice-table .col-concepto { white-space: normal; }
@@ -318,6 +327,34 @@ export default function InvoiceEditor({
           </tbody>
         </table>
         </div>
+
+        {mostrarDetalleHoras && (
+          <div className="invoice-detail-wrap" style={{ marginTop: 4, marginBottom: 8 }}>
+            <div style={{ fontSize: 10.5, color: '#888', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>{t.detalleHoras}</div>
+            <table className="invoice-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid #eee' }}>
+                  <th style={{ width: '28%', textAlign: 'left', padding: '6px 8px 6px 0', fontSize: 10.5, color: '#888', fontWeight: 500 }}>{t.fechaCol}</th>
+                  <th style={{ width: '18%', textAlign: 'right', padding: '6px 8px', fontSize: 10.5, color: '#888', fontWeight: 500 }}>{t.horas}</th>
+                  <th style={{ width: '18%', textAlign: 'right', padding: '6px 8px', fontSize: 10.5, color: '#888', fontWeight: 500 }}>{t.standby}</th>
+                  <th style={{ width: '18%', textAlign: 'right', padding: '6px 8px', fontSize: 10.5, color: '#888', fontWeight: 500 }}>{t.tarifa}</th>
+                  <th style={{ width: '18%', textAlign: 'right', padding: '6px 0', fontSize: 10.5, color: '#888', fontWeight: 500 }}>{t.diaTotal}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dias.map(d => (
+                  <tr key={d.id} style={{ borderBottom: '1px solid #f2f2f2' }}>
+                    <td style={{ padding: '5px 8px 5px 0', fontSize: 11.5, color: '#444' }}>{fmtDiaFecha(d.fecha)}</td>
+                    <td style={{ padding: '5px 8px', fontSize: 11.5, color: '#444', textAlign: 'right' }}>{d.hrs ?? 0}h</td>
+                    <td style={{ padding: '5px 8px', fontSize: 11.5, color: '#444', textAlign: 'right' }}>{d.standby_hrs > 0 ? `${d.standby_hrs}h` : '—'}</td>
+                    <td style={{ padding: '5px 8px', fontSize: 11.5, color: '#444', textAlign: 'right' }}>{fmt2(d.rate)}€</td>
+                    <td style={{ padding: '5px 0', fontSize: 11.5, color: '#444', textAlign: 'right' }}>{fmt2(Number(d.total_day))}€</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
 
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, marginTop: 20 }}>
           <div style={{ display: 'flex', gap: 24, fontSize: 12 }}>
