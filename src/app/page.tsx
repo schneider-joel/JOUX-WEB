@@ -222,8 +222,18 @@ export default function Home() {
   const totalLiquidez = cuentas.reduce((s, c) => s + aEuros(c), 0)
   const totalCrypto = crypto.reduce((s, c) => c.symbol === 'ETH' ? s + c.cantidad * ethPrice : s, 0)
   const totalPatrimonio = totalLiquidez + totalCrypto
-  const facturasPendientes = facturas.filter(f => f.estado === 'pendiente')
-  const facturasCobradas = facturas.filter(f => f.estado === 'cobrada')
+  // Una factura ligada a un proyecto solo debería verse/cobrarse una vez que
+  // el proyecto está "Facturado" — si volvió a Activo/Completado, se oculta
+  // (el trigger de Supabase ya la borra si sigue pendiente; esto es red de
+  // seguridad por si la UI todavía no recargó).
+  const facturaVisible = (f: Factura) => {
+    if (!f.proyecto_id) return true
+    const p = proyectos.find(p => p.id === f.proyecto_id)
+    return !p || p.status === 'facturado'
+  }
+  const facturasVisibles = facturas.filter(facturaVisible)
+  const facturasPendientes = facturasVisibles.filter(f => f.estado === 'pendiente')
+  const facturasCobradas = facturasVisibles.filter(f => f.estado === 'cobrada')
   const totalPendiente = facturasPendientes.reduce((s, f) => s + f.importe, 0)
 
   const mesActualKey = hoyLocal().slice(0, 7)
