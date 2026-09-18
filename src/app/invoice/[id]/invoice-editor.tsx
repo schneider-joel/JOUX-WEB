@@ -226,7 +226,10 @@ export default function InvoiceEditor({
           <tbody>
             <tr>
               <td style={{ padding: '14px 0', fontSize: 13 }}>
-                <div style={{ fontWeight: 600 }}>{factura.descripcion || factura.cliente}</div>
+                <div style={{ fontWeight: 600 }}>
+                  {factura.descripcion || factura.cliente}
+                  {factura.numero_referencia && <span style={{ fontWeight: 400, color: '#888' }}> · #{factura.numero_referencia}</span>}
+                </div>
                 {factura.concepto_detalle && <div style={{ color: '#888', fontSize: 12 }}>{factura.concepto_detalle}</div>}
               </td>
               <td style={{ padding: '14px 0', fontSize: 13, textAlign: 'right' }}>{fmt2(factura.importe)}€</td>
