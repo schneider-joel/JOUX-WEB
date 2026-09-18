@@ -250,6 +250,43 @@ $$ LANGUAGE plpgsql;
 INSERT INTO configuracion (clave, valor) VALUES ('ultimo_numero_factura', 'F260020')
 ON CONFLICT (clave) DO NOTHING;
 
+-- MIGRACIÓN: asignar el Nº de factura automáticamente al marcar Facturado
+-- (comparte una sola secuencia entre Ambushed/BoldMove y clientes propios, igual que en Holded)
+CREATE OR REPLACE FUNCTION siguiente_numero_factura() RETURNS TEXT AS $$
+DECLARE
+  actual TEXT;
+  prefijo TEXT;
+  digitos TEXT;
+  siguiente TEXT;
+BEGIN
+  SELECT valor INTO actual FROM configuracion WHERE clave = 'ultimo_numero_factura';
+  IF actual IS NULL THEN
+    RETURN NULL;
+  END IF;
+  prefijo := substring(actual FROM '^[A-Za-z-]*');
+  digitos := substring(actual FROM '\d+$');
+  siguiente := prefijo || lpad((digitos::INT + 1)::TEXT, length(digitos), '0');
+  UPDATE configuracion SET valor = siguiente WHERE clave = 'ultimo_numero_factura';
+  RETURN siguiente;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION crear_factura_desde_proyecto()
+RETURNS TRIGGER AS $$
+DECLARE
+  monto DECIMAL(10,2);
+BEGIN
+  IF NEW.status = 'facturado' AND (OLD.status IS DISTINCT FROM 'facturado') THEN
+    SELECT COALESCE(SUM(total_day), 0) INTO monto FROM dias_trabajados WHERE proyecto_id = NEW.id;
+    IF NOT EXISTS (SELECT 1 FROM facturas WHERE proyecto_id = NEW.id) THEN
+      INSERT INTO facturas (cliente, descripcion, importe, fecha, estado, origen, proyecto_id, numero_referencia, numero)
+      VALUES (NEW.cliente, NEW.nombre, monto, CURRENT_DATE, 'pendiente', 'timesheet', NEW.id, NEW.numero_proyecto, siguiente_numero_factura());
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
 -- Row Level Security (RLS) - desactivado para uso personal
 ALTER TABLE cuentas DISABLE ROW LEVEL SECURITY;
 ALTER TABLE crypto DISABLE ROW LEVEL SECURITY;

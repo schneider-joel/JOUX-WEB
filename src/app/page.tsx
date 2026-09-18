@@ -536,7 +536,7 @@ function TimesheetTab({ tipo, proyectos, dias, facturas, reload }: { tipo: TipoP
   const cambiarStatus = async (p: Proyecto, status: string) => {
     if (status === 'facturado') {
       const monto = totalProyecto(p.id)
-      if (!confirm(`Marcar "${p.nombre}" como Facturado va a crear una factura pendiente por €${fmt(monto)}. ¿Confirmás?`)) return
+      if (!confirm(`Marcar "${p.nombre}" como Facturado va a crear una factura pendiente por €${fmt(monto)} y asignarle el próximo Nº de factura. ¿Confirmás?`)) return
     }
     await supabase.from('proyectos').update({ status }).eq('id', p.id)
     reload()
