@@ -24,7 +24,7 @@ export default async function PublicTimesheetPage({ params }: { params: { token:
   const { data: facturas } = await supabase.from('facturas').select('id, proyecto_id').eq('origen', 'timesheet')
   const { count: rawCount, error: rawErr } = await supabase.from('proyectos').select('*', { count: 'exact', head: true })
 
-  const rawUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/proyectos?select=id,nombre&_=${Date.now()}`
+  const rawUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/proyectos?select=id,nombre`
   let rawFetchCount: number | string = 'err'
   try {
     const r = await fetch(rawUrl, {
