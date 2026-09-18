@@ -282,7 +282,7 @@ BEGIN
     IF fecha_emision IS NULL THEN fecha_emision := CURRENT_DATE; END IF;
     IF NOT EXISTS (SELECT 1 FROM facturas WHERE proyecto_id = NEW.id) THEN
       INSERT INTO facturas (cliente, descripcion, importe, fecha, fecha_vencimiento, estado, origen, proyecto_id, numero_referencia, numero)
-      VALUES (NEW.cliente, NEW.nombre, monto, fecha_emision, (fecha_emision + INTERVAL '1 month')::DATE, 'pendiente', 'timesheet', NEW.id, NEW.numero_proyecto, siguiente_numero_factura());
+      VALUES (NEW.cliente, NEW.nombre, monto, fecha_emision, fecha_emision + 30, 'pendiente', 'timesheet', NEW.id, NEW.numero_proyecto, siguiente_numero_factura());
     END IF;
   END IF;
   RETURN NEW;

@@ -217,7 +217,7 @@ export default function Home() {
               <div key={f.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '0.5px solid var(--border)' }}>
                 <div>
                   <div style={{ fontSize: 13, color: 'var(--text)' }}>{f.cliente}{f.descripcion ? ` · ${f.descripcion}` : ''}</div>
-                  <div style={{ fontSize: 11, color: 'var(--text3)' }}>Vence {fmtDate(f.fecha)}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text3)' }}>Vence {fmtDate(f.fecha_vencimiento || f.fecha)}</div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 14, fontWeight: 500, color: 'var(--green)' }}>+€{fmt(f.importe)}</div>
@@ -247,7 +247,7 @@ export default function Home() {
             <div key={f.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '0.5px solid var(--border)' }}>
               <div>
                 <div style={{ fontSize: 13, color: 'var(--text)' }}>{f.cliente}{f.descripcion ? ` · ` : ''}<span style={{ color: 'var(--text3)' }}>{f.descripcion}</span></div>
-                <div style={{ fontSize: 11, color: 'var(--text3)' }}>Vence {fmtDate(f.fecha)}{f.origen === 'notion' ? ' · Notion' : ''}</div>
+                <div style={{ fontSize: 11, color: 'var(--text3)' }}>Vence {fmtDate(f.fecha_vencimiento || f.fecha)}{f.origen === 'notion' ? ' · Notion' : ''}</div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 14, fontWeight: 500, color: 'var(--green)' }}>+€{fmt(f.importe)}</div>
