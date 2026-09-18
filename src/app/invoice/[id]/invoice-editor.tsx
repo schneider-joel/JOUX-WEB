@@ -117,8 +117,18 @@ export default function InvoiceEditor({
       })
     }
 
-    if (factura.numero && /^[A-Za-z-]*\d+$/.test(factura.numero)) {
-      await supabase.from('configuracion').update({ valor: factura.numero }).eq('clave', 'ultimo_numero_factura')
+    // Solo hace avanzar la secuencia global si el número es válido (mismo
+    // prefijo + más alto que el actual) — evita que guardar una factura con
+    // un número corto/mal tipeado corrompa el contador de "siguiente número".
+    const m = factura.numero?.match(/^(.*?)(\d+)$/)
+    if (m) {
+      const [, prefijoNuevo, digitosNuevo] = m
+      const { data: cfgActual } = await supabase.from('configuracion').select('valor').eq('clave', 'ultimo_numero_factura').single()
+      const mActual = cfgActual?.valor?.match(/^(.*?)(\d+)$/)
+      const esAvanceValido = !mActual || (mActual[1] === prefijoNuevo && Number(digitosNuevo) > Number(mActual[2]))
+      if (esAvanceValido) {
+        await supabase.from('configuracion').update({ valor: factura.numero }).eq('clave', 'ultimo_numero_factura')
+      }
     }
 
     setSaving(false)
