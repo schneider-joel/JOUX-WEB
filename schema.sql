@@ -296,3 +296,10 @@ ALTER TABLE facturas DISABLE ROW LEVEL SECURITY;
 ALTER TABLE presupuesto_fijos DISABLE ROW LEVEL SECURITY;
 ALTER TABLE presupuesto_variables DISABLE ROW LEVEL SECURITY;
 ALTER TABLE configuracion DISABLE ROW LEVEL SECURITY;
+
+-- MIGRACIÓN: tipo de factura (dentro/fuera de la UE) con IVA/Retención
+ALTER TABLE facturas ADD COLUMN IF NOT EXISTS tipo_factura TEXT DEFAULT 'fuera_ue';
+
+INSERT INTO configuracion (clave, valor) VALUES
+  ('emisor_iban', 'ES67 0182 5322 2702 0400 4921')
+ON CONFLICT (clave) DO NOTHING;

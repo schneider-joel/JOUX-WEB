@@ -32,6 +32,7 @@ export default async function InvoicePage({ params }: { params: { id: string } }
     direccion: cfgVal('emisor_direccion'),
     email: cfgVal('emisor_email'),
     telefono: cfgVal('emisor_telefono'),
+    iban: cfgVal('emisor_iban'),
   }
 
   const ultimoNumero = cfgVal('ultimo_numero_factura', 'F260000')

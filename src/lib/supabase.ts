@@ -38,6 +38,7 @@ export type Factura = {
   proyecto_id?: number
   numero_referencia?: string
   idioma?: 'es' | 'en'
+  tipo_factura?: 'fuera_ue' | 'dentro_ue'
 }
 
 export type ClienteFiscal = {

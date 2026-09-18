@@ -14,17 +14,24 @@ const fmt2 = (n: number) => new Intl.NumberFormat('en-US', { minimumFractionDigi
 const textos = {
   es: {
     titulo: 'FACTURA', numero: 'Número', referencia: 'Referencia', fecha: 'Fecha', vencimiento: 'Vencimiento', para: 'Para', de: 'De',
-    concepto: 'CONCEPTO', precio: 'PRECIO', unidades: 'UNIDADES', subtotal: 'SUBTOTAL', total: 'TOTAL',
+    concepto: 'CONCEPTO', precio: 'PRECIO', unidades: 'UNIDADES', subtotal: 'SUBTOTAL', iva: 'IVA', retencion: 'RETENCIÓN', total: 'TOTAL',
     baseImponible: 'BASE IMPONIBLE', totalLabel: 'Total', imprimir: 'Imprimir / Guardar PDF', editar: 'Editar', vista: 'Vista previa',
     guardar: 'Guardar cambios', guardando: 'Guardando...',
+    notaFueraUe: 'Operación no sujeta a IVA por el art. 69.Uno.1º LIVA',
+    notaTransferencia: 'Pagar por transferencia bancaria al siguiente número de cuenta',
   },
   en: {
     titulo: 'INVOICE', numero: 'Number', referencia: 'Reference', fecha: 'Date', vencimiento: 'Due date', para: 'To', de: 'From',
-    concepto: 'DESCRIPTION', precio: 'PRICE', unidades: 'QTY', subtotal: 'SUBTOTAL', total: 'TOTAL',
+    concepto: 'DESCRIPTION', precio: 'PRICE', unidades: 'QTY', subtotal: 'SUBTOTAL', iva: 'VAT', retencion: 'WITHHOLDING', total: 'TOTAL',
     baseImponible: 'NET AMOUNT', totalLabel: 'Total', imprimir: 'Print / Save PDF', editar: 'Edit', vista: 'Preview',
     guardar: 'Save changes', guardando: 'Saving...',
+    notaFueraUe: 'Not subject to VAT under art. 69.One.1 of the Spanish VAT Law',
+    notaTransferencia: 'Pay by bank transfer to the following account number',
   },
 }
+
+const IVA_PCT = 21
+const RETENCION_PCT = 15
 
 const inputStyle: React.CSSProperties = { width: '100%', background: '#fff', border: '1px solid #ddd', borderRadius: 6, padding: '7px 10px', color: '#111', fontSize: 13, fontFamily: 'Inter, sans-serif', outline: 'none' }
 const labelStyle: React.CSSProperties = { display: 'block', fontSize: 11, color: '#888', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }
@@ -45,7 +52,7 @@ export default function InvoiceEditor({
   ultimoNumero,
 }: {
   factura: Factura
-  emisor: { nombre: string; nif: string; direccion: string; email: string; telefono: string }
+  emisor: { nombre: string; nif: string; direccion: string; email: string; telefono: string; iban: string }
   clienteFiscalInicial: ClienteFiscal | null
   editable: boolean
   ultimoNumero: string
@@ -60,8 +67,14 @@ export default function InvoiceEditor({
 
   const idioma = factura.idioma === 'en' ? 'en' : 'es'
   const t = textos[idioma]
+  const dentroUe = factura.tipo_factura === 'dentro_ue'
 
   const set = (patch: Partial<Factura>) => setFactura({ ...factura, ...patch })
+
+  const base = Number(factura.importe) || 0
+  const ivaAmount = dentroUe ? base * (IVA_PCT / 100) : 0
+  const retencionAmount = dentroUe ? base * (RETENCION_PCT / 100) : 0
+  const total = base + ivaAmount - retencionAmount
 
   const usarSiguienteNumero = () => {
     const next = siguienteNumero(ultimoNumero)
@@ -81,6 +94,7 @@ export default function InvoiceEditor({
       concepto_detalle: factura.concepto_detalle,
       importe: factura.importe,
       idioma: factura.idioma || 'es',
+      tipo_factura: factura.tipo_factura || 'fuera_ue',
     }).eq('id', factura.id)
 
     if (error) {
@@ -182,6 +196,14 @@ export default function InvoiceEditor({
           </div>
 
           <div style={{ marginBottom: 14 }}>
+            <label style={labelStyle}>Tipo de factura</label>
+            <select value={factura.tipo_factura || 'fuera_ue'} onChange={e => set({ tipo_factura: e.target.value as 'fuera_ue' | 'dentro_ue' })} style={inputStyle}>
+              <option value="fuera_ue">Fuera de la UE (sin IVA, con transferencia bancaria)</option>
+              <option value="dentro_ue">Dentro de la UE / España (con IVA 21% y Retención -15%)</option>
+            </select>
+          </div>
+
+          <div style={{ marginBottom: 14 }}>
             <label style={labelStyle}>Concepto (título)</label>
             <input value={factura.descripcion || ''} onChange={e => set({ descripcion: e.target.value })} placeholder="Tratamiento Digital Web" style={inputStyle} />
           </div>
@@ -247,9 +269,15 @@ export default function InvoiceEditor({
             {clienteFiscal.direccion && clienteFiscal.direccion.split('\n').map((l, i) => <div key={i}>{l}</div>)}
           </div>
           <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: 28, fontWeight: 700 }}>{t.totalLabel} {fmt2(factura.importe)}€</div>
+            <div style={{ fontSize: 28, fontWeight: 700 }}>{t.totalLabel} {fmt2(total)}€</div>
           </div>
         </div>
+
+        {!dentroUe && (
+          <div style={{ fontSize: 12, color: '#444', background: '#f7f7f7', borderRadius: 6, padding: '10px 14px', marginBottom: 20 }}>
+            {t.notaFueraUe}
+          </div>
+        )}
 
         <div className="invoice-table-wrap">
         <table className="invoice-table" style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 8 }}>
@@ -259,6 +287,8 @@ export default function InvoiceEditor({
               <th style={{ textAlign: 'right', padding: '10px 12px', fontSize: 11 }}>{t.precio}</th>
               <th style={{ textAlign: 'right', padding: '10px 12px', fontSize: 11 }}>{t.unidades}</th>
               <th style={{ textAlign: 'right', padding: '10px 12px', fontSize: 11 }}>{t.subtotal}</th>
+              {dentroUe && <th style={{ textAlign: 'right', padding: '10px 12px', fontSize: 11 }}>{t.iva}</th>}
+              {dentroUe && <th style={{ textAlign: 'right', padding: '10px 12px', fontSize: 11 }}>{t.retencion}</th>}
               <th style={{ textAlign: 'right', padding: '10px 0', fontSize: 11 }}>{t.total}</th>
             </tr>
           </thead>
@@ -271,10 +301,12 @@ export default function InvoiceEditor({
                 </div>
                 {factura.concepto_detalle && <div style={{ color: '#888', fontSize: 12 }}>{factura.concepto_detalle}</div>}
               </td>
-              <td style={{ padding: '14px 12px', fontSize: 13, textAlign: 'right' }}>{fmt2(factura.importe)}€</td>
+              <td style={{ padding: '14px 12px', fontSize: 13, textAlign: 'right' }}>{fmt2(base)}€</td>
               <td style={{ padding: '14px 12px', fontSize: 13, textAlign: 'right' }}>1</td>
-              <td style={{ padding: '14px 12px', fontSize: 13, textAlign: 'right' }}>{fmt2(factura.importe)}€</td>
-              <td style={{ padding: '14px 0', fontSize: 13, textAlign: 'right' }}>{fmt2(factura.importe)}€</td>
+              <td style={{ padding: '14px 12px', fontSize: 13, textAlign: 'right' }}>{fmt2(base)}€</td>
+              {dentroUe && <td style={{ padding: '14px 12px', fontSize: 13, textAlign: 'right' }}>{IVA_PCT}%</td>}
+              {dentroUe && <td style={{ padding: '14px 12px', fontSize: 13, textAlign: 'right' }}>-{RETENCION_PCT}%</td>}
+              <td style={{ padding: '14px 0', fontSize: 13, textAlign: 'right' }}>{fmt2(total)}€</td>
             </tr>
           </tbody>
         </table>
@@ -283,13 +315,31 @@ export default function InvoiceEditor({
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, marginTop: 20 }}>
           <div style={{ display: 'flex', gap: 24, fontSize: 12 }}>
             <span style={{ fontWeight: 600 }}>{t.baseImponible}</span>
-            <span>{fmt2(factura.importe)}€</span>
+            <span>{fmt2(base)}€</span>
           </div>
+          {dentroUe && (
+            <>
+              <div style={{ display: 'flex', gap: 24, fontSize: 12 }}>
+                <span style={{ fontWeight: 600 }}>{t.iva} {IVA_PCT}%</span>
+                <span>{fmt2(ivaAmount)}€</span>
+              </div>
+              <div style={{ display: 'flex', gap: 24, fontSize: 12 }}>
+                <span style={{ fontWeight: 600 }}>{t.retencion} {RETENCION_PCT}%</span>
+                <span>-{fmt2(retencionAmount)}€</span>
+              </div>
+            </>
+          )}
           <div style={{ display: 'flex', gap: 24, fontSize: 13, fontWeight: 700 }}>
             <span>{t.total}</span>
-            <span>{fmt2(factura.importe)}€</span>
+            <span>{fmt2(total)}€</span>
           </div>
         </div>
+
+        {!dentroUe && emisor.iban && (
+          <div style={{ fontSize: 11, color: '#888', marginTop: 32, textAlign: 'center' }}>
+            {t.notaTransferencia} <strong style={{ color: '#111' }}>{emisor.iban}</strong>
+          </div>
+        )}
       </div>
     </>
   )
