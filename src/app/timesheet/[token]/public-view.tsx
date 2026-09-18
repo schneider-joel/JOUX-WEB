@@ -37,15 +37,16 @@ export default function PublicTimesheetView({
   facturas: { id: number; proyecto_id: number }[]
 }) {
   const [query, setQuery] = useState('')
+  const [cliente, setCliente] = useState('todos')
 
   const diasDe = (proyectoId: number) => dias.filter(d => d.proyecto_id === proyectoId)
   const totalProyecto = (proyectoId: number) => diasDe(proyectoId).reduce((s, d) => s + Number(d.total_day), 0)
   const facturaDe = (proyectoId: number) => facturas.find(f => f.proyecto_id === proyectoId)
 
   const q = query.trim().toLowerCase()
-  const filtrados = q
-    ? proyectos.filter(p => p.nombre.toLowerCase().includes(q) || (p.numero_proyecto || '').toLowerCase().includes(q))
-    : proyectos
+  const filtrados = proyectos
+    .filter(p => cliente === 'todos' || p.cliente === cliente)
+    .filter(p => !q || p.nombre.toLowerCase().includes(q) || (p.numero_proyecto || '').toLowerCase().includes(q))
 
   return (
     <div style={{ background: '#f5f5f5', minHeight: '100vh', fontFamily: 'Inter, sans-serif', color: '#111', padding: '48px 24px' }}>
@@ -55,12 +56,23 @@ export default function PublicTimesheetView({
           <div style={{ fontSize: 13, color: '#888', marginTop: 4 }}>Joel Schneider · Ambushed / BoldMove</div>
         </div>
 
-        <input
-          value={query}
-          onChange={e => setQuery(e.target.value)}
-          placeholder="Search projects..."
-          style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid #ddd', fontSize: 14, marginBottom: 24, outline: 'none', background: '#fff' }}
-        />
+        <div style={{ display: 'flex', gap: 10, marginBottom: 24 }}>
+          <input
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="Search projects..."
+            style={{ flex: 1, padding: '10px 14px', borderRadius: 8, border: '1px solid #ddd', fontSize: 14, outline: 'none', background: '#fff' }}
+          />
+          <select
+            value={cliente}
+            onChange={e => setCliente(e.target.value)}
+            style={{ padding: '10px 14px', borderRadius: 8, border: '1px solid #ddd', fontSize: 14, outline: 'none', background: '#fff' }}
+          >
+            <option value="todos">All clients</option>
+            <option value="Ambushed">Ambushed</option>
+            <option value="BoldMove">BoldMove</option>
+          </select>
+        </div>
 
         {filtrados.length === 0 && (
           <div style={{ textAlign: 'center', color: '#888', fontSize: 14, padding: '60px 0' }}>
