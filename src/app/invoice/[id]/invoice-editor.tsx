@@ -120,12 +120,16 @@ export default function InvoiceEditor({
     // Solo hace avanzar la secuencia global si el número es válido (mismo
     // prefijo + más alto que el actual) — evita que guardar una factura con
     // un número corto/mal tipeado corrompa el contador de "siguiente número".
+    // Si no se puede leer el valor actual (error de red, fila ausente), no se
+    // toca nada — la opción segura es NO avanzar, nunca asumir que cualquier
+    // número vale como próximo (eso fue justo lo que corrompió el contador
+    // la vez anterior).
     const m = factura.numero?.match(/^(.*?)(\d+)$/)
     if (m) {
       const [, prefijoNuevo, digitosNuevo] = m
-      const { data: cfgActual } = await supabase.from('configuracion').select('valor').eq('clave', 'ultimo_numero_factura').single()
+      const { data: cfgActual, error: cfgError } = await supabase.from('configuracion').select('valor').eq('clave', 'ultimo_numero_factura').single()
       const mActual = cfgActual?.valor?.match(/^(.*?)(\d+)$/)
-      const esAvanceValido = !mActual || (mActual[1] === prefijoNuevo && Number(digitosNuevo) > Number(mActual[2]))
+      const esAvanceValido = !cfgError && !!mActual && mActual[1] === prefijoNuevo && Number(digitosNuevo) > Number(mActual[2])
       if (esAvanceValido) {
         await supabase.from('configuracion').update({ valor: factura.numero }).eq('clave', 'ultimo_numero_factura')
       }
