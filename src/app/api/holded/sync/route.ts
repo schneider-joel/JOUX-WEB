@@ -10,6 +10,7 @@ export async function POST(req: NextRequest) {
     const { data: factura } = await supabase.from('facturas').select('*').eq('id', facturaId).single()
     if (!factura) return NextResponse.json({ error: 'Factura no encontrada' }, { status: 404 })
     if (factura.holded_estimate_id) return NextResponse.json({ error: 'Esta factura ya se envió a Holded' }, { status: 400 })
+    if (!factura.numero) return NextResponse.json({ error: 'La factura no tiene número asignado' }, { status: 400 })
 
     let contactId = await buscarContactoPorNombre(factura.cliente)
     if (!contactId) {
@@ -30,6 +31,7 @@ export async function POST(req: NextRequest) {
       fecha: factura.fecha,
       importe: Number(factura.importe),
       notas,
+      numero: factura.numero,
     })
 
     const { data: updated, error } = await supabase

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { supabase, Cuenta, Crypto, Factura, PresupuestoItem, Proyecto, DiaTrabajado, TipoProyecto, PatrimonioSnapshot } from '@/lib/supabase'
+import { supabase, Cuenta, Crypto, Factura, PresupuestoItem, Proyecto, DiaTrabajado, TipoProyecto, PatrimonioSnapshot, ClienteFiscal } from '@/lib/supabase'
 
 const fmt = (n: number) => new Intl.NumberFormat('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(Math.round(n))
 const fmt2 = (n: number) => new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
@@ -23,7 +23,7 @@ const ultimosMeses = (n: number) => {
   return out
 }
 
-type Tab = 'dashboard' | 'facturas' | 'presupuesto' | 'timesheet_ab' | 'timesheet_propios'
+type Tab = 'dashboard' | 'facturas' | 'presupuesto' | 'timesheet_ab' | 'timesheet_propios' | 'clientes'
 type Modal = { type: string; data?: any } | null
 
 const svgProps = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, viewBox: '0 0 24 24' }
@@ -42,6 +42,7 @@ const Icon = {
   edit: () => <svg {...svgProps}><path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17z" /><path d="M13.5 6.5l3 3" /></svg>,
   plus: () => <svg {...svgProps}><path d="M12 5v14M5 12h14" /></svg>,
   link: () => <svg {...svgProps}><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.5 1.5" /><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.5-1.5" /></svg>,
+  card: () => <svg {...svgProps}><rect x="2.5" y="5" width="19" height="14" rx="2.2" /><path d="M2.5 9.5h19" /><path d="M6 14h5" /></svg>,
 }
 
 function useChartSize() {
@@ -167,6 +168,7 @@ export default function Home() {
   const [variables, setVariables] = useState<PresupuestoItem[]>([])
   const [proyectos, setProyectos] = useState<Proyecto[]>([])
   const [dias, setDias] = useState<DiaTrabajado[]>([])
+  const [clientesFiscales, setClientesFiscales] = useState<ClienteFiscal[]>([])
   const [snapshots, setSnapshots] = useState<PatrimonioSnapshot[]>([])
   const [ethPrice, setEthPrice] = useState<number>(2100)
   const [usdToEur, setUsdToEur] = useState<number>(0.92)
@@ -176,7 +178,7 @@ export default function Home() {
   const [lastUpdated, setLastUpdated] = useState<string>('')
 
   const loadData = useCallback(async () => {
-    const [c, cr, f, fi, v, cfg, pr, di, sn] = await Promise.all([
+    const [c, cr, f, fi, v, cfg, pr, di, sn, cf] = await Promise.all([
       supabase.from('cuentas').select('*').order('orden'),
       supabase.from('crypto').select('*'),
       supabase.from('facturas').select('*').order('fecha'),
@@ -186,6 +188,7 @@ export default function Home() {
       supabase.from('proyectos').select('*').order('created_at'),
       supabase.from('dias_trabajados').select('*').order('fecha'),
       supabase.from('patrimonio_snapshots').select('*').order('fecha'),
+      supabase.from('clientes_fiscales').select('*').order('cliente'),
     ])
     if (c.data) setCuentas(c.data)
     if (cr.data) setCrypto(cr.data)
@@ -195,6 +198,7 @@ export default function Home() {
     if (pr.data) setProyectos(pr.data)
     if (di.data) setDias(di.data)
     if (sn.data) setSnapshots(sn.data)
+    if (cf.data) setClientesFiscales(cf.data)
     if (cfg.data) {
       const mes = cfg.data.find((x: any) => x.clave === 'mes_actual')?.valor
       const pt = cfg.data.find((x: any) => x.clave === 'presupuesto_total')?.valor
@@ -263,6 +267,18 @@ export default function Home() {
     loadData()
   }
 
+  const saveClienteFiscal = async (c: ClienteFiscal) => {
+    await supabase.from('clientes_fiscales').upsert(c)
+    setModal(null)
+    loadData()
+  }
+
+  const deleteClienteFiscal = async (cliente: string) => {
+    if (!confirm(`¿Borrar los datos fiscales de "${cliente}"? Las facturas ya cargadas no se ven afectadas.`)) return
+    await supabase.from('clientes_fiscales').delete().eq('cliente', cliente)
+    loadData()
+  }
+
   const [holdedBusy, setHoldedBusy] = useState<number | null>(null)
   const [holdedMsg, setHoldedMsg] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(null)
 
@@ -325,6 +341,7 @@ export default function Home() {
   const navItems: { id: Tab; label: string; icon: () => JSX.Element }[] = [
     { id: 'dashboard', label: 'Overview', icon: Icon.home },
     { id: 'facturas', label: 'Facturas', icon: Icon.invoice },
+    { id: 'clientes', label: 'Clientes', icon: Icon.card },
     { id: 'timesheet_ab', label: 'Timesheet AB', icon: Icon.clock },
     { id: 'timesheet_propios', label: 'Propios', icon: Icon.users },
   ]
@@ -332,6 +349,7 @@ export default function Home() {
     dashboard: ['Overview', 'Patrimonio, cuentas y facturación'],
     facturas: ['Facturas', `${facturasPendientes.length} pendientes · €${fmt(totalPendiente)} por cobrar`],
     presupuesto: ['Presupuesto', 'Gastos del mes'],
+    clientes: ['Clientes', `${clientesFiscales.length} con datos fiscales guardados`],
     timesheet_ab: ['Timesheet · Ambushed / BoldMove', 'Horas por proyecto y facturación'],
     timesheet_propios: ['Timesheet · Clientes propios', 'Días por proyecto y facturación'],
   }
@@ -362,7 +380,11 @@ export default function Home() {
           </div>
           <div className="header-actions">
             <button className="btn" onClick={() => loadData()}><Icon.refresh />Actualizar</button>
-            <button className="btn btn-primary" onClick={() => setModal({ type: 'addFactura' })}><Icon.plus />Nueva factura</button>
+            {tab === 'clientes' ? (
+              <button className="btn btn-primary" onClick={() => setModal({ type: 'editCliente' })}><Icon.plus />Nuevo cliente</button>
+            ) : (
+              <button className="btn btn-primary" onClick={() => setModal({ type: 'addFactura' })}><Icon.plus />Nueva factura</button>
+            )}
           </div>
         </header>
 
@@ -565,6 +587,31 @@ export default function Home() {
           </div>
         )}
 
+        {/* Clientes Tab */}
+        {tab === 'clientes' && (
+          <div className="card">
+            <div className="card-head">
+              <div className="card-title">Clientes <span style={{ color: 'var(--text3)', fontWeight: 400 }}>· {clientesFiscales.length}</span></div>
+            </div>
+            {clientesFiscales.length === 0 && <div className="chart-empty">No hay clientes con datos fiscales cargados todavía.</div>}
+            {clientesFiscales.map(c => (
+              <div key={c.cliente} className="row">
+                <div className="row-main">
+                  <div className="row-title">{c.cliente}</div>
+                  <div className="row-sub">{c.identificador || 'Sin identificador fiscal'}{c.direccion ? ` · ${c.direccion.replace(/\n/g, ', ')}` : ''}</div>
+                </div>
+                <div className="row-side">
+                  <button className="icon-btn accent" onClick={() => setModal({ type: 'editCliente', data: { cliente: c } })} title="Editar"><Icon.edit /></button>
+                  <button className="icon-btn danger" onClick={() => deleteClienteFiscal(c.cliente)} title="Borrar"><Icon.x /></button>
+                </div>
+              </div>
+            ))}
+            <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border)' }}>
+              Estos datos se usan para generar el PDF de cada factura y, al enviar una factura a Holded, para crear el contacto ahí si todavía no existe.
+            </div>
+          </div>
+        )}
+
         {/* Presupuesto Tab */}
         {tab === 'presupuesto' && (
           <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 20 }}>
@@ -644,7 +691,7 @@ export default function Home() {
           <div className="modal-bg" onClick={() => setModal(null)}>
             <div className="modal" onClick={e => e.stopPropagation()}>
               {modal.type === 'addFactura' && (
-                <ModalAddFactura cuentas={cuentas} onAdd={addFactura} onClose={() => setModal(null)} />
+                <ModalAddFactura cuentas={cuentas} clientesFiscales={clientesFiscales} onAdd={addFactura} onClose={() => setModal(null)} />
               )}
               {modal.type === 'addGasto' && (
                 <ModalAddGasto item={modal.data.item} tabla={modal.data.tabla} onAdd={addGasto} onClose={() => setModal(null)} />
@@ -655,6 +702,9 @@ export default function Home() {
               {modal.type === 'editCuentas' && (
                 <ModalEditCuentas cuentas={cuentas} onUpdate={updateCuentaSaldo} onClose={() => { setModal(null); loadData() }} />
               )}
+              {modal.type === 'editCliente' && (
+                <ModalCliente cliente={modal.data?.cliente} onSave={saveClienteFiscal} onClose={() => setModal(null)} />
+              )}
             </div>
           </div>
         )}
@@ -664,15 +714,52 @@ export default function Home() {
 }
 
 
-function ModalAddFactura({ cuentas, onAdd, onClose }: { cuentas: Cuenta[], onAdd: (d: any) => void, onClose: () => void }) {
-  const [form, setForm] = useState({ cliente: '', descripcion: '', importe: '', fecha: new Date().toISOString().split('T')[0], cuenta_destino_id: '', idioma: 'es' })
+function ModalAddFactura({ cuentas, clientesFiscales, onAdd, onClose }: { cuentas: Cuenta[], clientesFiscales: ClienteFiscal[], onAdd: (d: any) => void, onClose: () => void }) {
+  const [form, setForm] = useState({ cliente: clientesFiscales[0]?.cliente || '', descripcion: '', importe: '', fecha: new Date().toISOString().split('T')[0], cuenta_destino_id: '', idioma: 'es' })
+  const [nuevoCliente, setNuevoCliente] = useState(clientesFiscales.length === 0)
+  const [nuevoNombre, setNuevoNombre] = useState('')
+  const [nuevoIdentificador, setNuevoIdentificador] = useState('')
+  const [nuevoDireccion, setNuevoDireccion] = useState('')
+  const fieldStyle = { width: '100%', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 7, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'Inter, sans-serif', outline: 'none' }
+
+  const confirmar = async () => {
+    let cliente = form.cliente
+    if (nuevoCliente) {
+      if (!nuevoNombre) return
+      cliente = nuevoNombre
+      await supabase.from('clientes_fiscales').upsert({ cliente: nuevoNombre, identificador: nuevoIdentificador, direccion: nuevoDireccion })
+    }
+    if (!cliente || !form.importe) return
+    onAdd({ ...form, cliente, importe: Number(form.importe), cuenta_destino_id: form.cuenta_destino_id ? Number(form.cuenta_destino_id) : null })
+  }
+
   return (
     <>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, fontSize: 16, fontWeight: 500 }}>
         Nueva factura <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', fontSize: 20 }}>×</button>
       </div>
+      <div style={{ marginBottom: 14 }}>
+        <label style={{ display: 'block', fontSize: 12, color: 'var(--text2)', marginBottom: 6 }}>Cliente</label>
+        {!nuevoCliente ? (
+          <select value={form.cliente} onChange={e => {
+            if (e.target.value === '__nuevo__') { setNuevoCliente(true); return }
+            setForm({ ...form, cliente: e.target.value })
+          }} style={fieldStyle}>
+            {clientesFiscales.map(c => <option key={c.cliente} value={c.cliente}>{c.cliente}</option>)}
+            <option value="__nuevo__">+ Cliente nuevo...</option>
+          </select>
+        ) : (
+          <div style={{ border: '1px solid var(--border)', borderRadius: 7, padding: 12 }}>
+            <input value={nuevoNombre} onChange={e => setNuevoNombre(e.target.value)} placeholder="Nombre del cliente" style={{ ...fieldStyle, marginBottom: 8 }} />
+            <input value={nuevoIdentificador} onChange={e => setNuevoIdentificador(e.target.value)} placeholder="Identificador fiscal (NIF/CIF, VAT...)" style={{ ...fieldStyle, marginBottom: 8 }} />
+            <textarea value={nuevoDireccion} onChange={e => setNuevoDireccion(e.target.value)} placeholder="Dirección" rows={2} style={{ ...fieldStyle, resize: 'vertical' as const, marginBottom: clientesFiscales.length > 0 ? 8 : 0 }} />
+            {clientesFiscales.length > 0 && (
+              <button type="button" onClick={() => setNuevoCliente(false)} style={{ fontSize: 11, color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>← Elegir cliente guardado</button>
+            )}
+          </div>
+        )}
+      </div>
       {[
-        { label: 'Cliente', key: 'cliente', type: 'text', placeholder: 'Ambushed, Hans Emanuel...' },
         { label: 'Descripción (opcional)', key: 'descripcion', type: 'text', placeholder: 'Proyecto, treatment...' },
         { label: 'Importe (€)', key: 'importe', type: 'number', placeholder: '0' },
         { label: 'Fecha de cobro', key: 'fecha', type: 'date', placeholder: '' },
@@ -681,28 +768,26 @@ function ModalAddFactura({ cuentas, onAdd, onClose }: { cuentas: Cuenta[], onAdd
           <label style={{ display: 'block', fontSize: 12, color: 'var(--text2)', marginBottom: 6 }}>{f.label}</label>
           <input type={f.type} placeholder={f.placeholder} value={(form as any)[f.key]}
             onChange={e => setForm({ ...form, [f.key]: e.target.value })}
-            style={{ width: '100%', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 7, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'Inter, sans-serif', outline: 'none' }} />
+            style={fieldStyle} />
         </div>
       ))}
       <div style={{ marginBottom: 14 }}>
         <label style={{ display: 'block', fontSize: 12, color: 'var(--text2)', marginBottom: 6 }}>Cuenta destino (cuando se cobre)</label>
-        <select value={form.cuenta_destino_id} onChange={e => setForm({ ...form, cuenta_destino_id: e.target.value })}
-          style={{ width: '100%', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 7, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'Inter, sans-serif', outline: 'none' }}>
+        <select value={form.cuenta_destino_id} onChange={e => setForm({ ...form, cuenta_destino_id: e.target.value })} style={fieldStyle}>
           <option value="">Seleccionar cuenta...</option>
           {cuentas.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
         </select>
       </div>
       <div style={{ marginBottom: 14 }}>
         <label style={{ display: 'block', fontSize: 12, color: 'var(--text2)', marginBottom: 6 }}>Idioma del invoice</label>
-        <select value={form.idioma} onChange={e => setForm({ ...form, idioma: e.target.value })}
-          style={{ width: '100%', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 7, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'Inter, sans-serif', outline: 'none' }}>
+        <select value={form.idioma} onChange={e => setForm({ ...form, idioma: e.target.value })} style={fieldStyle}>
           <option value="es">Español</option>
           <option value="en">English</option>
         </select>
       </div>
       <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
         <button onClick={onClose} style={{ padding: '9px 18px', borderRadius: 7, fontSize: 13, cursor: 'pointer', background: 'var(--surface2)', color: 'var(--text2)', border: '1px solid var(--border)', fontFamily: 'Inter, sans-serif' }}>Cancelar</button>
-        <button onClick={() => form.cliente && form.importe && onAdd({ ...form, importe: Number(form.importe), cuenta_destino_id: form.cuenta_destino_id ? Number(form.cuenta_destino_id) : null })}
+        <button onClick={confirmar}
           style={{ flex: 1, padding: '9px 18px', borderRadius: 7, fontSize: 13, cursor: 'pointer', background: 'var(--accent)', color: '#000', border: 'none', fontWeight: 500, fontFamily: 'Inter, sans-serif' }}>
           Añadir
         </button>
@@ -776,6 +861,42 @@ function ModalEditCuentas({ cuentas, onUpdate, onClose }: { cuentas: Cuenta[], o
         style={{ marginTop: 16, width: '100%', padding: '9px 18px', borderRadius: 7, fontSize: 13, cursor: 'pointer', background: 'var(--accent)', color: '#000', border: 'none', fontWeight: 500, fontFamily: 'Inter, sans-serif' }}>
         Guardar todos
       </button>
+    </>
+  )
+}
+
+function ModalCliente({ cliente, onSave, onClose }: { cliente?: ClienteFiscal, onSave: (c: ClienteFiscal) => void, onClose: () => void }) {
+  const [nombre, setNombre] = useState(cliente?.cliente || '')
+  const [identificador, setIdentificador] = useState(cliente?.identificador || '')
+  const [direccion, setDireccion] = useState(cliente?.direccion || '')
+  const inputStyleLocal = { width: '100%', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 7, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'Inter, sans-serif', outline: 'none' }
+  const labelStyleLocal = { display: 'block' as const, fontSize: 12, color: 'var(--text2)', marginBottom: 6 }
+  return (
+    <>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, fontSize: 16, fontWeight: 500 }}>
+        {cliente ? `Editar cliente · ${cliente.cliente}` : 'Nuevo cliente'} <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', fontSize: 20 }}>×</button>
+      </div>
+      <div style={{ marginBottom: 14 }}>
+        <label style={labelStyleLocal}>Nombre del cliente</label>
+        <input value={nombre} disabled={!!cliente} onChange={e => setNombre(e.target.value)} placeholder="Ej: Ambushed, Hans Emanuel Productions..."
+          style={{ ...inputStyleLocal, opacity: cliente ? 0.6 : 1 }} />
+        {cliente && <div style={{ fontSize: 10.5, color: 'var(--text3)', marginTop: 4 }}>El nombre no se puede cambiar acá porque es lo que vincula este cliente con sus facturas.</div>}
+      </div>
+      <div style={{ marginBottom: 14 }}>
+        <label style={labelStyleLocal}>Identificador fiscal (NIF/CIF, VAT, teléfono...)</label>
+        <input value={identificador} onChange={e => setIdentificador(e.target.value)} placeholder="Ej: 12810068 · VAT 12810068 · 07752660689" style={inputStyleLocal} />
+      </div>
+      <div style={{ marginBottom: 14 }}>
+        <label style={labelStyleLocal}>Dirección fiscal</label>
+        <textarea value={direccion} onChange={e => setDireccion(e.target.value)} placeholder="Calle, número&#10;Ciudad, país" rows={3} style={{ ...inputStyleLocal, resize: 'vertical' as const }} />
+      </div>
+      <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+        <button onClick={onClose} style={{ padding: '9px 18px', borderRadius: 7, fontSize: 13, cursor: 'pointer', background: 'var(--surface2)', color: 'var(--text2)', border: '1px solid var(--border)', fontFamily: 'Inter, sans-serif' }}>Cancelar</button>
+        <button onClick={() => nombre && onSave({ cliente: nombre, identificador, direccion })}
+          style={{ flex: 1, padding: '9px 18px', borderRadius: 7, fontSize: 13, cursor: 'pointer', background: 'var(--accent)', color: '#000', border: 'none', fontWeight: 500, fontFamily: 'Inter, sans-serif' }}>
+          Guardar
+        </button>
+      </div>
     </>
   )
 }

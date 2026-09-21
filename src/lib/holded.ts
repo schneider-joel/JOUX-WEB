@@ -45,6 +45,7 @@ export async function crearPresupuesto(datos: {
   fecha: string
   importe: number
   notas: string
+  numero: string
 }): Promise<string> {
   const data = await holdedFetch('/estimates', {
     method: 'POST',
@@ -53,6 +54,7 @@ export async function crearPresupuesto(datos: {
       description: datos.descripcion,
       date: datos.fecha,
       notes: datos.notas,
+      number: datos.numero,
       items: [{ name: datos.descripcion, type: 'service', units: 1, price: datos.importe }],
     }),
   })
