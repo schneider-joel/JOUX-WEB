@@ -550,6 +550,11 @@ export default function Home() {
                     <div className="row-side">
                       <span className="row-amount">€{fmt(f.importe)}</span>
                       <span className="pill pill-green">cobrada</span>
+                      {f.holded_estimate_id ? (
+                        <span className="pill pill-green" title="Ya se envió como presupuesto a Holded">en Holded</span>
+                      ) : (
+                        <button className="icon-btn accent" disabled={holdedBusy === f.id} onClick={() => enviarAHolded(f)} title="Enviar a Holded como presupuesto"><Icon.link /></button>
+                      )}
                       <a className="icon-btn accent" href={`/invoice/${f.id}`} target="_blank" rel="noopener noreferrer" title="Ver invoice"><Icon.invoice /></a>
                       <button className="icon-btn danger" onClick={() => deleteFactura(f.id)} title="Borrar"><Icon.x /></button>
                     </div>
