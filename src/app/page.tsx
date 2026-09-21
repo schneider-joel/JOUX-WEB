@@ -263,6 +263,29 @@ export default function Home() {
     loadData()
   }
 
+  const [holdedBusy, setHoldedBusy] = useState<number | null>(null)
+  const [holdedMsg, setHoldedMsg] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(null)
+
+  const enviarAHolded = async (factura: Factura) => {
+    setHoldedBusy(factura.id)
+    setHoldedMsg(null)
+    try {
+      const res = await fetch('/api/holded/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ facturaId: factura.id }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setHoldedMsg({ tipo: 'ok', texto: `Presupuesto creado en Holded para "${factura.cliente}". Andá a aprobarlo cuando quieras.` })
+      loadData()
+    } catch (e: any) {
+      setHoldedMsg({ tipo: 'error', texto: e.message || 'No se pudo enviar a Holded.' })
+    } finally {
+      setHoldedBusy(null)
+    }
+  }
+
   const addFactura = async (data: any) => {
     await supabase.from('facturas').insert([{ ...data, estado: 'pendiente', origen: 'manual' }])
     setModal(null)
@@ -486,6 +509,11 @@ export default function Home() {
               <div className="card-title">Pendientes <span style={{ color: 'var(--text3)', fontWeight: 400 }}>· {facturasPendientes.length}</span></div>
               <span className="row-amount" style={{ color: 'var(--amber)' }}>€{fmt(totalPendiente)}</span>
             </div>
+            {holdedMsg && (
+              <div style={{ fontSize: 11.5, padding: '7px 10px', borderRadius: 8, marginBottom: 10, background: holdedMsg.tipo === 'ok' ? 'var(--green-dim)' : 'var(--red-dim)', color: holdedMsg.tipo === 'ok' ? 'var(--green)' : 'var(--red)' }}>
+                {holdedMsg.texto}
+              </div>
+            )}
             {facturasPendientes.length === 0 && <div className="chart-empty">No hay facturas pendientes.</div>}
             {facturasPendientes.map(f => (
               <div key={f.id} className="row">
@@ -496,6 +524,11 @@ export default function Home() {
                 <div className="row-side">
                   <span className="row-amount" style={{ color: 'var(--green)' }}>+€{fmt(f.importe)}</span>
                   <span className="pill pill-amber">pendiente</span>
+                  {f.holded_estimate_id ? (
+                    <span className="pill pill-green" title="Ya se envió como presupuesto a Holded">en Holded</span>
+                  ) : (
+                    <button className="icon-btn accent" disabled={holdedBusy === f.id} onClick={() => enviarAHolded(f)} title="Enviar a Holded como presupuesto"><Icon.link /></button>
+                  )}
                   <a className="icon-btn accent" href={`/invoice/${f.id}`} target="_blank" rel="noopener noreferrer" title="Ver invoice"><Icon.invoice /></a>
                   <button className="icon-btn ok" onClick={() => marcarCobrada(f)} title="Marcar como cobrada"><Icon.check /></button>
                   <button className="icon-btn danger" onClick={() => deleteFactura(f.id)} title="Borrar"><Icon.x /></button>

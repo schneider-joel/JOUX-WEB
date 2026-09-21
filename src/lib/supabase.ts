@@ -47,6 +47,7 @@ export type Factura = {
   numero_referencia?: string
   idioma?: 'es' | 'en'
   tipo_factura?: 'fuera_ue' | 'dentro_ue'
+  holded_estimate_id?: string
 }
 
 export type ClienteFiscal = {

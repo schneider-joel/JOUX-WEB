@@ -342,3 +342,8 @@ BEGIN
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
+
+-- MIGRACIÓN: sincronización con Holded (se empuja cada factura como
+-- presupuesto para revisar/aprobar allá; holded_estimate_id guarda el id
+-- del presupuesto ya creado para no duplicarlo si se sincroniza de nuevo).
+ALTER TABLE facturas ADD COLUMN IF NOT EXISTS holded_estimate_id TEXT;
