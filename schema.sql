@@ -347,3 +347,35 @@ $$ LANGUAGE plpgsql;
 -- presupuesto para revisar/aprobar allá; holded_estimate_id guarda el id
 -- del presupuesto ya creado para no duplicarlo si se sincroniza de nuevo).
 ALTER TABLE facturas ADD COLUMN IF NOT EXISTS holded_estimate_id TEXT;
+
+-- MIGRACIÓN: fix de siguiente_numero_factura() — la versión anterior sacaba
+-- el prefijo con regexp_replace(actual, '\d+$', '') y los dígitos con
+-- substring(actual FROM '\d+$') por separado; en la práctica, en la base
+-- vivía una versión que se comía todo el bloque "2026-" del medio (ej.
+-- "F-2026-61" → "F-62" en vez de "F-2026-62"). Ahora se saca todo con un
+-- solo regexp_match (prefijo no-goloso + dígitos finales), la misma lógica
+-- que ya usa el editor de factura en el frontend (invoice-editor.tsx).
+--
+-- MIGRACIÓN (siguiente): el contador guardado en `configuracion` no se
+-- entera cuando se borra una factura (de prueba, por ejemplo) — solo sube,
+-- nunca baja, así que después de borrar una factura de prueba el próximo
+-- número seguía saltando por delante como si esa factura siguiera existiendo.
+-- Ahora se calcula en vivo: MAX(número existente con el prefijo del año
+-- actual) + 1. `configuracion.ultimo_numero_factura` queda solo como
+-- registro informativo, ya no es la fuente de verdad.
+CREATE OR REPLACE FUNCTION siguiente_numero_factura() RETURNS TEXT AS $$
+DECLARE
+  prefijo TEXT;
+  maximo INT;
+  siguiente TEXT;
+BEGIN
+  prefijo := 'F-' || to_char(CURRENT_DATE, 'YYYY') || '-';
+  SELECT COALESCE(MAX((regexp_match(numero, '^' || prefijo || '(\d+)$'))[1]::INT), 0)
+    INTO maximo
+    FROM facturas
+    WHERE numero LIKE prefijo || '%';
+  siguiente := prefijo || (maximo + 1)::TEXT;
+  UPDATE configuracion SET valor = siguiente WHERE clave = 'ultimo_numero_factura';
+  RETURN siguiente;
+END;
+$$ LANGUAGE plpgsql;

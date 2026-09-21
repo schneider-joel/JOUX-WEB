@@ -24,6 +24,18 @@ export default async function InvoicePage({ params }: { params: { id: string } }
   const { data: cfg } = await supabase.from('configuracion').select('*')
   const { data: clienteFiscal } = await supabase.from('clientes_fiscales').select('*').eq('cliente', factura.cliente).maybeSingle()
 
+  // El "próximo número" se calcula en vivo (MAX de las facturas que ya
+  // existen con el prefijo del año actual, +1) en vez de confiar en un
+  // contador guardado aparte — así, si se borra una factura de prueba, el
+  // siguiente número generado no salta por delante como si siguiera existiendo.
+  const anioActual = new Date().getFullYear()
+  const prefijoActual = `F-${anioActual}-`
+  const { data: facturasDelAnio } = await supabase.from('facturas').select('numero').like('numero', `${prefijoActual}%`)
+  const maxNumeroActual = (facturasDelAnio || []).reduce((max, f) => {
+    const m = f.numero?.match(new RegExp(`^${prefijoActual}(\\d+)$`))
+    return m ? Math.max(max, Number(m[1])) : max
+  }, 0)
+
   let dias: any[] = []
   let proyectoTipo: string | undefined
   if (factura.proyecto_id) {
@@ -46,7 +58,7 @@ export default async function InvoicePage({ params }: { params: { id: string } }
     iban: cfgVal('emisor_iban'),
   }
 
-  const ultimoNumero = cfgVal('ultimo_numero_factura', 'F260000')
+  const ultimoNumero = maxNumeroActual > 0 ? `${prefijoActual}${maxNumeroActual}` : cfgVal('ultimo_numero_factura', 'F260000')
 
   return <InvoiceEditor factura={factura} emisor={emisor} clienteFiscalInicial={clienteFiscal} editable={editable} ultimoNumero={ultimoNumero} dias={dias} proyectoTipo={proyectoTipo} />
 }
