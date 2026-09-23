@@ -1,9 +1,67 @@
-import { createClient } from '@supabase/supabase-js'
+// Shim de cliente (navegador). En vez de hablar con Supabase directo con la
+// key pública, manda cada consulta a /api/db, una ruta del servidor protegida
+// por la contraseña de la app que ejecuta la consulta con la service_role key.
+// Mantiene la misma forma encadenable/awaitable de supabase-js para el
+// subconjunto que usa la app (select/insert/update/upsert/delete + eq/order/
+// single/maybeSingle), así los sitios de llamada no cambian.
+type Filtro = { col: string; val: any }
+type Resultado = { data: any; error: { message: string } | null }
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+class QueryBuilder implements PromiseLike<Resultado> {
+  private table: string
+  private op = 'select'
+  private _columns?: string
+  private _payload?: any
+  private _filters: Filtro[] = []
+  private _order?: { col: string; ascending: boolean }
+  private _returning = false
+  private _single = false
+  private _maybeSingle = false
 
-export const supabase = createClient(supabaseUrl, supabaseKey)
+  constructor(table: string) { this.table = table }
+
+  select(columns = '*') {
+    if (this.op === 'select') this._columns = columns
+    else { this._returning = true; this._columns = columns }
+    return this
+  }
+  insert(payload: any) { this.op = 'insert'; this._payload = payload; return this }
+  update(payload: any) { this.op = 'update'; this._payload = payload; return this }
+  upsert(payload: any) { this.op = 'upsert'; this._payload = payload; return this }
+  delete() { this.op = 'delete'; return this }
+  eq(col: string, val: any) { this._filters.push({ col, val }); return this }
+  order(col: string, opts?: { ascending?: boolean }) { this._order = { col, ascending: opts?.ascending !== false }; return this }
+  single() { this._single = true; return this }
+  maybeSingle() { this._maybeSingle = true; return this }
+
+  private async exec(): Promise<Resultado> {
+    try {
+      const res = await fetch('/api/db', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          table: this.table, op: this.op, columns: this._columns, payload: this._payload,
+          filters: this._filters, order: this._order, returning: this._returning,
+          single: this._single, maybeSingle: this._maybeSingle,
+        }),
+      })
+      return await res.json()
+    } catch (e: any) {
+      return { data: null, error: { message: e?.message || 'Error de red' } }
+    }
+  }
+
+  then<R1 = Resultado, R2 = never>(
+    onF?: ((v: Resultado) => R1 | PromiseLike<R1>) | null,
+    onR?: ((r: any) => R2 | PromiseLike<R2>) | null,
+  ): PromiseLike<R1 | R2> {
+    return this.exec().then(onF, onR)
+  }
+}
+
+export const supabase = {
+  from(table: string) { return new QueryBuilder(table) },
+}
 
 export type Cuenta = {
   id: number

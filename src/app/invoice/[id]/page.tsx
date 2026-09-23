@@ -1,11 +1,6 @@
 import { cookies } from 'next/headers'
-import { createClient } from '@supabase/supabase-js'
+import { supabaseServer as supabase } from '@/lib/supabase-server'
 import InvoiceEditor from './invoice-editor'
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
 
 export default async function InvoicePage({ params }: { params: { id: string } }) {
   const authCookie = cookies().get('joux_auth')?.value

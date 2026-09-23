@@ -1122,7 +1122,7 @@ function ModalAddProyecto({ tipo, onAdd, onClose }: { tipo: TipoProyecto, onAdd:
   useEffect(() => {
     supabase.from('clientes_fiscales').select('cliente').order('cliente').then(({ data }) => {
       if (data) setClientesGuardados(data)
-      if (tipo !== 'ambushed_boldmove' && data && data.length > 0 && !data.some(c => c.cliente === cliente)) {
+      if (tipo !== 'ambushed_boldmove' && data && data.length > 0 && !data.some((c: { cliente: string }) => c.cliente === cliente)) {
         setCliente(data[0].cliente)
       }
     })

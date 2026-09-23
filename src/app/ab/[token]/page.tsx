@@ -1,26 +1,11 @@
-import { createClient } from '@supabase/supabase-js'
+import { supabaseServer as supabase } from '@/lib/supabase-server'
 import PublicTimesheetView from './view'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 export const fetchCache = 'force-no-store'
 
-function client() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      global: {
-        fetch: (url, options = {}) =>
-          fetch(url, { ...options, cache: 'no-store' }),
-      },
-    }
-  )
-}
-
 export default async function AmbushedBoldMovePage({ params }: { params: { token: string } }) {
-  const supabase = client()
-
   const { data: cfg } = await supabase.from('configuracion').select('valor').eq('clave', 'timesheet_public_token').single()
 
   if (!cfg?.valor || cfg.valor !== params.token) {
