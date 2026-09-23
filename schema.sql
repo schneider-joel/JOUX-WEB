@@ -384,3 +384,20 @@ $$ LANGUAGE plpgsql;
 -- de la UE (los bancos de fuera de SEPA suelen necesitarlo además del IBAN).
 INSERT INTO configuracion (clave, valor) VALUES ('emisor_swift', 'BBVAESMM')
 ON CONFLICT (clave) DO NOTHING;
+
+-- MIGRACIÓN: activar RLS en todas las tablas (reemplaza los DISABLE de arriba).
+-- El navegador ya no habla con Supabase directo con la key pública: pasa por
+-- /api/db (protegido por la contraseña de la app) y el servidor usa la
+-- service_role/secret key, que se salta RLS. Con RLS activo y SIN políticas,
+-- la key pública queda sin acceso a ninguna fila, cerrando el agujero por el
+-- que cualquiera con esa key (extraíble del bundle) podía leer/escribir todo.
+ALTER TABLE cuentas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE crypto ENABLE ROW LEVEL SECURITY;
+ALTER TABLE facturas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE presupuesto_fijos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE presupuesto_variables ENABLE ROW LEVEL SECURITY;
+ALTER TABLE configuracion ENABLE ROW LEVEL SECURITY;
+ALTER TABLE proyectos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE dias_trabajados ENABLE ROW LEVEL SECURITY;
+ALTER TABLE patrimonio_snapshots ENABLE ROW LEVEL SECURITY;
+ALTER TABLE clientes_fiscales ENABLE ROW LEVEL SECURITY;
