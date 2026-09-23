@@ -56,6 +56,7 @@ export default async function InvoicePage({ params }: { params: { id: string } }
     email: cfgVal('emisor_email'),
     telefono: cfgVal('emisor_telefono'),
     iban: cfgVal('emisor_iban'),
+    swift: cfgVal('emisor_swift'),
   }
 
   const ultimoNumero = maxNumeroActual > 0 ? `${prefijoActual}${maxNumeroActual}` : cfgVal('ultimo_numero_factura', 'F260000')

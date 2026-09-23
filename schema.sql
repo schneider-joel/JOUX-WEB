@@ -379,3 +379,8 @@ BEGIN
   RETURN siguiente;
 END;
 $$ LANGUAGE plpgsql;
+
+-- MIGRACIÓN: SWIFT/BIC del emisor, para la nota de pago de facturas fuera
+-- de la UE (los bancos de fuera de SEPA suelen necesitarlo además del IBAN).
+INSERT INTO configuracion (clave, valor) VALUES ('emisor_swift', 'BBVAESMM')
+ON CONFLICT (clave) DO NOTHING;

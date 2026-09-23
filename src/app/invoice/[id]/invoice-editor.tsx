@@ -56,7 +56,7 @@ export default function InvoiceEditor({
   proyectoTipo,
 }: {
   factura: Factura
-  emisor: { nombre: string; nif: string; direccion: string; email: string; telefono: string; iban: string }
+  emisor: { nombre: string; nif: string; direccion: string; email: string; telefono: string; iban: string; swift?: string }
   clienteFiscalInicial: ClienteFiscal | null
   editable: boolean
   ultimoNumero: string
@@ -377,6 +377,7 @@ export default function InvoiceEditor({
         {!dentroUe && emisor.iban && (
           <div style={{ fontSize: 11, color: '#888', marginTop: 32, textAlign: 'center' }}>
             {t.notaTransferencia} <strong style={{ color: '#111' }}>{emisor.iban}</strong>
+            {emisor.swift && <> · SWIFT/BIC: <strong style={{ color: '#111' }}>{emisor.swift}</strong></>}
           </div>
         )}
       </div>
