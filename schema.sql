@@ -427,3 +427,13 @@ CREATE TABLE IF NOT EXISTS compras (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 ALTER TABLE compras ENABLE ROW LEVEL SECURITY;
+
+-- MIGRACIÓN: facturas históricas y registros no fiscales.
+-- archivo_path: PDF original (bucket privado "facturas") de facturas ya
+-- declaradas antes de emitir desde JOUX Hub (Holded 2024-2026 T1, carpeta
+-- declarada T2 2026). fiscal = false marca los registros de timesheet de
+-- períodos ya declarados, que no coinciden con la factura real: se conservan
+-- para los proyectos pero no cuentan para impuestos ni para la lista.
+ALTER TABLE facturas ADD COLUMN IF NOT EXISTS archivo_path TEXT;
+ALTER TABLE facturas ADD COLUMN IF NOT EXISTS archivo_nombre TEXT;
+ALTER TABLE facturas ADD COLUMN IF NOT EXISTS fiscal BOOLEAN NOT NULL DEFAULT TRUE;

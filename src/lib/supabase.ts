@@ -128,6 +128,11 @@ export type Factura = {
   idioma?: 'es' | 'en'
   tipo_factura?: 'fuera_ue' | 'dentro_ue'
   holded_estimate_id?: string
+  // PDF original (facturas históricas ya declaradas); si no hay, se genera con la plantilla.
+  archivo_path?: string
+  archivo_nombre?: string
+  // false = registro interno (p. ej. timesheet) que no es la factura declarada.
+  fiscal?: boolean
 }
 
 export type Compra = {

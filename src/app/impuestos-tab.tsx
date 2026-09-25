@@ -62,12 +62,19 @@ function calcular(anio: number, facturas: Factura[], compras: Compra[], cuotaMen
   return out
 }
 
+const btn: React.CSSProperties = { background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 7, padding: '5px 12px', color: 'var(--text2)', fontSize: 12.5, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }
+const btnActivo: React.CSSProperties = { ...btn, background: 'var(--accent)', color: '#000', border: '1px solid var(--accent)', fontWeight: 500 }
+const fechaCorta = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })
+const delTrimestre = (anio: number, q: number) => <T extends { fecha: string }>(x: T) =>
+  x.fecha >= `${anio}-${String(q * 3 - 2).padStart(2, '0')}-01` && x.fecha <= `${anio}-${String(q * 3).padStart(2, '0')}-31`
+
 export default function ImpuestosTab({ facturas, compras, cuotaMensual, onSaveCuota }: {
   facturas: Factura[]; compras: Compra[]; cuotaMensual: number; onSaveCuota: (n: number) => void
 }) {
   const anioActual = new Date().getFullYear()
   const anios = Array.from(new Set([anioActual, ...facturas.map(f => Number(f.fecha.slice(0, 4))), ...compras.map(c => Number(c.fecha.slice(0, 4)))])).sort((a, b) => b - a)
   const [anio, setAnio] = useState(anioActual)
+  const [abierto, setAbierto] = useState<number | null>(null)
   const [cuota, setCuota] = useState(String(cuotaMensual || ''))
   const trims = calcular(anio, facturas, compras, cuotaMensual)
 
@@ -84,18 +91,21 @@ export default function ImpuestosTab({ facturas, compras, cuotaMensual, onSaveCu
     ['Total a apartar', t => `€${eur(t.irpf + Math.max(0, t.iva))}`, true],
   ]
 
+  const ventasQ = abierto ? facturas.filter(delTrimestre(anio, abierto)).sort((a, b) => a.fecha.localeCompare(b.fecha)) : []
+  const comprasQ = abierto ? compras.filter(delTrimestre(anio, abierto)).sort((a, b) => a.fecha.localeCompare(b.fecha)) : []
+
   return (
     <div className="card">
-      <div className="card-head">
-        <div className="card-title">Estimación trimestral · {anio}</div>
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+      <div className="card-head" style={{ flexWrap: 'wrap', gap: 10 }}>
+        <div style={{ display: 'flex', gap: 6 }}>
+          {anios.map(a => (
+            <button key={a} style={a === anio ? btnActivo : btn} onClick={() => { setAnio(a); setAbierto(null) }}>{a}</button>
+          ))}
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <label style={{ fontSize: 11.5, color: 'var(--text3)' }}>Cuota autónomo / mes €</label>
           <input type="number" value={cuota} onChange={e => setCuota(e.target.value)} onBlur={() => onSaveCuota(Number(cuota) || 0)}
             style={{ width: 90, background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 7, padding: '6px 10px', color: 'var(--text)', fontSize: 13 }} />
-          <select value={anio} onChange={e => setAnio(Number(e.target.value))}
-            style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 7, padding: '6px 10px', color: 'var(--text)', fontSize: 13 }}>
-            {anios.map(a => <option key={a} value={a}>{a}</option>)}
-          </select>
         </div>
       </div>
 
@@ -125,13 +135,55 @@ export default function ImpuestosTab({ facturas, compras, cuotaMensual, onSaveCu
                 ))}
               </tr>
             ))}
+            <tr style={{ borderTop: '1px solid var(--border)' }}>
+              <td style={{ padding: '10px 10px', color: 'var(--text3)', fontSize: 11.5 }}>Facturas</td>
+              {trims.map(t => {
+                const n = facturas.filter(delTrimestre(anio, t.q)).length + compras.filter(delTrimestre(anio, t.q)).length
+                return (
+                  <td key={t.q} style={{ padding: '10px 10px', textAlign: 'right' }}>
+                    {n > 0 && (
+                      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                        <button style={abierto === t.q ? btnActivo : btn} onClick={() => setAbierto(abierto === t.q ? null : t.q)}>Ver {n}</button>
+                        <a style={{ ...btn, textDecoration: 'none' }} href={`/api/trimestre/zip?anio=${anio}&q=${t.q}`} title={`Descargar ZIP de T${t.q} ${anio}`}>ZIP</a>
+                      </div>
+                    )}
+                  </td>
+                )
+              })}
+            </tr>
           </tbody>
         </table>
       </div>
 
+      {abierto && (
+        <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <div style={{ fontSize: 13, fontWeight: 500 }}>T{abierto} {anio} · {ventasQ.length} ventas · {comprasQ.length} compras</div>
+            <button style={btn} onClick={() => setAbierto(null)}>Cerrar</button>
+          </div>
+          {ventasQ.map(f => (
+            <div key={`v${f.id}`} style={{ display: 'flex', gap: 10, fontSize: 12, padding: '4px 0', borderBottom: '1px solid var(--border)' }}>
+              <span className="mono" style={{ width: 110, color: 'var(--text)' }}>{f.numero || '—'}</span>
+              <span style={{ width: 56, color: 'var(--text3)' }}>{fechaCorta(f.fecha)}</span>
+              <span style={{ flex: 1, color: 'var(--text2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.cliente}{f.descripcion ? ` · ${f.descripcion}` : ''}</span>
+              <span className="mono" style={{ color: 'var(--text2)' }}>€{eur(Number(f.importe))}</span>
+            </div>
+          ))}
+          {comprasQ.map(c => (
+            <div key={`c${c.id}`} style={{ display: 'flex', gap: 10, fontSize: 12, padding: '4px 0', borderBottom: '1px solid var(--border)' }}>
+              <span style={{ width: 110, color: 'var(--text3)' }}>Compra</span>
+              <span style={{ width: 56, color: 'var(--text3)' }}>{fechaCorta(c.fecha)}</span>
+              <span style={{ flex: 1, color: 'var(--text2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.proveedor}{c.concepto ? ` · ${c.concepto}` : ''}</span>
+              <span className="mono" style={{ color: 'var(--text2)' }}>−€{eur(Number(c.base))}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border)', lineHeight: 1.6 }}>
         Aproximación, no sustituye a tu gestor. IRPF (130): 20% del rendimiento acumulado desde enero (ingresos − gastos deducibles − cuota de autónomo − 5% de gastos de difícil justificación, máx. 2.000€/año), menos las retenciones del 15% de clientes españoles y lo ya pagado en trimestres anteriores.
         IVA (303): 21% de las facturas a clientes españoles menos el IVA deducible de tus compras. No incluye amortizaciones de compras grandes (más de 300€) ni la deducción por rendimientos bajos.
+        El ZIP trae los PDF de las ventas (el original si es una factura ya declarada), los archivos de las compras y un resumen en CSV.
       </div>
     </div>
   )

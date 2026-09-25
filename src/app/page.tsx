@@ -25,7 +25,7 @@ const ultimosMeses = (n: number) => {
   return out
 }
 
-type Tab = 'dashboard' | 'facturas' | 'compras' | 'impuestos' | 'presupuesto' | 'timesheet_ab' | 'timesheet_propios' | 'clientes' | 'regularizacion'
+type Tab = 'dashboard' | 'facturas' | 'compras' | 'impuestos' | 'presupuesto' | 'timesheet_ab' | 'timesheet_propios' | 'clientes'
 type Modal = { type: string; data?: any } | null
 
 const svgProps = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, viewBox: '0 0 24 24' }
@@ -239,17 +239,40 @@ export default function Home() {
   // (el trigger de Supabase ya la borra si sigue pendiente; esto es red de
   // seguridad por si la UI todavía no recargó).
   const facturaVisible = (f: Factura) => {
-    // Las de regularización (cobros viejos facturados a posteriori) viven en
-    // su propia pestaña y no cuentan en pendientes/cobradas del día a día.
-    if (f.origen === 'regularizacion') return false
+    // Registros internos (timesheets de períodos ya declarados) no son la
+    // factura real: la declarada está importada aparte como histórica.
+    if (f.fiscal === false) return false
     if (!f.proyecto_id) return true
     const p = proyectos.find(p => p.id === f.proyecto_id)
     return !p || p.status === 'facturado'
   }
+  const facturasFiscales = facturas.filter(f => f.fiscal !== false)
   const facturasVisibles = facturas.filter(facturaVisible)
   const facturasPendientes = facturasVisibles.filter(f => f.estado === 'pendiente')
   const facturasCobradas = facturasVisibles.filter(f => f.estado === 'cobrada')
   const totalPendiente = facturasPendientes.reduce((s, f) => s + f.importe, 0)
+
+  // Filtro de período de la pestaña Facturas (el trimestre sale de la fecha).
+  const [filtroAnio, setFiltroAnio] = useState(new Date().getFullYear())
+  const [filtroTrim, setFiltroTrim] = useState(0)
+  const trimDe = (fecha: string) => Math.ceil(Number(fecha.slice(5, 7)) / 3)
+  const enFiltro = (f: Factura) => Number(f.fecha.slice(0, 4)) === filtroAnio && (!filtroTrim || trimDe(f.fecha) === filtroTrim)
+  const aniosFacturas = Array.from(new Set([new Date().getFullYear(), ...facturasVisibles.map(f => Number(f.fecha.slice(0, 4)))])).sort((a, b) => b - a)
+  // Facturas cuya fecha queda fuera de orden respecto de su número (misma serie).
+  const fueraDeOrden = new Set<number>()
+  {
+    const series = new Map<string, Factura[]>()
+    for (const f of facturasVisibles) {
+      const m = f.numero?.match(/^(.*?)(\d+)$/)
+      if (m) series.set(m[1], [...(series.get(m[1]) || []), f])
+    }
+    Array.from(series.values()).forEach(fs => {
+      const orden = fs.sort((a, b) => Number(a.numero!.match(/(\d+)$/)![1]) - Number(b.numero!.match(/(\d+)$/)![1]))
+      orden.forEach((f, i) => {
+        if ((i > 0 && f.fecha < orden[i - 1].fecha) || (i < orden.length - 1 && f.fecha > orden[i + 1].fecha)) fueraDeOrden.add(f.id)
+      })
+    })
+  }
 
   const mesActualKey = hoyLocal().slice(0, 7)
   const snapshotMesAnterior = [...snapshots].filter(s => s.fecha.slice(0, 7) < mesActualKey).sort((a, b) => b.fecha.localeCompare(a.fecha))[0]
@@ -335,7 +358,6 @@ export default function Home() {
     { id: 'clientes', label: 'Clientes', icon: Icon.card },
     { id: 'timesheet_ab', label: 'Timesheet AB', icon: Icon.clock },
     { id: 'timesheet_propios', label: 'Propios', icon: Icon.users },
-    { id: 'regularizacion', label: 'Regularización', icon: Icon.refresh },
   ]
   const titulos: Record<Tab, [string, string]> = {
     dashboard: ['Overview', 'Patrimonio, cuentas y facturación'],
@@ -346,7 +368,6 @@ export default function Home() {
     timesheet_propios: ['Timesheet · Clientes propios', 'Días por proyecto y facturación'],
     compras: ['Compras', 'Facturas de gastos y compras'],
     impuestos: ['Impuestos', 'Estimación trimestral de IRPF (130) e IVA (303)'],
-    regularizacion: ['Regularización de facturas', 'Temporal · cobros de ago 2024 – abr 2025 facturados a posteriori'],
   }
 
   return (
@@ -474,7 +495,7 @@ export default function Home() {
                     <span><i style={{ background: '#fbbf24', opacity: 0.6 }} />Pendiente</span>
                   </div>
                 </div>
-                <IngresosChart facturas={facturas} />
+                <IngresosChart facturas={facturasFiscales} />
                 <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border)' }}>
                   <div className="card-kicker" style={{ marginBottom: 6 }}>Crypto</div>
                   {crypto.map(c => {
@@ -520,52 +541,70 @@ export default function Home() {
         )}
 
         {/* Facturas Tab */}
-        {tab === 'facturas' && (
-          <div className="card">
-            <div className="card-head">
-              <div className="card-title">Pendientes <span style={{ color: 'var(--text3)', fontWeight: 400 }}>· {facturasPendientes.length}</span></div>
-              <span className="row-amount" style={{ color: 'var(--amber)' }}>€{fmt(totalPendiente)}</span>
-            </div>
-            {facturasPendientes.length === 0 && <div className="chart-empty">No hay facturas pendientes.</div>}
-            {facturasPendientes.map(f => (
-              <div key={f.id} className="row">
-                <div className="row-main">
-                  <div className="row-title">{f.cliente}{f.descripcion ? <span style={{ color: 'var(--text3)' }}> · {f.descripcion}</span> : null}</div>
-                  <div className="row-sub">{f.numero ? `${f.numero} · ` : ''}Vence {fmtDate(f.fecha_vencimiento || f.fecha)}{f.origen === 'notion' ? ' · Notion' : ''}</div>
+        {tab === 'facturas' && (() => {
+          const chip: React.CSSProperties = { background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 7, padding: '4px 10px', color: 'var(--text2)', fontSize: 12, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }
+          const chipOn: React.CSSProperties = { ...chip, background: 'var(--accent)', color: '#000', border: '1px solid var(--accent)', fontWeight: 500 }
+          const neutra: React.CSSProperties = { background: 'var(--surface2)', color: 'var(--text2)' }
+          const verHref = (f: Factura) => f.archivo_path ? `/api/facturas/archivo?id=${f.id}` : `/invoice/${f.id}`
+          const marcas = (f: Factura) => (
+            <>
+              {f.origen === 'historico' && <span className="pill" style={neutra} title="Factura ya declarada, con su PDF original">declarada</span>}
+              {f.origen === 'regularizacion' && <span className="pill" style={neutra} title="Cobro de 2024-2025 facturado a posteriori">regularizada</span>}
+              {fueraDeOrden.has(f.id) && <span className="pill pill-amber" title="La fecha no sigue el orden de su número: revisala">fuera de orden</span>}
+            </>
+          )
+          const cobradas = facturasCobradas.filter(enFiltro).sort((a, b) => b.fecha.localeCompare(a.fecha))
+          return (
+            <div className="card">
+              <div className="card-head">
+                <div className="card-title">Pendientes <span style={{ color: 'var(--text3)', fontWeight: 400 }}>· {facturasPendientes.length}</span></div>
+                <span className="row-amount" style={{ color: 'var(--amber)' }}>€{fmt(totalPendiente)}</span>
+              </div>
+              {facturasPendientes.length === 0 && <div className="chart-empty">No hay facturas pendientes.</div>}
+              {facturasPendientes.map(f => (
+                <div key={f.id} className="row">
+                  <div className="row-main">
+                    <div className="row-title">{f.cliente}{f.descripcion ? <span style={{ color: 'var(--text3)' }}> · {f.descripcion}</span> : null}</div>
+                    <div className="row-sub">{f.numero ? `${f.numero} · ` : ''}T{trimDe(f.fecha)} {f.fecha.slice(0, 4)} · Vence {fmtDate(f.fecha_vencimiento || f.fecha)}</div>
+                  </div>
+                  <div className="row-side">
+                    <span className="row-amount" style={{ color: 'var(--green)' }}>+€{fmt(f.importe)}</span>
+                    {marcas(f)}
+                    <span className="pill pill-amber">pendiente</span>
+                    <a className="icon-btn accent" href={verHref(f)} target="_blank" rel="noopener noreferrer" title="Ver factura"><Icon.invoice /></a>
+                    <button className="icon-btn ok" onClick={() => marcarCobrada(f)} title="Marcar como cobrada"><Icon.check /></button>
+                    <button className="icon-btn danger" onClick={() => deleteFactura(f.id)} title="Borrar"><Icon.x /></button>
+                  </div>
                 </div>
-                <div className="row-side">
-                  <span className="row-amount" style={{ color: 'var(--green)' }}>+€{fmt(f.importe)}</span>
-                  <span className="pill pill-amber">pendiente</span>
-                  <a className="icon-btn accent" href={`/invoice/${f.id}`} target="_blank" rel="noopener noreferrer" title="Ver invoice"><Icon.invoice /></a>
-                  <button className="icon-btn ok" onClick={() => marcarCobrada(f)} title="Marcar como cobrada"><Icon.check /></button>
-                  <button className="icon-btn danger" onClick={() => deleteFactura(f.id)} title="Borrar"><Icon.x /></button>
+              ))}
+
+              <div className="card-head" style={{ marginTop: 24, paddingTop: 18, borderTop: '1px solid var(--border)', flexWrap: 'wrap', gap: 10 }}>
+                <div className="card-title">Cobradas <span style={{ color: 'var(--text3)', fontWeight: 400 }}>· {cobradas.length}</span></div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                  {aniosFacturas.map(a => <button key={a} style={a === filtroAnio ? chipOn : chip} onClick={() => setFiltroAnio(a)}>{a}</button>)}
+                  <span style={{ width: 8 }} />
+                  {[0, 1, 2, 3, 4].map(q => <button key={q} style={q === filtroTrim ? chipOn : chip} onClick={() => setFiltroTrim(q)}>{q ? `T${q}` : 'Todo'}</button>)}
+                  <span className="row-amount" style={{ color: 'var(--text2)', marginLeft: 8 }}>€{fmt(cobradas.reduce((s, f) => s + Number(f.importe), 0))}</span>
                 </div>
               </div>
-            ))}
-            {facturasCobradas.length > 0 && (
-              <>
-                <div className="card-head" style={{ marginTop: 24, paddingTop: 18, borderTop: '1px solid var(--border)' }}>
-                  <div className="card-title">Cobradas <span style={{ color: 'var(--text3)', fontWeight: 400 }}>· {facturasCobradas.length}</span></div>
-                  <span className="row-amount" style={{ color: 'var(--text2)' }}>€{fmt(facturasCobradas.reduce((s, f) => s + f.importe, 0))}</span>
-                </div>
-                {[...facturasCobradas].reverse().map(f => (
-                  <div key={f.id} className="row muted">
-                    <div className="row-main">
-                      <div className="row-title">{f.cliente}{f.descripcion ? <span style={{ color: 'var(--text3)' }}> · {f.descripcion}</span> : null}</div>
-                      <div className="row-sub">{f.numero ? `${f.numero} · ` : ''}Cobrada {f.fecha_cobro ? fmtDate(f.fecha_cobro) : fmtDate(f.fecha)}</div>
-                    </div>
-                    <div className="row-side">
-                      <span className="row-amount">€{fmt(f.importe)}</span>
-                      <span className="pill pill-green">cobrada</span>
-                      <a className="icon-btn accent" href={`/invoice/${f.id}`} target="_blank" rel="noopener noreferrer" title="Ver invoice"><Icon.invoice /></a>
-                      <button className="icon-btn danger" onClick={() => deleteFactura(f.id)} title="Borrar"><Icon.x /></button>
-                    </div>
+              {cobradas.length === 0 && <div className="chart-empty">No hay facturas cobradas en este período.</div>}
+              {cobradas.map(f => (
+                <div key={f.id} className="row muted">
+                  <div className="row-main">
+                    <div className="row-title">{f.cliente}{f.descripcion ? <span style={{ color: 'var(--text3)' }}> · {f.descripcion}</span> : null}</div>
+                    <div className="row-sub">{f.numero ? `${f.numero} · ` : ''}T{trimDe(f.fecha)} {f.fecha.slice(0, 4)} · Emitida {fmtDate(f.fecha)}{f.fecha_cobro ? ` · Cobrada ${fmtDate(f.fecha_cobro)}` : ''}</div>
                   </div>
-                ))}
-              </>
-            )}
-          </div>
-        )}
+                  <div className="row-side">
+                    <span className="row-amount">€{fmt(f.importe)}</span>
+                    {marcas(f)}
+                    <a className="icon-btn accent" href={verHref(f)} target="_blank" rel="noopener noreferrer" title="Ver factura"><Icon.invoice /></a>
+                    <button className="icon-btn danger" onClick={() => deleteFactura(f.id)} title="Borrar"><Icon.x /></button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
+        })()}
 
         {/* Clientes Tab */}
         {tab === 'clientes' && (
@@ -595,53 +634,11 @@ export default function Home() {
         {tab === 'compras' && <ComprasTab compras={compras} reload={loadData} />}
 
         {tab === 'impuestos' && (
-          <ImpuestosTab facturas={facturas} compras={compras} cuotaMensual={cuotaAutonomo} onSaveCuota={async n => {
+          <ImpuestosTab facturas={facturasFiscales} compras={compras} cuotaMensual={cuotaAutonomo} onSaveCuota={async n => {
             await supabase.from('configuracion').upsert({ clave: 'cuota_autonomo_mensual', valor: String(n) })
             setCuotaAutonomo(n)
           }} />
         )}
-
-        {/* Regularización Tab (temporal) */}
-        {tab === 'regularizacion' && (() => {
-          const regs = facturas.filter(f => f.origen === 'regularizacion').sort((a, b) => a.fecha.localeCompare(b.fecha))
-          const fmtFecha = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })
-          const grupos = new Map<string, Factura[]>()
-          for (const f of regs) {
-            const k = `${f.fecha.slice(0, 4)} · T${Math.ceil(Number(f.fecha.slice(5, 7)) / 3)}`
-            grupos.set(k, [...(grupos.get(k) || []), f])
-          }
-          return (
-            <div className="card">
-              <div className="card-head">
-                <div className="card-title">Facturas de regularización <span style={{ color: 'var(--text3)', fontWeight: 400 }}>· {regs.length}</span></div>
-                <span className="row-amount" style={{ color: 'var(--text2)' }}>€{fmt(regs.reduce((s, f) => s + Number(f.importe), 0))}</span>
-              </div>
-              {regs.length === 0 && <div className="chart-empty">Todavía no hay facturas de regularización.</div>}
-              {Array.from(grupos.entries()).map(([k, fs]) => (
-                <div key={k} style={{ marginBottom: 18 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.08em', margin: '14px 0 6px' }}>
-                    <span>{k}</span><span>€{fmt(fs.reduce((s, f) => s + Number(f.importe), 0))}</span>
-                  </div>
-                  {fs.map(f => (
-                    <div key={f.id} className="row">
-                      <div className="row-main">
-                        <div className="row-title">{f.numero} <span style={{ color: 'var(--text3)' }}>· {f.cliente} · {f.descripcion}{f.numero_referencia ? ` #${f.numero_referencia}` : ''}</span></div>
-                        <div className="row-sub">Emitida {fmtFecha(f.fecha)}{f.fecha_cobro ? ` · Cobrada ${fmtFecha(f.fecha_cobro)}` : ''}</div>
-                      </div>
-                      <div className="row-side">
-                        <span className="row-amount">€{fmt(f.importe)}</span>
-                        <a className="icon-btn accent" href={`/invoice/${f.id}`} target="_blank" rel="noopener noreferrer" title="Ver invoice"><Icon.invoice /></a>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ))}
-              <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 6, paddingTop: 14, borderTop: '1px solid var(--border)' }}>
-                Sección temporal. Estas facturas no cuentan en pendientes/cobradas del día a día.
-              </div>
-            </div>
-          )
-        })()}
 
         {/* Presupuesto Tab */}
         {tab === 'presupuesto' && (
