@@ -1,7 +1,9 @@
 'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { supabase, batchQuery, Cuenta, Crypto, Factura, PresupuestoItem, Proyecto, DiaTrabajado, TipoProyecto, PatrimonioSnapshot, ClienteFiscal } from '@/lib/supabase'
+import ComprasTab from './compras-tab'
+import ImpuestosTab from './impuestos-tab'
+import { supabase, batchQuery, Compra, Cuenta, Crypto, Factura, PresupuestoItem, Proyecto, DiaTrabajado, TipoProyecto, PatrimonioSnapshot, ClienteFiscal } from '@/lib/supabase'
 
 const fmt = (n: number) => new Intl.NumberFormat('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(Math.round(n))
 const fmt2 = (n: number) => new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
@@ -23,7 +25,7 @@ const ultimosMeses = (n: number) => {
   return out
 }
 
-type Tab = 'dashboard' | 'facturas' | 'presupuesto' | 'timesheet_ab' | 'timesheet_propios' | 'clientes' | 'regularizacion'
+type Tab = 'dashboard' | 'facturas' | 'compras' | 'impuestos' | 'presupuesto' | 'timesheet_ab' | 'timesheet_propios' | 'clientes' | 'regularizacion'
 type Modal = { type: string; data?: any } | null
 
 const svgProps = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, viewBox: '0 0 24 24' }
@@ -169,6 +171,8 @@ export default function Home() {
   const [proyectos, setProyectos] = useState<Proyecto[]>([])
   const [dias, setDias] = useState<DiaTrabajado[]>([])
   const [clientesFiscales, setClientesFiscales] = useState<ClienteFiscal[]>([])
+  const [compras, setCompras] = useState<Compra[]>([])
+  const [cuotaAutonomo, setCuotaAutonomo] = useState(0)
   const [snapshots, setSnapshots] = useState<PatrimonioSnapshot[]>([])
   const [ethPrice, setEthPrice] = useState<number>(2100)
   const [usdToEur, setUsdToEur] = useState<number>(0.92)
@@ -178,7 +182,7 @@ export default function Home() {
   const [lastUpdated, setLastUpdated] = useState<string>('')
 
   const loadData = useCallback(async () => {
-    const [c, cr, f, fi, v, cfg, pr, di, sn, cf] = await batchQuery([
+    const [c, cr, f, fi, v, cfg, pr, di, sn, cf, co] = await batchQuery([
       supabase.from('cuentas').select('*').order('orden'),
       supabase.from('crypto').select('*'),
       supabase.from('facturas').select('*').order('fecha'),
@@ -189,6 +193,7 @@ export default function Home() {
       supabase.from('dias_trabajados').select('*').order('fecha'),
       supabase.from('patrimonio_snapshots').select('*').order('fecha'),
       supabase.from('clientes_fiscales').select('*').order('cliente'),
+      supabase.from('compras').select('*').order('fecha'),
     ])
     if (c.data) setCuentas(c.data)
     if (cr.data) setCrypto(cr.data)
@@ -199,9 +204,12 @@ export default function Home() {
     if (di.data) setDias(di.data)
     if (sn.data) setSnapshots(sn.data)
     if (cf.data) setClientesFiscales(cf.data)
+    if (co.data) setCompras(co.data)
     if (cfg.data) {
       const mes = cfg.data.find((x: any) => x.clave === 'mes_actual')?.valor
       const pt = cfg.data.find((x: any) => x.clave === 'presupuesto_total')?.valor
+      const cuota = cfg.data.find((x: any) => x.clave === 'cuota_autonomo_mensual')?.valor
+      if (cuota) setCuotaAutonomo(Number(cuota))
       if (mes) setMesActual(mes)
       if (pt) setPresupuestoTotal(Number(pt))
     }
@@ -344,6 +352,8 @@ export default function Home() {
   const navItems: { id: Tab; label: string; icon: () => JSX.Element }[] = [
     { id: 'dashboard', label: 'Overview', icon: Icon.home },
     { id: 'facturas', label: 'Facturas', icon: Icon.invoice },
+    { id: 'compras', label: 'Compras', icon: Icon.wallet },
+    { id: 'impuestos', label: 'Impuestos', icon: Icon.trend },
     { id: 'clientes', label: 'Clientes', icon: Icon.card },
     { id: 'timesheet_ab', label: 'Timesheet AB', icon: Icon.clock },
     { id: 'timesheet_propios', label: 'Propios', icon: Icon.users },
@@ -356,6 +366,8 @@ export default function Home() {
     clientes: ['Clientes', `${clientesFiscales.length} con datos fiscales guardados`],
     timesheet_ab: ['Timesheet · Ambushed / BoldMove', 'Horas por proyecto y facturación'],
     timesheet_propios: ['Timesheet · Clientes propios', 'Días por proyecto y facturación'],
+    compras: ['Compras', 'Facturas de gastos y compras'],
+    impuestos: ['Impuestos', 'Estimación trimestral de IRPF (130) e IVA (303)'],
     regularizacion: ['Regularización de facturas', 'Temporal · cobros de ago 2024 – abr 2025 facturados a posteriori'],
   }
 
@@ -387,7 +399,7 @@ export default function Home() {
             <button className="btn" onClick={() => loadData()}><Icon.refresh />Actualizar</button>
             {tab === 'clientes' ? (
               <button className="btn btn-primary" onClick={() => setModal({ type: 'editCliente' })}><Icon.plus />Nuevo cliente</button>
-            ) : (
+            ) : tab === 'compras' || tab === 'impuestos' ? null : (
               <button className="btn btn-primary" onClick={() => setModal({ type: 'addFactura' })}><Icon.plus />Nueva factura</button>
             )}
           </div>
@@ -615,6 +627,15 @@ export default function Home() {
               Estos datos se usan para generar el PDF de cada factura y, al enviar una factura a Holded, para crear el contacto ahí si todavía no existe.
             </div>
           </div>
+        )}
+
+        {tab === 'compras' && <ComprasTab compras={compras} reload={loadData} />}
+
+        {tab === 'impuestos' && (
+          <ImpuestosTab facturas={facturas} compras={compras} cuotaMensual={cuotaAutonomo} onSaveCuota={async n => {
+            await supabase.from('configuracion').upsert({ clave: 'cuota_autonomo_mensual', valor: String(n) })
+            setCuotaAutonomo(n)
+          }} />
         )}
 
         {/* Regularización Tab (temporal) */}

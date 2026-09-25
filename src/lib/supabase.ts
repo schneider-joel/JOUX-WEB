@@ -130,6 +130,19 @@ export type Factura = {
   holded_estimate_id?: string
 }
 
+export type Compra = {
+  id: number
+  fecha: string
+  proveedor: string
+  concepto?: string
+  base: number
+  iva_pct: number
+  deducible_pct: number
+  archivo_path?: string
+  archivo_nombre?: string
+  created_at?: string
+}
+
 export type ClienteFiscal = {
   cliente: string
   identificador?: string

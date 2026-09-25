@@ -409,3 +409,21 @@ INSERT INTO configuracion (clave, valor) VALUES
   ('emisor_direccion_anterior', E'Carrer del Alcalde Reig, 6\nValencia (46006), Valencia, España'),
   ('emisor_direccion_desde', '2026-09-23')
 ON CONFLICT (clave) DO NOTHING;
+
+-- MIGRACIÓN: facturas de compra (gastos). El archivo va al bucket privado
+-- de Storage "compras" (lo sube /api/compras con la secret key); acá queda
+-- la ruta. Total = base * (1 + iva_pct/100). deducible_pct = % de uso
+-- profesional, para la estimación de IRPF (130) e IVA (303).
+CREATE TABLE IF NOT EXISTS compras (
+  id BIGSERIAL PRIMARY KEY,
+  fecha DATE NOT NULL,
+  proveedor TEXT NOT NULL,
+  concepto TEXT,
+  base DECIMAL(10,2) NOT NULL,
+  iva_pct DECIMAL(5,2) NOT NULL DEFAULT 21,
+  deducible_pct DECIMAL(5,2) NOT NULL DEFAULT 100,
+  archivo_path TEXT,
+  archivo_nombre TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE compras ENABLE ROW LEVEL SECURITY;
