@@ -407,7 +407,7 @@ ALTER TABLE clientes_fiscales ENABLE ROW LEVEL SECURITY;
 -- (p. ej. las de regularización de 2024-2025, emitidas en Alcalde Reig).
 INSERT INTO configuracion (clave, valor) VALUES
   ('emisor_direccion_anterior', E'Carrer del Alcalde Reig, 6\nValencia (46006), Valencia, España'),
-  ('emisor_direccion_desde', '2026-09-23')
+  ('emisor_direccion_desde', '2026-04-01')
 ON CONFLICT (clave) DO NOTHING;
 
 -- MIGRACIÓN: facturas de compra (gastos). El archivo va al bucket privado
