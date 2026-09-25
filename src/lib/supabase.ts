@@ -34,16 +34,20 @@ class QueryBuilder implements PromiseLike<Resultado> {
   single() { this._single = true; return this }
   maybeSingle() { this._maybeSingle = true; return this }
 
+  spec() {
+    return {
+      table: this.table, op: this.op, columns: this._columns, payload: this._payload,
+      filters: this._filters, order: this._order, returning: this._returning,
+      single: this._single, maybeSingle: this._maybeSingle,
+    }
+  }
+
   private async exec(): Promise<Resultado> {
     try {
       const res = await fetch('/api/db', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          table: this.table, op: this.op, columns: this._columns, payload: this._payload,
-          filters: this._filters, order: this._order, returning: this._returning,
-          single: this._single, maybeSingle: this._maybeSingle,
-        }),
+        body: JSON.stringify(this.spec()),
       })
       return await res.json()
     } catch (e: any) {
@@ -61,6 +65,24 @@ class QueryBuilder implements PromiseLike<Resultado> {
 
 export const supabase = {
   from(table: string) { return new QueryBuilder(table) },
+}
+
+// Ejecuta varias consultas en una sola llamada a /api/db (una sola función
+// serverless en vez de una por consulta).
+export async function batchQuery(builders: QueryBuilder[]): Promise<Resultado[]> {
+  try {
+    const res = await fetch('/api/db', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ batch: builders.map(b => b.spec()) }),
+    })
+    const json = await res.json()
+    if (Array.isArray(json.results)) return json.results
+    const error = json.error || { message: 'Respuesta inválida' }
+    return builders.map(() => ({ data: null, error }))
+  } catch (e: any) {
+    return builders.map(() => ({ data: null, error: { message: e?.message || 'Error de red' } }))
+  }
 }
 
 export type Cuenta = {

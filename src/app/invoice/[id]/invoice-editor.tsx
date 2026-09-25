@@ -368,7 +368,7 @@ export default function InvoiceEditor({
           </div>
         </div>
 
-        {!dentroUe && emisor.iban && (
+        {!dentroUe && emisor.iban && factura.origen !== 'regularizacion' && (
           <div style={{ fontSize: 11, color: '#888', marginTop: 32, textAlign: 'center' }}>
             {t.notaTransferencia} <strong style={{ color: '#111' }}>{emisor.iban}</strong>
             {emisor.swift && <> · SWIFT/BIC: <strong style={{ color: '#111' }}>{emisor.swift}</strong></>}

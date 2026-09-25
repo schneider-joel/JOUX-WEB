@@ -19,29 +19,38 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { table, op, columns, payload, filters, order, returning, single, maybeSingle } = await req.json()
-
-    if (!TABLAS_PERMITIDAS.has(table)) {
-      return NextResponse.json({ data: null, error: { message: `Tabla no permitida: ${table}` } }, { status: 400 })
+    const body = await req.json()
+    // Lote: varias consultas en una sola invocación (el dashboard carga ~10
+    // tablas de golpe; mandarlas una por una disparaba 10 funciones
+    // serverless en paralelo y colgaba la carga).
+    if (Array.isArray(body.batch)) {
+      const results = await Promise.all(body.batch.map(ejecutar))
+      return NextResponse.json({ results })
     }
-
-    let q: any = supabaseServer.from(table)
-    if (op === 'select') q = q.select(columns || '*')
-    else if (op === 'insert') q = q.insert(payload)
-    else if (op === 'update') q = q.update(payload)
-    else if (op === 'upsert') q = q.upsert(payload)
-    else if (op === 'delete') q = q.delete()
-    else return NextResponse.json({ data: null, error: { message: `Operación inválida: ${op}` } }, { status: 400 })
-
-    for (const f of filters || []) q = q.eq(f.col, f.val)
-    if (returning && op !== 'select') q = q.select(columns || '*')
-    if (order) q = q.order(order.col, { ascending: order.ascending !== false })
-    if (single) q = q.single()
-    else if (maybeSingle) q = q.maybeSingle()
-
-    const { data, error } = await q
-    return NextResponse.json({ data, error: error ? { message: error.message } : null })
+    return NextResponse.json(await ejecutar(body))
   } catch (e: any) {
     return NextResponse.json({ data: null, error: { message: e.message || 'Error' } }, { status: 500 })
   }
+}
+
+async function ejecutar(spec: any): Promise<{ data: any; error: { message: string } | null }> {
+  const { table, op, columns, payload, filters, order, returning, single, maybeSingle } = spec
+  if (!TABLAS_PERMITIDAS.has(table)) return { data: null, error: { message: `Tabla no permitida: ${table}` } }
+
+  let q: any = supabaseServer.from(table)
+  if (op === 'select') q = q.select(columns || '*')
+  else if (op === 'insert') q = q.insert(payload)
+  else if (op === 'update') q = q.update(payload)
+  else if (op === 'upsert') q = q.upsert(payload)
+  else if (op === 'delete') q = q.delete()
+  else return { data: null, error: { message: `Operación inválida: ${op}` } }
+
+  for (const f of filters || []) q = q.eq(f.col, f.val)
+  if (returning && op !== 'select') q = q.select(columns || '*')
+  if (order) q = q.order(order.col, { ascending: order.ascending !== false })
+  if (single) q = q.single()
+  else if (maybeSingle) q = q.maybeSingle()
+
+  const { data, error } = await q
+  return { data, error: error ? { message: error.message } : null }
 }

@@ -401,3 +401,11 @@ ALTER TABLE proyectos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE dias_trabajados ENABLE ROW LEVEL SECURITY;
 ALTER TABLE patrimonio_snapshots ENABLE ROW LEVEL SECURITY;
 ALTER TABLE clientes_fiscales ENABLE ROW LEVEL SECURITY;
+
+-- MIGRACIÓN: dirección del emisor según la fecha de la factura. Las facturas
+-- fechadas antes de emisor_direccion_desde muestran emisor_direccion_anterior
+-- (p. ej. las de regularización de 2024-2025, emitidas en Alcalde Reig).
+INSERT INTO configuracion (clave, valor) VALUES
+  ('emisor_direccion_anterior', E'Carrer del Alcalde Reig, 6\nValencia (46006), Valencia, España'),
+  ('emisor_direccion_desde', '2026-09-23')
+ON CONFLICT (clave) DO NOTHING;

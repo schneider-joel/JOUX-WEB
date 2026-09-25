@@ -47,7 +47,10 @@ export default async function InvoicePage({ params }: { params: { id: string } }
   const emisor = {
     nombre: cfgVal('emisor_nombre', 'Joel Schneider'),
     nif: cfgVal('emisor_nif'),
-    direccion: cfgVal('emisor_direccion'),
+    // Facturas fechadas antes de la mudanza muestran la dirección de entonces.
+    direccion: cfgVal('emisor_direccion_anterior') && factura.fecha < cfgVal('emisor_direccion_desde', '0000')
+      ? cfgVal('emisor_direccion_anterior')
+      : cfgVal('emisor_direccion'),
     email: cfgVal('emisor_email'),
     telefono: cfgVal('emisor_telefono'),
     iban: cfgVal('emisor_iban'),

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { supabase, Cuenta, Crypto, Factura, PresupuestoItem, Proyecto, DiaTrabajado, TipoProyecto, PatrimonioSnapshot, ClienteFiscal } from '@/lib/supabase'
+import { supabase, batchQuery, Cuenta, Crypto, Factura, PresupuestoItem, Proyecto, DiaTrabajado, TipoProyecto, PatrimonioSnapshot, ClienteFiscal } from '@/lib/supabase'
 
 const fmt = (n: number) => new Intl.NumberFormat('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(Math.round(n))
 const fmt2 = (n: number) => new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
@@ -23,7 +23,7 @@ const ultimosMeses = (n: number) => {
   return out
 }
 
-type Tab = 'dashboard' | 'facturas' | 'presupuesto' | 'timesheet_ab' | 'timesheet_propios' | 'clientes'
+type Tab = 'dashboard' | 'facturas' | 'presupuesto' | 'timesheet_ab' | 'timesheet_propios' | 'clientes' | 'regularizacion'
 type Modal = { type: string; data?: any } | null
 
 const svgProps = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, viewBox: '0 0 24 24' }
@@ -178,7 +178,7 @@ export default function Home() {
   const [lastUpdated, setLastUpdated] = useState<string>('')
 
   const loadData = useCallback(async () => {
-    const [c, cr, f, fi, v, cfg, pr, di, sn, cf] = await Promise.all([
+    const [c, cr, f, fi, v, cfg, pr, di, sn, cf] = await batchQuery([
       supabase.from('cuentas').select('*').order('orden'),
       supabase.from('crypto').select('*'),
       supabase.from('facturas').select('*').order('fecha'),
@@ -231,6 +231,9 @@ export default function Home() {
   // (el trigger de Supabase ya la borra si sigue pendiente; esto es red de
   // seguridad por si la UI todavía no recargó).
   const facturaVisible = (f: Factura) => {
+    // Las de regularización (cobros viejos facturados a posteriori) viven en
+    // su propia pestaña y no cuentan en pendientes/cobradas del día a día.
+    if (f.origen === 'regularizacion') return false
     if (!f.proyecto_id) return true
     const p = proyectos.find(p => p.id === f.proyecto_id)
     return !p || p.status === 'facturado'
@@ -344,6 +347,7 @@ export default function Home() {
     { id: 'clientes', label: 'Clientes', icon: Icon.card },
     { id: 'timesheet_ab', label: 'Timesheet AB', icon: Icon.clock },
     { id: 'timesheet_propios', label: 'Propios', icon: Icon.users },
+    { id: 'regularizacion', label: 'Regularización', icon: Icon.refresh },
   ]
   const titulos: Record<Tab, [string, string]> = {
     dashboard: ['Overview', 'Patrimonio, cuentas y facturación'],
@@ -352,6 +356,7 @@ export default function Home() {
     clientes: ['Clientes', `${clientesFiscales.length} con datos fiscales guardados`],
     timesheet_ab: ['Timesheet · Ambushed / BoldMove', 'Horas por proyecto y facturación'],
     timesheet_propios: ['Timesheet · Clientes propios', 'Días por proyecto y facturación'],
+    regularizacion: ['Regularización de facturas', 'Temporal · cobros de ago 2024 – abr 2025 facturados a posteriori'],
   }
 
   return (
@@ -611,6 +616,48 @@ export default function Home() {
             </div>
           </div>
         )}
+
+        {/* Regularización Tab (temporal) */}
+        {tab === 'regularizacion' && (() => {
+          const regs = facturas.filter(f => f.origen === 'regularizacion').sort((a, b) => a.fecha.localeCompare(b.fecha))
+          const fmtFecha = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })
+          const grupos = new Map<string, Factura[]>()
+          for (const f of regs) {
+            const k = `${f.fecha.slice(0, 4)} · T${Math.ceil(Number(f.fecha.slice(5, 7)) / 3)}`
+            grupos.set(k, [...(grupos.get(k) || []), f])
+          }
+          return (
+            <div className="card">
+              <div className="card-head">
+                <div className="card-title">Facturas de regularización <span style={{ color: 'var(--text3)', fontWeight: 400 }}>· {regs.length}</span></div>
+                <span className="row-amount" style={{ color: 'var(--text2)' }}>€{fmt(regs.reduce((s, f) => s + Number(f.importe), 0))}</span>
+              </div>
+              {regs.length === 0 && <div className="chart-empty">Todavía no hay facturas de regularización.</div>}
+              {Array.from(grupos.entries()).map(([k, fs]) => (
+                <div key={k} style={{ marginBottom: 18 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.08em', margin: '14px 0 6px' }}>
+                    <span>{k}</span><span>€{fmt(fs.reduce((s, f) => s + Number(f.importe), 0))}</span>
+                  </div>
+                  {fs.map(f => (
+                    <div key={f.id} className="row">
+                      <div className="row-main">
+                        <div className="row-title">{f.numero} <span style={{ color: 'var(--text3)' }}>· {f.cliente} · {f.descripcion}{f.numero_referencia ? ` #${f.numero_referencia}` : ''}</span></div>
+                        <div className="row-sub">Emitida {fmtFecha(f.fecha)}{f.fecha_cobro ? ` · Cobrada ${fmtFecha(f.fecha_cobro)}` : ''}</div>
+                      </div>
+                      <div className="row-side">
+                        <span className="row-amount">€{fmt(f.importe)}</span>
+                        <a className="icon-btn accent" href={`/invoice/${f.id}`} target="_blank" rel="noopener noreferrer" title="Ver invoice"><Icon.invoice /></a>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ))}
+              <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 6, paddingTop: 14, borderTop: '1px solid var(--border)' }}>
+                Sección temporal. Estas facturas no se envían a Holded ni cuentan en pendientes/cobradas del día a día.
+              </div>
+            </div>
+          )
+        })()}
 
         {/* Presupuesto Tab */}
         {tab === 'presupuesto' && (
