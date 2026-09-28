@@ -1184,10 +1184,17 @@ function ModalAddProyecto({ tipo, onAdd, onClose }: { tipo: TipoProyecto, onAdd:
             if (e.target.value === '__nuevo__') { setNuevoCliente(true); return }
             setCliente(e.target.value)
           }} style={inputStyle}>
-            {tipo === 'ambushed_boldmove' && !clientesGuardados.some(c => c.cliente === 'Ambushed') && <option value="Ambushed">Ambushed</option>}
-            {tipo === 'ambushed_boldmove' && !clientesGuardados.some(c => c.cliente === 'BoldMove') && <option value="BoldMove">BoldMove</option>}
-            {clientesGuardados.map(c => <option key={c.cliente} value={c.cliente}>{c.cliente}</option>)}
-            <option value="__nuevo__">+ Nuevo cliente...</option>
+            {tipo === 'ambushed_boldmove' ? (
+              <>
+                <option value="Ambushed">Ambushed</option>
+                <option value="BoldMove">BoldMove</option>
+              </>
+            ) : (
+              <>
+                {clientesGuardados.map(c => <option key={c.cliente} value={c.cliente}>{c.cliente}</option>)}
+                <option value="__nuevo__">+ Nuevo cliente...</option>
+              </>
+            )}
           </select>
         ) : (
           <div style={{ border: '1px solid var(--border)', borderRadius: 7, padding: 12 }}>
