@@ -360,15 +360,23 @@ export default function Home() {
     </div>
   )
 
-  const navItems: { id: Tab; label: string; icon: () => JSX.Element }[] = [
-    { id: 'dashboard', label: 'Overview', icon: Icon.home },
-    { id: 'facturas', label: 'Facturas', icon: Icon.invoice },
-    { id: 'compras', label: 'Compras', icon: Icon.wallet },
-    { id: 'impuestos', label: 'Impuestos', icon: Icon.trend },
-    { id: 'clientes', label: 'Clientes', icon: Icon.card },
-    { id: 'timesheet_ab', label: 'Timesheet AB', icon: Icon.clock },
-    { id: 'timesheet_th', label: 'Tays / Hans', icon: Icon.clock },
-    { id: 'timesheet_propios', label: 'Propios', icon: Icon.users },
+  const navGroups: { label: string; items: { id: Tab; label: string; icon: () => JSX.Element; badge?: number }[] }[] = [
+    {
+      label: 'General', items: [
+        { id: 'dashboard', label: 'Overview', icon: Icon.home },
+        { id: 'facturas', label: 'Facturas', icon: Icon.invoice, badge: facturasPendientes.length },
+        { id: 'compras', label: 'Compras', icon: Icon.wallet },
+        { id: 'impuestos', label: 'Impuestos', icon: Icon.trend },
+        { id: 'clientes', label: 'Clientes', icon: Icon.card },
+      ],
+    },
+    {
+      label: 'Timesheets', items: [
+        { id: 'timesheet_ab', label: 'Ambushed / BoldMove', icon: Icon.clock },
+        { id: 'timesheet_th', label: 'Tays / Hans', icon: Icon.clock },
+        { id: 'timesheet_propios', label: 'Propios', icon: Icon.users },
+      ],
+    },
   ]
   const titulos: Record<Tab, [string, string]> = {
     dashboard: ['Overview', 'Patrimonio, cuentas y facturación'],
@@ -392,11 +400,19 @@ export default function Home() {
             <div className="brand-sub">Finanzas</div>
           </div>
         </div>
-        {navItems.map(n => (
-          <button key={n.id} className={`nav-btn${tab === n.id ? ' active' : ''}`} onClick={() => setTab(n.id)}>
-            <n.icon /><span>{n.label}</span>
-          </button>
-        ))}
+        <div className="nav-scroll">
+          {navGroups.map(g => (
+            <div className="nav-group" key={g.label}>
+              <div className="nav-section-label">{g.label}</div>
+              {g.items.map(n => (
+                <button key={n.id} className={`nav-btn${tab === n.id ? ' active' : ''}`} onClick={() => setTab(n.id)}>
+                  <n.icon /><span>{n.label}</span>
+                  {!!n.badge && <span className="nav-badge">{n.badge}</span>}
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
         <div className="nav-foot">{lastUpdated && `sync ${lastUpdated}`}</div>
       </aside>
 
