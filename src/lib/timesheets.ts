@@ -2,7 +2,7 @@
 // comparten pestaña y link público.
 export type GrupoTimesheet = { key: string; label: string; clientes: string[] }
 
-type GrupoFijo = GrupoTimesheet & { ruta: string; tokenKey: string }
+export type GrupoFijo = GrupoTimesheet & { ruta: string; tokenKey: string }
 
 export const GRUPOS_FIJOS: GrupoFijo[] = [
   { key: 'ab', label: 'Ambushed / BoldMove', clientes: ['Ambushed', 'BoldMove'], ruta: 'ab', tokenKey: 'timesheet_public_token' },
