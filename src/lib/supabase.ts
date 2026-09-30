@@ -152,6 +152,7 @@ export type ClienteFiscal = {
   cliente: string
   identificador?: string
   direccion?: string
+  pais?: 'ES' | 'UE' | 'EXT' | null
 }
 
 export type PresupuestoItem = {

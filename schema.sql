@@ -454,3 +454,33 @@ INSERT INTO configuracion (clave, valor)
 -- modo_rate: 'hora' (hrs × rate + stand by) | 'dia' (rate fijo por día, hrs = NULL).
 ALTER TABLE proyectos ADD COLUMN IF NOT EXISTS modo_rate TEXT NOT NULL DEFAULT 'dia';
 UPDATE proyectos SET modo_rate = 'hora' WHERE tipo = 'ambushed_boldmove';
+
+-- MIGRACIÓN: país fiscal del cliente → formato de la factura. 'ES' = España
+-- (IVA 21% + retención 15%, tipo_factura 'dentro_ue'); 'UE' y 'EXT' van sin
+-- IVA ni retención ('fuera_ue'). La app lo sugiere por dirección/NIF
+-- (src/lib/clientes.ts) y la factura de un proyecto lo toma al facturarse.
+ALTER TABLE clientes_fiscales ADD COLUMN IF NOT EXISTS pais TEXT;
+UPDATE clientes_fiscales SET pais = 'ES' WHERE cliente IN ('Cpworks Barcelona', 'Jaleo Creative Makers', 'Tays Perez') AND pais IS NULL;
+UPDATE clientes_fiscales SET pais = 'EXT' WHERE cliente IN ('Ambushed', 'BoldMove', 'Hans Emanuel') AND pais IS NULL;
+
+CREATE OR REPLACE FUNCTION crear_factura_desde_proyecto()
+RETURNS TRIGGER AS $$
+DECLARE
+  monto DECIMAL(10,2);
+  fecha_emision DATE;
+  tipo TEXT;
+BEGIN
+  IF NEW.status = 'facturado' AND (OLD.status IS DISTINCT FROM 'facturado') THEN
+    SELECT COALESCE(SUM(total_day), 0), MAX(fecha) INTO monto, fecha_emision FROM dias_trabajados WHERE proyecto_id = NEW.id;
+    IF fecha_emision IS NULL THEN fecha_emision := CURRENT_DATE; END IF;
+    SELECT CASE WHEN pais = 'ES' THEN 'dentro_ue' ELSE 'fuera_ue' END INTO tipo FROM clientes_fiscales WHERE cliente = NEW.cliente;
+    IF NOT EXISTS (SELECT 1 FROM facturas WHERE proyecto_id = NEW.id) THEN
+      INSERT INTO facturas (cliente, descripcion, importe, fecha, fecha_vencimiento, estado, origen, proyecto_id, numero_referencia, numero, tipo_factura)
+      VALUES (NEW.cliente, NEW.nombre, monto, fecha_emision, fecha_emision + 30, 'pendiente', 'timesheet', NEW.id, NEW.numero_proyecto, siguiente_numero_factura(), COALESCE(tipo, 'fuera_ue'));
+    END IF;
+  ELSIF OLD.status = 'facturado' AND NEW.status IS DISTINCT FROM 'facturado' THEN
+    DELETE FROM facturas WHERE proyecto_id = NEW.id AND estado = 'pendiente';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;

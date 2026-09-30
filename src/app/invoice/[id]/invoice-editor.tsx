@@ -230,8 +230,8 @@ export default function InvoiceEditor({
           <div style={{ marginBottom: 14 }}>
             <label style={labelStyle}>Tipo de factura</label>
             <select value={factura.tipo_factura || 'fuera_ue'} onChange={e => set({ tipo_factura: e.target.value as 'fuera_ue' | 'dentro_ue' })} style={inputStyle}>
-              <option value="fuera_ue">Fuera de la UE (sin IVA, con transferencia bancaria)</option>
-              <option value="dentro_ue">Dentro de la UE / España (con IVA 21% y Retención -15%)</option>
+              <option value="fuera_ue">Fuera de España (sin IVA ni retención)</option>
+              <option value="dentro_ue">España (IVA 21% y retención -15%)</option>
             </select>
           </div>
 

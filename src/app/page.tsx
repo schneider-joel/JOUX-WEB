@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import ComprasTab from './compras-tab'
 import ImpuestosTab from './impuestos-tab'
+import { PAISES, PaisFiscal, detectarPais, tipoFacturaDePais } from '@/lib/clientes'
 import { GrupoTimesheet, grupoDeCliente, grupoDeKey, gruposTimesheet, linkPublico, tipoLegacy } from '@/lib/timesheets'
 import { supabase, batchQuery, Compra, Cuenta, Crypto, Factura, PresupuestoItem, Proyecto, DiaTrabajado, PatrimonioSnapshot, ClienteFiscal } from '@/lib/supabase'
 
@@ -644,7 +645,13 @@ export default function Home() {
             {clientesFiscales.map(c => (
               <div key={c.cliente} className="row">
                 <div className="row-main">
-                  <div className="row-title">{c.cliente}</div>
+                  <div className="row-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {c.cliente}
+                    <span className={`pill${c.pais ? '' : ' pill-amber'}`} style={c.pais ? { background: 'var(--surface3)', color: 'var(--text2)' } : undefined}
+                      title={c.pais ? PAISES.find(x => x.value === c.pais)?.label : 'Sin país: sus facturas salen sin IVA. Editalo para elegirlo.'}>
+                      {c.pais === 'ES' ? 'España' : c.pais === 'UE' ? 'UE' : c.pais === 'EXT' ? 'Fuera UE' : 'sin país'}
+                    </span>
+                  </div>
                   <div className="row-sub">{c.identificador || 'Sin identificador fiscal'}{c.direccion ? ` · ${c.direccion.replace(/\n/g, ', ')}` : ''}</div>
                 </div>
                 <div className="row-side">
@@ -734,7 +741,7 @@ export default function Home() {
 
         {/* Timesheet del grupo de clientes activo */}
         {grupoActivo && (
-          <TimesheetTab key={grupoActivo.key} grupo={grupoActivo} proyectos={proyectos} dias={dias} facturas={facturas} reload={loadData} />
+          <TimesheetTab key={grupoActivo.key} grupo={grupoActivo} proyectos={proyectos} dias={dias} facturas={facturas} clientesFiscales={clientesFiscales} reload={loadData} />
         )}
 
         {/* Modals */}
@@ -781,10 +788,11 @@ function ModalAddFactura({ cuentas, clientesFiscales, onAdd, onClose }: { cuenta
     if (nuevoCliente) {
       if (!nuevoNombre) return
       cliente = nuevoNombre
-      await supabase.from('clientes_fiscales').upsert({ cliente: nuevoNombre, identificador: nuevoIdentificador, direccion: nuevoDireccion })
+      await supabase.from('clientes_fiscales').upsert({ cliente: nuevoNombre, identificador: nuevoIdentificador, direccion: nuevoDireccion, pais: detectarPais(nuevoIdentificador, nuevoDireccion) })
     }
     if (!cliente || !form.importe) return
-    onAdd({ ...form, cliente, importe: Number(form.importe), cuenta_destino_id: form.cuenta_destino_id ? Number(form.cuenta_destino_id) : null })
+    const pais = nuevoCliente ? detectarPais(nuevoIdentificador, nuevoDireccion) : clientesFiscales.find(c => c.cliente === cliente)?.pais
+    onAdd({ ...form, cliente, importe: Number(form.importe), tipo_factura: tipoFacturaDePais(pais), cuenta_destino_id: form.cuenta_destino_id ? Number(form.cuenta_destino_id) : null })
   }
 
   return (
@@ -923,6 +931,9 @@ function ModalCliente({ cliente, onSave, onClose }: { cliente?: ClienteFiscal, o
   const [nombre, setNombre] = useState(cliente?.cliente || '')
   const [identificador, setIdentificador] = useState(cliente?.identificador || '')
   const [direccion, setDireccion] = useState(cliente?.direccion || '')
+  // Si el país no se eligió a mano, se sugiere a partir del identificador y la dirección.
+  const [paisElegido, setPaisElegido] = useState<PaisFiscal | null>(cliente?.pais || null)
+  const pais = paisElegido || detectarPais(identificador, direccion)
   const inputStyleLocal = { width: '100%', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 7, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'Inter, sans-serif', outline: 'none' }
   const labelStyleLocal = { display: 'block' as const, fontSize: 12, color: 'var(--text2)', marginBottom: 6 }
   return (
@@ -944,9 +955,17 @@ function ModalCliente({ cliente, onSave, onClose }: { cliente?: ClienteFiscal, o
         <label style={labelStyleLocal}>Dirección fiscal</label>
         <textarea value={direccion} onChange={e => setDireccion(e.target.value)} placeholder="Calle, número&#10;Ciudad, país" rows={3} style={{ ...inputStyleLocal, resize: 'vertical' as const }} />
       </div>
+      <div style={{ marginBottom: 14 }}>
+        <label style={labelStyleLocal}>País fiscal (define el formato de sus facturas)</label>
+        <select value={pais || ''} onChange={e => setPaisElegido((e.target.value || null) as PaisFiscal | null)} style={inputStyleLocal}>
+          <option value="">Sin definir (sin IVA)</option>
+          {PAISES.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+        </select>
+        {!paisElegido && pais && <div style={{ fontSize: 10.5, color: 'var(--text3)', marginTop: 4 }}>Detectado automáticamente por la dirección / identificador.</div>}
+      </div>
       <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
         <button onClick={onClose} style={{ padding: '9px 18px', borderRadius: 7, fontSize: 13, cursor: 'pointer', background: 'var(--surface2)', color: 'var(--text2)', border: '1px solid var(--border)', fontFamily: 'Inter, sans-serif' }}>Cancelar</button>
-        <button onClick={() => nombre && onSave({ cliente: nombre, identificador, direccion })}
+        <button onClick={() => nombre && onSave({ cliente: nombre, identificador, direccion, pais })}
           style={{ flex: 1, padding: '9px 18px', borderRadius: 7, fontSize: 13, cursor: 'pointer', background: 'var(--accent)', color: '#000', border: 'none', fontWeight: 500, fontFamily: 'Inter, sans-serif' }}>
           Guardar
         </button>
@@ -962,7 +981,7 @@ const confirmBtnStyle = { flex: 1, padding: '9px 18px', borderRadius: 7, fontSiz
 
 const statusColor: Record<string, string> = { activo: 'var(--amber)', completado: 'var(--text2)', facturado: 'var(--green)' }
 
-function TimesheetTab({ grupo, proyectos, dias, facturas, reload }: { grupo: GrupoTimesheet, proyectos: Proyecto[], dias: DiaTrabajado[], facturas: Factura[], reload: () => void }) {
+function TimesheetTab({ grupo, proyectos, dias, facturas, clientesFiscales, reload }: { grupo: GrupoTimesheet, proyectos: Proyecto[], dias: DiaTrabajado[], facturas: Factura[], clientesFiscales: ClienteFiscal[], reload: () => void }) {
   const [modal, setModal] = useState<Modal>(null)
   const [expandido, setExpandido] = useState<number | null>(null)
   const [token, setToken] = useState('')
@@ -1010,6 +1029,19 @@ function TimesheetTab({ grupo, proyectos, dias, facturas, reload }: { grupo: Gru
       if (!confirm(`Marcar "${p.nombre}" como Facturado va a crear una factura pendiente por €${fmt(monto)} y asignarle el próximo Nº de factura. ¿Confirmás?`)) return
     }
     await supabase.from('proyectos').update({ status }).eq('id', p.id)
+    reload()
+  }
+
+  // Cambia el cliente del proyecto y, si ya tiene factura, también el de la
+  // factura y su formato (IVA/retención según el país del nuevo cliente).
+  const cambiarCliente = async (p: Proyecto, cliente: string) => {
+    const factura = facturas.find(f => f.proyecto_id === p.id)
+    if (factura && !confirm(`"${p.nombre}" ya tiene la factura ${factura.numero || ''}. También va a pasar a ${cliente}. ¿Confirmás?`)) return
+    await supabase.from('proyectos').update({ cliente, tipo: tipoLegacy(cliente) }).eq('id', p.id)
+    if (factura) {
+      const pais = clientesFiscales.find(c => c.cliente === cliente)?.pais
+      await supabase.from('facturas').update({ cliente, tipo_factura: tipoFacturaDePais(pais) }).eq('id', factura.id)
+    }
     reload()
   }
 
@@ -1085,7 +1117,11 @@ function TimesheetTab({ grupo, proyectos, dias, facturas, reload }: { grupo: Gru
               <div>
                 <div style={{ fontSize: 14, fontWeight: 500 }}>{p.nombre}</div>
                 <div style={{ fontSize: 11, color: 'var(--text3)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  {p.cliente}
+                  <select value={p.cliente} onClick={e => e.stopPropagation()} onChange={e => cambiarCliente(p, e.target.value)} title="Cambiar cliente"
+                    style={{ background: 'none', border: 'none', borderBottom: '1px dotted var(--border)', color: 'var(--text3)', fontSize: 11, fontFamily: 'Inter, sans-serif', outline: 'none', padding: 0, cursor: 'pointer' }}>
+                    {!clientesFiscales.some(c => c.cliente === p.cliente) && <option value={p.cliente}>{p.cliente}</option>}
+                    {clientesFiscales.map(c => <option key={c.cliente} value={c.cliente}>{c.cliente}</option>)}
+                  </select>
                   <span>·</span>
                   {p.modo_rate === 'hora' ? 'por hora' : 'por día'}
                   <span>·</span>
@@ -1189,7 +1225,7 @@ function ModalAddProyecto({ clienteInicial, onAdd, onClose }: { clienteInicial?:
     if (nuevoCliente) {
       if (!nuevoNombre) return
       clienteFinal = nuevoNombre
-      await supabase.from('clientes_fiscales').upsert({ cliente: nuevoNombre, identificador: nuevoIdentificador, direccion: nuevoDireccion })
+      await supabase.from('clientes_fiscales').upsert({ cliente: nuevoNombre, identificador: nuevoIdentificador, direccion: nuevoDireccion, pais: detectarPais(nuevoIdentificador, nuevoDireccion) })
     }
     if (!nombre || !clienteFinal) return
     onAdd({ nombre, cliente: clienteFinal, numero_proyecto: numeroProyecto, modo_rate: modo })
