@@ -25,7 +25,17 @@ const ultimosMeses = (n: number) => {
   return out
 }
 
-type Tab = 'dashboard' | 'facturas' | 'compras' | 'impuestos' | 'presupuesto' | 'timesheet_ab' | 'timesheet_propios' | 'clientes'
+type Tab = 'dashboard' | 'facturas' | 'compras' | 'impuestos' | 'presupuesto' | 'timesheet_ab' | 'timesheet_th' | 'timesheet_propios' | 'clientes'
+
+// Clientes fijos y link público de solo lectura por tipo de timesheet (ver TimesheetTab).
+const CLIENTES_FIJOS: Partial<Record<TipoProyecto, string[]>> = {
+  ambushed_boldmove: ['Ambushed', 'BoldMove'],
+  tays_hans: ['Hans Emanuel', 'Tays Perez'],
+}
+const PUBLIC_LINK: Partial<Record<TipoProyecto, { ruta: string; tokenKey: string; label: string }>> = {
+  ambushed_boldmove: { ruta: 'ab', tokenKey: 'timesheet_public_token', label: 'Ambushed / BoldMove' },
+  tays_hans: { ruta: 'th', tokenKey: 'timesheet_th_public_token', label: 'Tays / Hans' },
+}
 type Modal = { type: string; data?: any } | null
 
 const svgProps = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, viewBox: '0 0 24 24' }
@@ -357,6 +367,7 @@ export default function Home() {
     { id: 'impuestos', label: 'Impuestos', icon: Icon.trend },
     { id: 'clientes', label: 'Clientes', icon: Icon.card },
     { id: 'timesheet_ab', label: 'Timesheet AB', icon: Icon.clock },
+    { id: 'timesheet_th', label: 'Tays / Hans', icon: Icon.clock },
     { id: 'timesheet_propios', label: 'Propios', icon: Icon.users },
   ]
   const titulos: Record<Tab, [string, string]> = {
@@ -365,6 +376,7 @@ export default function Home() {
     presupuesto: ['Presupuesto', 'Gastos del mes'],
     clientes: ['Clientes', `${clientesFiscales.length} con datos fiscales guardados`],
     timesheet_ab: ['Timesheet · Ambushed / BoldMove', 'Horas por proyecto y facturación'],
+    timesheet_th: ['Timesheet · Tays / Hans', 'Días por proyecto y facturación'],
     timesheet_propios: ['Timesheet · Clientes propios', 'Días por proyecto y facturación'],
     compras: ['Compras', 'Facturas de gastos y compras'],
     impuestos: ['Impuestos', 'Estimación trimestral de IRPF (130) e IVA (303)'],
@@ -709,6 +721,11 @@ export default function Home() {
           <TimesheetTab tipo="ambushed_boldmove" proyectos={proyectos} dias={dias} facturas={facturas} reload={loadData} />
         )}
 
+        {/* Timesheet Tays/Hans Tab */}
+        {tab === 'timesheet_th' && (
+          <TimesheetTab tipo="tays_hans" proyectos={proyectos} dias={dias} facturas={facturas} reload={loadData} />
+        )}
+
         {/* Timesheet Clientes Propios Tab */}
         {tab === 'timesheet_propios' && (
           <TimesheetTab tipo="propio" proyectos={proyectos} dias={dias} facturas={facturas} reload={loadData} />
@@ -944,10 +961,12 @@ function TimesheetTab({ tipo, proyectos, dias, facturas, reload }: { tipo: TipoP
   const [copyHover, setCopyHover] = useState(false)
   const [clienteFiltro, setClienteFiltro] = useState('todos')
 
+  const linkCfg = PUBLIC_LINK[tipo]
   useEffect(() => {
-    if (tipo !== 'ambushed_boldmove') return
-    supabase.from('configuracion').select('valor').eq('clave', 'timesheet_public_token').single()
-      .then(({ data }) => { if (data?.valor) setPublicUrl(`${window.location.origin}/ab/${data.valor}`) })
+    if (!linkCfg) return
+    supabase.from('configuracion').select('valor').eq('clave', linkCfg.tokenKey).single()
+      .then(({ data }) => { if (data?.valor) setPublicUrl(`${window.location.origin}/${linkCfg.ruta}/${data.valor}`) })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tipo])
 
   const diasDe = (proyectoId: number) => dias.filter(d => d.proyecto_id === proyectoId).sort((a, b) => a.fecha.localeCompare(b.fecha))
@@ -1012,9 +1031,9 @@ function TimesheetTab({ tipo, proyectos, dias, facturas, reload }: { tipo: TipoP
 
   return (
     <div>
-      {tipo === 'ambushed_boldmove' && publicUrl && (
+      {linkCfg && publicUrl && (
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 16px', marginBottom: 16, fontSize: 12, color: 'var(--text2)' }}>
-          <span>Link público de solo lectura para Ambushed / BoldMove</span>
+          <span>Link público de solo lectura para {linkCfg.label}</span>
           <button
             onClick={() => {
               navigator.clipboard.writeText(publicUrl)
@@ -1037,12 +1056,11 @@ function TimesheetTab({ tipo, proyectos, dias, facturas, reload }: { tipo: TipoP
       )}
 
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, gap: 8 }}>
-        {tipo === 'ambushed_boldmove' ? (
+        {CLIENTES_FIJOS[tipo] ? (
           <select value={clienteFiltro} onChange={e => setClienteFiltro(e.target.value)}
             style={{ fontSize: 11, padding: '4px 10px', borderRadius: 6, background: 'var(--surface2)', color: 'var(--text2)', border: '1px solid var(--border)', fontFamily: 'Inter, sans-serif' }}>
             <option value="todos">Todos los clientes</option>
-            <option value="Ambushed">Ambushed</option>
-            <option value="BoldMove">BoldMove</option>
+            {CLIENTES_FIJOS[tipo]!.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
         ) : <div />}
         <button className="btn btn-primary" onClick={() => setModal({ type: 'addProyecto' })}><Icon.plus />Nuevo proyecto</button>
@@ -1141,7 +1159,7 @@ function ModalAddProyecto({ tipo, onAdd, onClose }: { tipo: TipoProyecto, onAdd:
   const [nombre, setNombre] = useState('')
   const [numeroProyecto, setNumeroProyecto] = useState('')
   const [clientesGuardados, setClientesGuardados] = useState<{ cliente: string }[]>([])
-  const [cliente, setCliente] = useState(tipo === 'ambushed_boldmove' ? 'Ambushed' : '')
+  const [cliente, setCliente] = useState(CLIENTES_FIJOS[tipo]?.[0] || '')
   const [nuevoCliente, setNuevoCliente] = useState(false)
   const [nuevoNombre, setNuevoNombre] = useState('')
   const [nuevoIdentificador, setNuevoIdentificador] = useState('')
@@ -1150,7 +1168,7 @@ function ModalAddProyecto({ tipo, onAdd, onClose }: { tipo: TipoProyecto, onAdd:
   useEffect(() => {
     supabase.from('clientes_fiscales').select('cliente').order('cliente').then(({ data }) => {
       if (data) setClientesGuardados(data)
-      if (tipo !== 'ambushed_boldmove' && data && data.length > 0 && !data.some((c: { cliente: string }) => c.cliente === cliente)) {
+      if (!CLIENTES_FIJOS[tipo] && data && data.length > 0 && !data.some((c: { cliente: string }) => c.cliente === cliente)) {
         setCliente(data[0].cliente)
       }
     })
@@ -1184,10 +1202,9 @@ function ModalAddProyecto({ tipo, onAdd, onClose }: { tipo: TipoProyecto, onAdd:
             if (e.target.value === '__nuevo__') { setNuevoCliente(true); return }
             setCliente(e.target.value)
           }} style={inputStyle}>
-            {tipo === 'ambushed_boldmove' ? (
+            {CLIENTES_FIJOS[tipo] ? (
               <>
-                <option value="Ambushed">Ambushed</option>
-                <option value="BoldMove">BoldMove</option>
+                {CLIENTES_FIJOS[tipo]!.map(c => <option key={c} value={c}>{c}</option>)}
               </>
             ) : (
               <>

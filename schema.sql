@@ -437,3 +437,11 @@ ALTER TABLE compras ENABLE ROW LEVEL SECURITY;
 ALTER TABLE facturas ADD COLUMN IF NOT EXISTS archivo_path TEXT;
 ALTER TABLE facturas ADD COLUMN IF NOT EXISTS archivo_nombre TEXT;
 ALTER TABLE facturas ADD COLUMN IF NOT EXISTS fiscal BOOLEAN NOT NULL DEFAULT TRUE;
+
+-- MIGRACIÓN: tercer tipo de timesheet, "tays_hans" (Tays Perez / Hans
+-- Emanuel, pareja; ella consigue proyectos con otros directores). Mismo
+-- patrón que "ambushed_boldmove" pero con rate por día (hrs = NULL), como
+-- "propio", y su propio link público de solo lectura en /th/<token>.
+INSERT INTO configuracion (clave, valor)
+  SELECT 'timesheet_th_public_token', gen_random_uuid()::text
+  WHERE NOT EXISTS (SELECT 1 FROM configuracion WHERE clave = 'timesheet_th_public_token');

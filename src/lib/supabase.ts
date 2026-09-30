@@ -162,7 +162,7 @@ export type PresupuestoItem = {
   mes: string
 }
 
-export type TipoProyecto = 'ambushed_boldmove' | 'propio'
+export type TipoProyecto = 'ambushed_boldmove' | 'propio' | 'tays_hans'
 export type StatusProyecto = 'activo' | 'completado' | 'facturado'
 
 export type Proyecto = {
