@@ -8,7 +8,7 @@ const fmt2 = (n: number) => new Intl.NumberFormat('en-US', { minimumFractionDigi
 const textos = {
   es: {
     titulo: 'FACTURA', numero: 'Número', referencia: 'Referencia', fecha: 'Fecha', vencimiento: 'Vencimiento', para: 'Para', de: 'De',
-    concepto: 'CONCEPTO', precio: 'PRECIO', unidades: 'UNIDADES', subtotal: 'SUBTOTAL', iva: 'IVA', retencion: 'RETENCIÓN', total: 'TOTAL',
+    concepto: 'CONCEPTO', precio: 'PRECIO', unidades: 'UNIDADES', unidadesCorto: 'UDS.', subtotal: 'SUBTOTAL', iva: 'IVA', retencion: 'RETENCIÓN', total: 'TOTAL',
     baseImponible: 'BASE IMPONIBLE', totalLabel: 'Total', imprimir: 'Imprimir / Guardar PDF', editar: 'Editar', vista: 'Vista previa',
     guardar: 'Guardar cambios', guardando: 'Guardando...',
     notaFueraUe: 'Operación no sujeta a IVA por el art. 69.Uno.1º LIVA',
@@ -17,7 +17,7 @@ const textos = {
   },
   en: {
     titulo: 'INVOICE', numero: 'Number', referencia: 'Reference', fecha: 'Date', vencimiento: 'Due date', para: 'To', de: 'From',
-    concepto: 'DESCRIPTION', precio: 'PRICE', unidades: 'QTY', subtotal: 'SUBTOTAL', iva: 'VAT', retencion: 'WITHHOLDING', total: 'TOTAL',
+    concepto: 'DESCRIPTION', precio: 'PRICE', unidades: 'QTY', unidadesCorto: 'QTY', subtotal: 'SUBTOTAL', iva: 'VAT', retencion: 'WITHHOLDING', total: 'TOTAL',
     baseImponible: 'NET AMOUNT', totalLabel: 'Total', imprimir: 'Print / Save PDF', editar: 'Edit', vista: 'Preview',
     guardar: 'Save changes', guardando: 'Saving...',
     notaFueraUe: 'Not subject to VAT under art. 69.One.1 of the Spanish VAT Law',
@@ -139,6 +139,12 @@ export default function InvoiceEditor({
   const vencimientoFmt = factura.fecha_vencimiento
     ? new Date(factura.fecha_vencimiento + 'T00:00:00').toLocaleDateString(idioma === 'es' ? 'es-ES' : 'en-GB')
     : ''
+
+  // Con IVA y retención son 7 columnas: las numéricas se ajustan a su contenido
+  // sin partirse y el concepto ocupa el resto. Sin IVA se reparten al 15%.
+  const celda = { textAlign: 'right' as const, whiteSpace: 'nowrap' as const, width: dentroUe ? '1%' : '15%' }
+  const th = { ...celda, padding: dentroUe ? '10px 7px' : '10px 8px', fontSize: 11 }
+  const td = { ...celda, padding: dentroUe ? '14px 7px' : '14px 8px', fontSize: 13 }
 
   const mostrarDetalleHoras = modoRate === 'hora' && dias.length > 0
   const totalHoras = dias.reduce((s, d) => s + (d.hrs ?? 0), 0)
@@ -306,16 +312,16 @@ export default function InvoiceEditor({
         )}
 
         <div className="invoice-table-wrap">
-        <table className="invoice-table" style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 8 }}>
+        <table className="invoice-table" style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 8, tableLayout: dentroUe ? 'auto' : undefined }}>
           <thead>
             <tr style={{ borderTop: '1px solid #ddd', borderBottom: '1px solid #ddd' }}>
-              <th style={{ width: dentroUe ? '28%' : '40%', textAlign: 'left', padding: '10px 8px 10px 0', fontSize: 11 }}>{t.concepto}</th>
-              <th style={{ width: dentroUe ? '12%' : '15%', textAlign: 'right', padding: '10px 8px', fontSize: 11 }}>{t.precio}</th>
-              <th style={{ width: dentroUe ? '10%' : '15%', textAlign: 'right', padding: '10px 8px', fontSize: 11 }}>{t.unidades}</th>
-              <th style={{ width: dentroUe ? '13%' : '15%', textAlign: 'right', padding: '10px 8px', fontSize: 11 }}>{t.subtotal}</th>
-              {dentroUe && <th style={{ width: '11%', textAlign: 'right', padding: '10px 8px', fontSize: 11 }}>{t.iva}</th>}
-              {dentroUe && <th style={{ width: '13%', textAlign: 'right', padding: '10px 8px', fontSize: 11 }}>{t.retencion}</th>}
-              <th style={{ width: dentroUe ? '13%' : '15%', textAlign: 'right', padding: '10px 0', fontSize: 11 }}>{t.total}</th>
+              <th style={{ width: dentroUe ? undefined : '40%', textAlign: 'left', padding: '10px 8px 10px 0', fontSize: 11 }}>{t.concepto}</th>
+              <th style={th}>{t.precio}</th>
+              <th style={th}>{dentroUe ? t.unidadesCorto : t.unidades}</th>
+              <th style={th}>{t.subtotal}</th>
+              {dentroUe && <th style={th}>{t.iva}</th>}
+              {dentroUe && <th style={th}>{t.retencion}</th>}
+              <th style={{ ...th, paddingRight: 0 }}>{t.total}</th>
             </tr>
           </thead>
           <tbody>
@@ -327,12 +333,12 @@ export default function InvoiceEditor({
                 </div>
                 {factura.concepto_detalle && <div style={{ color: '#888', fontSize: 12 }}>{factura.concepto_detalle}</div>}
               </td>
-              <td style={{ padding: '14px 8px', fontSize: 13, textAlign: 'right' }}>{fmt2(base)}€</td>
-              <td style={{ padding: '14px 8px', fontSize: 13, textAlign: 'right' }}>1</td>
-              <td style={{ padding: '14px 8px', fontSize: 13, textAlign: 'right' }}>{fmt2(base)}€</td>
-              {dentroUe && <td style={{ padding: '14px 8px', fontSize: 13, textAlign: 'right' }}>{IVA_PCT}%</td>}
-              {dentroUe && <td style={{ padding: '14px 8px', fontSize: 13, textAlign: 'right' }}>-{RETENCION_PCT}%</td>}
-              <td style={{ padding: '14px 0', fontSize: 13, textAlign: 'right' }}>{fmt2(total)}€</td>
+              <td style={td}>{fmt2(base)}€</td>
+              <td style={td}>1</td>
+              <td style={td}>{fmt2(base)}€</td>
+              {dentroUe && <td style={td}>{IVA_PCT}%</td>}
+              {dentroUe && <td style={td}>-{RETENCION_PCT}%</td>}
+              <td style={{ ...td, paddingRight: 0 }}>{fmt2(total)}€</td>
             </tr>
           </tbody>
         </table>
