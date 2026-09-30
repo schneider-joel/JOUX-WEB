@@ -445,3 +445,12 @@ ALTER TABLE facturas ADD COLUMN IF NOT EXISTS fiscal BOOLEAN NOT NULL DEFAULT TR
 INSERT INTO configuracion (clave, valor)
   SELECT 'timesheet_th_public_token', gen_random_uuid()::text
   WHERE NOT EXISTS (SELECT 1 FROM configuracion WHERE clave = 'timesheet_th_public_token');
+
+-- MIGRACIÓN: timesheets por cliente. Cada cliente tiene su propio timesheet
+-- (pestaña + link público /t/<token>, guardado en configuracion como
+-- "timesheet_token:<cliente>"); solo Ambushed+BoldMove y Hans Emanuel+Tays
+-- Perez comparten uno (ver src/lib/timesheets.ts). proyectos.tipo queda como
+-- columna legacy: la agrupación es por cliente y el rate se elige por proyecto.
+-- modo_rate: 'hora' (hrs × rate + stand by) | 'dia' (rate fijo por día, hrs = NULL).
+ALTER TABLE proyectos ADD COLUMN IF NOT EXISTS modo_rate TEXT NOT NULL DEFAULT 'dia';
+UPDATE proyectos SET modo_rate = 'hora' WHERE tipo = 'ambushed_boldmove';

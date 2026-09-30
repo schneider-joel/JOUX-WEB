@@ -172,6 +172,7 @@ export type Proyecto = {
   cliente: string
   status: StatusProyecto
   numero_proyecto?: string
+  modo_rate?: 'hora' | 'dia'
   created_at: string
 }
 

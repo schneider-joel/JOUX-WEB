@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-const PUBLIC_PATHS = [/^\/ab\//, /^\/invoice\//, /^\/login$/, /^\/api\/login$/, /^\/icon/, /^\/apple-icon/]
+// /ab, /th y /t son los links públicos de los timesheets (protegidos por token).
+const PUBLIC_PATHS = [/^\/(ab|th|t)\//, /^\/invoice\//, /^\/login$/, /^\/api\/login$/, /^\/icon/, /^\/apple-icon/]
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl

@@ -47,7 +47,7 @@ export default function InvoiceEditor({
   editable,
   ultimoNumero,
   dias = [],
-  proyectoTipo,
+  modoRate,
 }: {
   factura: Factura
   emisor: { nombre: string; nif: string; direccion: string; email: string; telefono: string; iban: string; swift?: string }
@@ -55,7 +55,7 @@ export default function InvoiceEditor({
   editable: boolean
   ultimoNumero: string
   dias?: DiaTrabajado[]
-  proyectoTipo?: string
+  modoRate?: string
 }) {
   const [factura, setFactura] = useState(initialFactura)
   const [clienteFiscal, setClienteFiscal] = useState<ClienteFiscal>(
@@ -140,7 +140,7 @@ export default function InvoiceEditor({
     ? new Date(factura.fecha_vencimiento + 'T00:00:00').toLocaleDateString(idioma === 'es' ? 'es-ES' : 'en-GB')
     : ''
 
-  const mostrarDetalleHoras = proyectoTipo === 'ambushed_boldmove' && dias.length > 0
+  const mostrarDetalleHoras = modoRate === 'hora' && dias.length > 0
   const totalHoras = dias.reduce((s, d) => s + (d.hrs ?? 0), 0)
   const totalStandby = dias.reduce((s, d) => s + (d.standby_hrs ?? 0), 0)
 

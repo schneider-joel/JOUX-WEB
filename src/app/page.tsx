@@ -3,7 +3,8 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import ComprasTab from './compras-tab'
 import ImpuestosTab from './impuestos-tab'
-import { supabase, batchQuery, Compra, Cuenta, Crypto, Factura, PresupuestoItem, Proyecto, DiaTrabajado, TipoProyecto, PatrimonioSnapshot, ClienteFiscal } from '@/lib/supabase'
+import { GrupoTimesheet, grupoDeCliente, grupoDeKey, gruposTimesheet, linkPublico, tipoLegacy } from '@/lib/timesheets'
+import { supabase, batchQuery, Compra, Cuenta, Crypto, Factura, PresupuestoItem, Proyecto, DiaTrabajado, PatrimonioSnapshot, ClienteFiscal } from '@/lib/supabase'
 
 const fmt = (n: number) => new Intl.NumberFormat('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(Math.round(n))
 const fmt2 = (n: number) => new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
@@ -25,17 +26,9 @@ const ultimosMeses = (n: number) => {
   return out
 }
 
-type Tab = 'dashboard' | 'facturas' | 'compras' | 'impuestos' | 'presupuesto' | 'timesheet_ab' | 'timesheet_th' | 'timesheet_propios' | 'clientes'
-
-// Clientes fijos y link público de solo lectura por tipo de timesheet (ver TimesheetTab).
-const CLIENTES_FIJOS: Partial<Record<TipoProyecto, string[]>> = {
-  ambushed_boldmove: ['Ambushed', 'BoldMove'],
-  tays_hans: ['Hans Emanuel', 'Tays Perez'],
-}
-const PUBLIC_LINK: Partial<Record<TipoProyecto, { ruta: string; tokenKey: string; label: string }>> = {
-  ambushed_boldmove: { ruta: 'ab', tokenKey: 'timesheet_public_token', label: 'Ambushed / BoldMove' },
-  tays_hans: { ruta: 'th', tokenKey: 'timesheet_th_public_token', label: 'Tays / Hans' },
-}
+// Los timesheets son dinámicos: una pestaña "ts:<key>" por grupo de clientes (ver lib/timesheets).
+type Tab = 'dashboard' | 'facturas' | 'compras' | 'impuestos' | 'presupuesto' | 'clientes' | `ts:${string}`
+type NuevoProyecto = { nombre: string; cliente: string; numero_proyecto: string; modo_rate: 'hora' | 'dia' }
 type Modal = { type: string; data?: any } | null
 
 const svgProps = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, viewBox: '0 0 24 24' }
@@ -311,6 +304,14 @@ export default function Home() {
     loadData()
   }
 
+  // El proyecto va al timesheet de su cliente (o al del grupo al que pertenece).
+  const addProyecto = async (data: NuevoProyecto) => {
+    await supabase.from('proyectos').insert([{ ...data, tipo: tipoLegacy(data.cliente), status: 'activo' }])
+    setModal(null)
+    await loadData()
+    setTab(`ts:${grupoDeCliente(data.cliente).key}`)
+  }
+
   const saveClienteFiscal = async (c: ClienteFiscal) => {
     await supabase.from('clientes_fiscales').upsert(c)
     setModal(null)
@@ -371,24 +372,22 @@ export default function Home() {
       ],
     },
     {
-      label: 'Timesheets', items: [
-        { id: 'timesheet_ab', label: 'Ambushed / BoldMove', icon: Icon.clock },
-        { id: 'timesheet_th', label: 'Tays / Hans', icon: Icon.clock },
-        { id: 'timesheet_propios', label: 'Propios', icon: Icon.users },
-      ],
+      label: 'Timesheets', items: gruposTimesheet(proyectos).map(g => ({
+        id: `ts:${g.key}` as Tab, label: g.label, icon: g.clientes.length > 1 ? Icon.users : Icon.clock,
+        badge: proyectos.filter(p => g.clientes.includes(p.cliente) && p.status === 'activo').length,
+      })),
     },
   ]
-  const titulos: Record<Tab, [string, string]> = {
+  const grupoActivo = tab.startsWith('ts:') ? grupoDeKey(tab.slice(3)) : null
+  const titulos: Record<string, [string, string]> = {
     dashboard: ['Overview', 'Patrimonio, cuentas y facturación'],
     facturas: ['Facturas', `${facturasPendientes.length} pendientes · €${fmt(totalPendiente)} por cobrar`],
     presupuesto: ['Presupuesto', 'Gastos del mes'],
     clientes: ['Clientes', `${clientesFiscales.length} con datos fiscales guardados`],
-    timesheet_ab: ['Timesheet · Ambushed / BoldMove', 'Horas por proyecto y facturación'],
-    timesheet_th: ['Timesheet · Tays / Hans', 'Días por proyecto y facturación'],
-    timesheet_propios: ['Timesheet · Clientes propios', 'Días por proyecto y facturación'],
     compras: ['Compras', 'Facturas de gastos y compras'],
     impuestos: ['Impuestos', 'Estimación trimestral de IRPF (130) e IVA (303)'],
   }
+  const [titulo, subtitulo] = grupoActivo ? [`Timesheet · ${grupoActivo.label}`, 'Proyectos, días y facturación'] : titulos[tab]
 
   return (
     <div className="app">
@@ -419,14 +418,15 @@ export default function Home() {
       <main className="main">
         <header className="page-header">
           <div>
-            <h1 className="page-title">{titulos[tab][0]}</h1>
-            <div className="page-sub">{titulos[tab][1]}</div>
+            <h1 className="page-title">{titulo}</h1>
+            <div className="page-sub">{subtitulo}</div>
           </div>
           <div className="header-actions">
             <button className="btn" onClick={() => loadData()}><Icon.refresh />Actualizar</button>
+            <button className={`btn${grupoActivo ? ' btn-primary' : ''}`} onClick={() => setModal({ type: 'addProyecto' })}><Icon.plus />Nuevo proyecto</button>
             {tab === 'clientes' ? (
               <button className="btn btn-primary" onClick={() => setModal({ type: 'editCliente' })}><Icon.plus />Nuevo cliente</button>
-            ) : tab === 'compras' || tab === 'impuestos' ? null : (
+            ) : tab === 'compras' || tab === 'impuestos' || grupoActivo ? null : (
               <button className="btn btn-primary" onClick={() => setModal({ type: 'addFactura' })}><Icon.plus />Nueva factura</button>
             )}
           </div>
@@ -732,19 +732,9 @@ export default function Home() {
           </div>
         )}
 
-        {/* Timesheet Ambushed/BoldMove Tab */}
-        {tab === 'timesheet_ab' && (
-          <TimesheetTab tipo="ambushed_boldmove" proyectos={proyectos} dias={dias} facturas={facturas} reload={loadData} />
-        )}
-
-        {/* Timesheet Tays/Hans Tab */}
-        {tab === 'timesheet_th' && (
-          <TimesheetTab tipo="tays_hans" proyectos={proyectos} dias={dias} facturas={facturas} reload={loadData} />
-        )}
-
-        {/* Timesheet Clientes Propios Tab */}
-        {tab === 'timesheet_propios' && (
-          <TimesheetTab tipo="propio" proyectos={proyectos} dias={dias} facturas={facturas} reload={loadData} />
+        {/* Timesheet del grupo de clientes activo */}
+        {grupoActivo && (
+          <TimesheetTab key={grupoActivo.key} grupo={grupoActivo} proyectos={proyectos} dias={dias} facturas={facturas} reload={loadData} />
         )}
 
         {/* Modals */}
@@ -762,6 +752,9 @@ export default function Home() {
               )}
               {modal.type === 'editCuentas' && (
                 <ModalEditCuentas cuentas={cuentas} onUpdate={updateCuentaSaldo} onClose={() => { setModal(null); loadData() }} />
+              )}
+              {modal.type === 'addProyecto' && (
+                <ModalAddProyecto clienteInicial={grupoActivo?.clientes[0]} onAdd={addProyecto} onClose={() => setModal(null)} />
               )}
               {modal.type === 'editCliente' && (
                 <ModalCliente cliente={modal.data?.cliente} onSave={saveClienteFiscal} onClose={() => setModal(null)} />
@@ -969,21 +962,31 @@ const confirmBtnStyle = { flex: 1, padding: '9px 18px', borderRadius: 7, fontSiz
 
 const statusColor: Record<string, string> = { activo: 'var(--amber)', completado: 'var(--text2)', facturado: 'var(--green)' }
 
-function TimesheetTab({ tipo, proyectos, dias, facturas, reload }: { tipo: TipoProyecto, proyectos: Proyecto[], dias: DiaTrabajado[], facturas: Factura[], reload: () => void }) {
+function TimesheetTab({ grupo, proyectos, dias, facturas, reload }: { grupo: GrupoTimesheet, proyectos: Proyecto[], dias: DiaTrabajado[], facturas: Factura[], reload: () => void }) {
   const [modal, setModal] = useState<Modal>(null)
   const [expandido, setExpandido] = useState<number | null>(null)
-  const [publicUrl, setPublicUrl] = useState('')
+  const [token, setToken] = useState('')
   const [linkCopiado, setLinkCopiado] = useState(false)
   const [copyHover, setCopyHover] = useState(false)
   const [clienteFiltro, setClienteFiltro] = useState('todos')
 
-  const linkCfg = PUBLIC_LINK[tipo]
+  const link = linkPublico(grupo)
   useEffect(() => {
-    if (!linkCfg) return
-    supabase.from('configuracion').select('valor').eq('clave', linkCfg.tokenKey).single()
-      .then(({ data }) => { if (data?.valor) setPublicUrl(`${window.location.origin}/${linkCfg.ruta}/${data.valor}`) })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tipo])
+    supabase.from('configuracion').select('valor').eq('clave', link.tokenKey).maybeSingle()
+      .then(({ data }) => setToken(data?.valor || ''))
+  }, [link.tokenKey])
+
+  // El token del link se crea la primera vez que se copia.
+  const copiarLink = () => {
+    const t = token || crypto.randomUUID()
+    navigator.clipboard.writeText(`${window.location.origin}/${link.ruta}/${t}`).catch(() => {})
+    if (!token) {
+      setToken(t)
+      supabase.from('configuracion').upsert({ clave: link.tokenKey, valor: t }).then(() => {})
+    }
+    setLinkCopiado(true)
+    setTimeout(() => setLinkCopiado(false), 1800)
+  }
 
   const diasDe = (proyectoId: number) => dias.filter(d => d.proyecto_id === proyectoId).sort((a, b) => a.fecha.localeCompare(b.fecha))
   const totalProyecto = (proyectoId: number) => diasDe(proyectoId).reduce((s, d) => s + Number(d.total_day), 0)
@@ -993,7 +996,7 @@ function TimesheetTab({ tipo, proyectos, dias, facturas, reload }: { tipo: TipoP
   }
 
   const proyectosFiltrados = proyectos
-    .filter(p => p.tipo === tipo)
+    .filter(p => grupo.clientes.includes(p.cliente))
     .filter(p => clienteFiltro === 'todos' || p.cliente === clienteFiltro)
     .sort((a, b) => {
       const fa = ultimaFecha(a.id) || a.created_at
@@ -1007,12 +1010,6 @@ function TimesheetTab({ tipo, proyectos, dias, facturas, reload }: { tipo: TipoP
       if (!confirm(`Marcar "${p.nombre}" como Facturado va a crear una factura pendiente por €${fmt(monto)} y asignarle el próximo Nº de factura. ¿Confirmás?`)) return
     }
     await supabase.from('proyectos').update({ status }).eq('id', p.id)
-    reload()
-  }
-
-  const addProyecto = async (data: { nombre: string; cliente: string; numero_proyecto: string }) => {
-    await supabase.from('proyectos').insert([{ ...data, tipo, status: 'activo' }])
-    setModal(null)
     reload()
   }
 
@@ -1047,40 +1044,33 @@ function TimesheetTab({ tipo, proyectos, dias, facturas, reload }: { tipo: TipoP
 
   return (
     <div>
-      {linkCfg && publicUrl && (
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 16px', marginBottom: 16, fontSize: 12, color: 'var(--text2)' }}>
-          <span>Link público de solo lectura para {linkCfg.label}</span>
-          <button
-            onClick={() => {
-              navigator.clipboard.writeText(publicUrl)
-              setLinkCopiado(true)
-              setTimeout(() => setLinkCopiado(false), 1800)
-            }}
-            onMouseEnter={() => setCopyHover(true)}
-            onMouseLeave={() => setCopyHover(false)}
-            style={{
-              fontSize: 11, borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontFamily: 'Inter, sans-serif',
-              transition: 'background 0.15s, border-color 0.15s, color 0.15s',
-              background: linkCopiado ? 'var(--green-dim)' : copyHover ? 'var(--border)' : 'none',
-              border: `1px solid ${linkCopiado ? 'var(--green)' : 'var(--border)'}`,
-              color: linkCopiado ? 'var(--green)' : 'var(--text)',
-            }}
-          >
-            {linkCopiado ? '✓ Link copiado' : 'Copiar link'}
-          </button>
-        </div>
-      )}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 16px', marginBottom: 16, fontSize: 12, color: 'var(--text2)' }}>
+        <span>Link público de solo lectura para {grupo.label}</span>
+        <button
+          onClick={copiarLink}
+          onMouseEnter={() => setCopyHover(true)}
+          onMouseLeave={() => setCopyHover(false)}
+          style={{
+            fontSize: 11, borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontFamily: 'Inter, sans-serif',
+            transition: 'background 0.15s, border-color 0.15s, color 0.15s',
+            background: linkCopiado ? 'var(--green-dim)' : copyHover ? 'var(--border)' : 'none',
+            border: `1px solid ${linkCopiado ? 'var(--green)' : 'var(--border)'}`,
+            color: linkCopiado ? 'var(--green)' : 'var(--text)',
+          }}
+        >
+          {linkCopiado ? '✓ Link copiado' : 'Copiar link'}
+        </button>
+      </div>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, gap: 8 }}>
-        {CLIENTES_FIJOS[tipo] ? (
+      {grupo.clientes.length > 1 && (
+        <div style={{ marginBottom: 16 }}>
           <select value={clienteFiltro} onChange={e => setClienteFiltro(e.target.value)}
             style={{ fontSize: 11, padding: '4px 10px', borderRadius: 6, background: 'var(--surface2)', color: 'var(--text2)', border: '1px solid var(--border)', fontFamily: 'Inter, sans-serif' }}>
             <option value="todos">Todos los clientes</option>
-            {CLIENTES_FIJOS[tipo]!.map(c => <option key={c} value={c}>{c}</option>)}
+            {grupo.clientes.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
-        ) : <div />}
-        <button className="btn btn-primary" onClick={() => setModal({ type: 'addProyecto' })}><Icon.plus />Nuevo proyecto</button>
-      </div>
+        </div>
+      )}
 
       {proyectosFiltrados.length === 0 && (
         <div style={{ textAlign: 'center', color: 'var(--text3)', fontSize: 13, padding: '40px 0' }}>No hay proyectos todavía.</div>
@@ -1096,6 +1086,8 @@ function TimesheetTab({ tipo, proyectos, dias, facturas, reload }: { tipo: TipoP
                 <div style={{ fontSize: 14, fontWeight: 500 }}>{p.nombre}</div>
                 <div style={{ fontSize: 11, color: 'var(--text3)', display: 'flex', alignItems: 'center', gap: 6 }}>
                   {p.cliente}
+                  <span>·</span>
+                  {p.modo_rate === 'hora' ? 'por hora' : 'por día'}
                   <span>·</span>
                   <input
                     key={p.id + (p.numero_proyecto || '')}
@@ -1132,10 +1124,10 @@ function TimesheetTab({ tipo, proyectos, dias, facturas, reload }: { tipo: TipoP
                   <div style={{ fontSize: 12, color: 'var(--text3)', padding: '8px 0' }}>Sin días cargados.</div>
                 )}
                 {diasDe(p.id).map(d => (
-                  <div key={d.id} onClick={() => setModal({ type: 'editDia', data: { dia: d } })}
+                  <div key={d.id} onClick={() => setModal({ type: 'editDia', data: { dia: d, porHora: p.modo_rate === 'hora' } })}
                     style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', fontSize: 12, borderBottom: '0.5px solid var(--border)', cursor: 'pointer' }}>
                     <div style={{ color: 'var(--text2)', width: 70 }}>{fmtDate(d.fecha)}</div>
-                    {tipo === 'ambushed_boldmove' ? (
+                    {d.hrs != null ? (
                       <div style={{ color: 'var(--text3)', flex: 1 }}>{d.hrs}h × €{d.rate}{d.standby_hrs > 0 ? ` · SB ${d.standby_hrs}h` : ''}</div>
                     ) : (
                       <div style={{ color: 'var(--text3)', flex: 1 }}>€{d.rate}/día</div>
@@ -1145,7 +1137,7 @@ function TimesheetTab({ tipo, proyectos, dias, facturas, reload }: { tipo: TipoP
                     <button className="icon-btn danger" style={{ width: 24, height: 24, marginLeft: 8 }} onClick={e => { e.stopPropagation(); deleteDia(d.id) }} title="Borrar día"><Icon.x /></button>
                   </div>
                 ))}
-                <button className="btn btn-dashed" style={{ marginTop: 10 }} onClick={() => setModal({ type: 'addDia', data: { proyectoId: p.id } })}><Icon.plus />Nuevo día</button>
+                <button className="btn btn-dashed" style={{ marginTop: 10 }} onClick={() => setModal({ type: 'addDia', data: { proyectoId: p.id, porHora: p.modo_rate === 'hora' } })}><Icon.plus />Nuevo día</button>
               </div>
             )}
           </div>
@@ -1155,14 +1147,11 @@ function TimesheetTab({ tipo, proyectos, dias, facturas, reload }: { tipo: TipoP
       {modal && (
         <div className="modal-bg" onClick={() => setModal(null)}>
           <div className="modal" style={{ width: 380 }} onClick={e => e.stopPropagation()}>
-            {modal.type === 'addProyecto' && (
-              <ModalAddProyecto tipo={tipo} onAdd={addProyecto} onClose={() => setModal(null)} />
-            )}
             {modal.type === 'addDia' && (
-              <ModalAddDia tipo={tipo} onAdd={(d: any) => addDia(modal.data.proyectoId, d)} onClose={() => setModal(null)} />
+              <ModalAddDia porHora={modal.data.porHora} onAdd={(d: any) => addDia(modal.data.proyectoId, d)} onClose={() => setModal(null)} />
             )}
             {modal.type === 'editDia' && (
-              <ModalAddDia tipo={tipo} dia={modal.data.dia} onAdd={(d: any) => updateDia(modal.data.dia.id, d)} onClose={() => setModal(null)} />
+              <ModalAddDia porHora={modal.data.porHora} dia={modal.data.dia} onAdd={(d: any) => updateDia(modal.data.dia.id, d)} onClose={() => setModal(null)} />
             )}
           </div>
         </div>
@@ -1171,11 +1160,13 @@ function TimesheetTab({ tipo, proyectos, dias, facturas, reload }: { tipo: TipoP
   )
 }
 
-function ModalAddProyecto({ tipo, onAdd, onClose }: { tipo: TipoProyecto, onAdd: (d: { nombre: string; cliente: string; numero_proyecto: string }) => void, onClose: () => void }) {
+function ModalAddProyecto({ clienteInicial, onAdd, onClose }: { clienteInicial?: string, onAdd: (d: NuevoProyecto) => void, onClose: () => void }) {
   const [nombre, setNombre] = useState('')
   const [numeroProyecto, setNumeroProyecto] = useState('')
   const [clientesGuardados, setClientesGuardados] = useState<{ cliente: string }[]>([])
-  const [cliente, setCliente] = useState(CLIENTES_FIJOS[tipo]?.[0] || '')
+  const [cliente, setCliente] = useState(clienteInicial || '')
+  // Por defecto, por hora para Ambushed / BoldMove y fijo por día para el resto.
+  const [modoElegido, setModoElegido] = useState<'hora' | 'dia' | null>(null)
   const [nuevoCliente, setNuevoCliente] = useState(false)
   const [nuevoNombre, setNuevoNombre] = useState('')
   const [nuevoIdentificador, setNuevoIdentificador] = useState('')
@@ -1184,12 +1175,14 @@ function ModalAddProyecto({ tipo, onAdd, onClose }: { tipo: TipoProyecto, onAdd:
   useEffect(() => {
     supabase.from('clientes_fiscales').select('cliente').order('cliente').then(({ data }) => {
       if (data) setClientesGuardados(data)
-      if (!CLIENTES_FIJOS[tipo] && data && data.length > 0 && !data.some((c: { cliente: string }) => c.cliente === cliente)) {
+      if (data && data.length > 0 && !data.some((c: { cliente: string }) => c.cliente === cliente)) {
         setCliente(data[0].cliente)
       }
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  const modo = modoElegido || (!nuevoCliente && grupoDeCliente(cliente).key === 'ab' ? 'hora' : 'dia')
 
   const crear = async () => {
     let clienteFinal = cliente
@@ -1199,7 +1192,7 @@ function ModalAddProyecto({ tipo, onAdd, onClose }: { tipo: TipoProyecto, onAdd:
       await supabase.from('clientes_fiscales').upsert({ cliente: nuevoNombre, identificador: nuevoIdentificador, direccion: nuevoDireccion })
     }
     if (!nombre || !clienteFinal) return
-    onAdd({ nombre, cliente: clienteFinal, numero_proyecto: numeroProyecto })
+    onAdd({ nombre, cliente: clienteFinal, numero_proyecto: numeroProyecto, modo_rate: modo })
   }
 
   return (
@@ -1218,16 +1211,8 @@ function ModalAddProyecto({ tipo, onAdd, onClose }: { tipo: TipoProyecto, onAdd:
             if (e.target.value === '__nuevo__') { setNuevoCliente(true); return }
             setCliente(e.target.value)
           }} style={inputStyle}>
-            {CLIENTES_FIJOS[tipo] ? (
-              <>
-                {CLIENTES_FIJOS[tipo]!.map(c => <option key={c} value={c}>{c}</option>)}
-              </>
-            ) : (
-              <>
-                {clientesGuardados.map(c => <option key={c.cliente} value={c.cliente}>{c.cliente}</option>)}
-                <option value="__nuevo__">+ Nuevo cliente...</option>
-              </>
-            )}
+            {clientesGuardados.map(c => <option key={c.cliente} value={c.cliente}>{c.cliente}</option>)}
+            <option value="__nuevo__">+ Nuevo cliente...</option>
           </select>
         ) : (
           <div style={{ border: '1px solid var(--border)', borderRadius: 7, padding: 12 }}>
@@ -1237,6 +1222,17 @@ function ModalAddProyecto({ tipo, onAdd, onClose }: { tipo: TipoProyecto, onAdd:
             <button type="button" onClick={() => setNuevoCliente(false)} style={{ fontSize: 11, color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>← Elegir cliente guardado</button>
           </div>
         )}
+      </div>
+      <div style={{ marginBottom: 14 }}>
+        <label style={labelStyle}>Rate</label>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {([['hora', 'Por hora'], ['dia', 'Fijo por día']] as const).map(([m, label]) => (
+            <button key={m} type="button" onClick={() => setModoElegido(m)}
+              style={{ ...inputStyle, flex: 1, cursor: 'pointer', textAlign: 'center', borderColor: modo === m ? 'var(--accent)' : 'var(--border)', color: modo === m ? 'var(--accent-bright)' : 'var(--text2)', background: modo === m ? 'var(--accent-dim)' : 'var(--surface2)' }}>
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
       <div style={{ marginBottom: 14 }}>
         <label style={labelStyle}>Nº de referencia (para el cliente, ej: 268)</label>
@@ -1250,7 +1246,7 @@ function ModalAddProyecto({ tipo, onAdd, onClose }: { tipo: TipoProyecto, onAdd:
   )
 }
 
-function ModalAddDia({ tipo, dia, onAdd, onClose }: { tipo: TipoProyecto, dia?: DiaTrabajado, onAdd: (d: any) => void, onClose: () => void }) {
+function ModalAddDia({ porHora, dia, onAdd, onClose }: { porHora: boolean, dia?: DiaTrabajado, onAdd: (d: any) => void, onClose: () => void }) {
   const [fecha, setFecha] = useState(dia?.fecha || new Date().toISOString().split('T')[0])
   const [rate, setRate] = useState(dia ? String(dia.rate) : '')
   const [hrs, setHrs] = useState(dia?.hrs != null ? String(dia.hrs) : '')
@@ -1262,8 +1258,8 @@ function ModalAddDia({ tipo, dia, onAdd, onClose }: { tipo: TipoProyecto, dia?: 
     onAdd({
       fecha,
       rate: Number(rate),
-      hrs: tipo === 'ambushed_boldmove' ? Number(hrs || 0) : null,
-      standby_hrs: tipo === 'ambushed_boldmove' ? Number(standby || 0) : 0,
+      hrs: porHora ? Number(hrs || 0) : null,
+      standby_hrs: porHora ? Number(standby || 0) : 0,
       status,
     })
   }
@@ -1278,10 +1274,10 @@ function ModalAddDia({ tipo, dia, onAdd, onClose }: { tipo: TipoProyecto, dia?: 
         <input type="date" value={fecha} onChange={e => setFecha(e.target.value)} style={inputStyle} />
       </div>
       <div style={{ marginBottom: 14 }}>
-        <label style={labelStyle}>{tipo === 'ambushed_boldmove' ? 'Rate por hora (€)' : 'Rate por día (€)'}</label>
+        <label style={labelStyle}>{porHora ? 'Rate por hora (€)' : 'Rate por día (€)'}</label>
         <input type="number" value={rate} onChange={e => setRate(e.target.value)} placeholder="0" style={inputStyle} />
       </div>
-      {tipo === 'ambushed_boldmove' && (
+      {porHora && (
         <>
           <div style={{ marginBottom: 14 }}>
             <label style={labelStyle}>Horas trabajadas</label>

@@ -8,6 +8,7 @@ type Proyecto = {
   cliente: string
   status: string
   numero_proyecto?: string
+  modo_rate?: string
 }
 
 type Dia = {
@@ -28,10 +29,14 @@ const statusColor: Record<string, string> = { activo: '#92400e', completado: '#3
 const statusBg: Record<string, string> = { activo: '#fef3c7', completado: '#f3f4f6', facturado: '#dcfce7' }
 
 export default function PublicTimesheetView({
+  titulo,
+  clientes,
   proyectos,
   dias,
   facturas,
 }: {
+  titulo: string
+  clientes: string[]
   proyectos: Proyecto[]
   dias: Dia[]
   facturas: { id: number; proyecto_id: number }[]
@@ -58,7 +63,7 @@ export default function PublicTimesheetView({
       <div style={{ maxWidth: 800, margin: '0 auto' }}>
         <div style={{ marginBottom: 24 }}>
           <div style={{ fontSize: 24, fontWeight: 700 }}>Timesheet</div>
-          <div style={{ fontSize: 13, color: '#888', marginTop: 4 }}>Joel Schneider · Ambushed / BoldMove</div>
+          <div style={{ fontSize: 13, color: '#888', marginTop: 4 }}>Joel Schneider · {titulo}</div>
         </div>
 
         <div style={{ display: 'flex', gap: 10, marginBottom: 24 }}>
@@ -68,15 +73,16 @@ export default function PublicTimesheetView({
             placeholder="Search projects..."
             style={{ flex: 1, padding: '10px 14px', borderRadius: 8, border: '1px solid #ddd', fontSize: 14, outline: 'none', background: '#fff' }}
           />
-          <select
-            value={cliente}
-            onChange={e => setCliente(e.target.value)}
-            style={{ padding: '10px 14px', borderRadius: 8, border: '1px solid #ddd', fontSize: 14, outline: 'none', background: '#fff', color: '#111' }}
-          >
-            <option value="todos">All clients</option>
-            <option value="Ambushed">Ambushed</option>
-            <option value="BoldMove">BoldMove</option>
-          </select>
+          {clientes.length > 1 && (
+            <select
+              value={cliente}
+              onChange={e => setCliente(e.target.value)}
+              style={{ padding: '10px 14px', borderRadius: 8, border: '1px solid #ddd', fontSize: 14, outline: 'none', background: '#fff', color: '#111' }}
+            >
+              <option value="todos">All clients</option>
+              {clientes.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          )}
         </div>
 
         {filtrados.length === 0 && (
@@ -87,6 +93,7 @@ export default function PublicTimesheetView({
 
         {filtrados.map(p => {
           const factura = facturaDe(p.id)
+          const porHora = p.modo_rate === 'hora'
           return (
             <div key={p.id} style={{ background: '#fff', border: '1px solid #e5e5e5', borderRadius: 10, padding: 24, marginBottom: 16 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
@@ -114,9 +121,9 @@ export default function PublicTimesheetView({
                 <thead>
                   <tr style={{ borderBottom: '1px solid #e5e5e5', color: '#888' }}>
                     <th style={{ textAlign: 'left', padding: '6px 0', fontWeight: 500 }}>Date</th>
-                    <th style={{ textAlign: 'left', padding: '6px 0', fontWeight: 500 }}>Hrs</th>
-                    <th style={{ textAlign: 'left', padding: '6px 0', fontWeight: 500 }}>Rate</th>
-                    <th style={{ textAlign: 'left', padding: '6px 0', fontWeight: 500 }}>Stand by</th>
+                    {porHora && <th style={{ textAlign: 'left', padding: '6px 0', fontWeight: 500 }}>Hrs</th>}
+                    <th style={{ textAlign: 'left', padding: '6px 0', fontWeight: 500 }}>{porHora ? 'Rate' : 'Day rate'}</th>
+                    {porHora && <th style={{ textAlign: 'left', padding: '6px 0', fontWeight: 500 }}>Stand by</th>}
                     <th style={{ textAlign: 'right', padding: '6px 0', fontWeight: 500 }}>Total</th>
                   </tr>
                 </thead>
@@ -124,14 +131,14 @@ export default function PublicTimesheetView({
                   {diasDe(p.id).map(d => (
                     <tr key={d.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
                       <td style={{ padding: '8px 0' }}>{fmtDate(d.fecha)}</td>
-                      <td style={{ padding: '8px 0' }}>{d.hrs ?? '—'}</td>
+                      {porHora && <td style={{ padding: '8px 0' }}>{d.hrs ?? '—'}</td>}
                       <td style={{ padding: '8px 0' }}>€{d.rate}</td>
-                      <td style={{ padding: '8px 0' }}>{d.standby_hrs > 0 ? `${d.standby_hrs}h` : '—'}</td>
+                      {porHora && <td style={{ padding: '8px 0' }}>{d.standby_hrs > 0 ? `${d.standby_hrs}h` : '—'}</td>}
                       <td style={{ padding: '8px 0', textAlign: 'right', fontFamily: 'monospace' }}>€{fmt(d.total_day)}</td>
                     </tr>
                   ))}
                   {diasDe(p.id).length === 0 && (
-                    <tr><td colSpan={5} style={{ padding: '12px 0', color: '#888' }}>No days logged yet.</td></tr>
+                    <tr><td colSpan={porHora ? 5 : 3} style={{ padding: '12px 0', color: '#888' }}>No days logged yet.</td></tr>
                   )}
                 </tbody>
               </table>

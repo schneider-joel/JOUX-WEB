@@ -32,13 +32,13 @@ export default async function InvoicePage({ params }: { params: { id: string } }
   }, 0)
 
   let dias: any[] = []
-  let proyectoTipo: string | undefined
+  let modoRate: string | undefined
   if (factura.proyecto_id) {
     const [{ data: proyecto }, { data: diasData }] = await Promise.all([
-      supabase.from('proyectos').select('tipo').eq('id', factura.proyecto_id).single(),
+      supabase.from('proyectos').select('modo_rate').eq('id', factura.proyecto_id).single(),
       supabase.from('dias_trabajados').select('*').eq('proyecto_id', factura.proyecto_id).order('fecha'),
     ])
-    proyectoTipo = proyecto?.tipo
+    modoRate = proyecto?.modo_rate
     dias = diasData || []
   }
 
@@ -59,5 +59,5 @@ export default async function InvoicePage({ params }: { params: { id: string } }
 
   const ultimoNumero = maxNumeroActual > 0 ? `${prefijoActual}${maxNumeroActual}` : cfgVal('ultimo_numero_factura', 'F260000')
 
-  return <InvoiceEditor factura={factura} emisor={emisor} clienteFiscalInicial={clienteFiscal} editable={editable} ultimoNumero={ultimoNumero} dias={dias} proyectoTipo={proyectoTipo} />
+  return <InvoiceEditor factura={factura} emisor={emisor} clienteFiscalInicial={clienteFiscal} editable={editable} ultimoNumero={ultimoNumero} dias={dias} modoRate={modoRate} />
 }
