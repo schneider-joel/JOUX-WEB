@@ -93,6 +93,8 @@ export type Cuenta = {
   tipo: string
   orden: number
   moneda?: string
+  padre_id?: number | null // apartado dentro de otra cuenta (p. ej. BBVA · Ahorros)
+  rentabilidad_anual?: number | null // % anual, para cuentas de inversión
 }
 
 export type PatrimonioSnapshot = {

@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import ComprasTab from './compras-tab'
-import ImpuestosTab from './impuestos-tab'
+import ImpuestosTab, { proximoPago } from './impuestos-tab'
+import CuentasCard from './cuentas-card'
 import { PAISES, PaisFiscal, detectarPais, tipoFacturaDePais } from '@/lib/clientes'
 import { GrupoTimesheet, grupoDeCliente, grupoDeKey, gruposTimesheet, linkPublico, tipoLegacy } from '@/lib/timesheets'
 import { supabase, batchQuery, Compra, Cuenta, Crypto, Factura, PresupuestoItem, Proyecto, DiaTrabajado, PatrimonioSnapshot, ClienteFiscal } from '@/lib/supabase'
@@ -333,9 +334,8 @@ export default function Home() {
   }
 
 
-  const updateCuentaSaldo = async (id: number, saldo: number) => {
-    await supabase.from('cuentas').update({ saldo }).eq('id', id)
-    loadData()
+  const updateCuenta = async (id: number, patch: Partial<Cuenta>) => {
+    await supabase.from('cuentas').update(patch).eq('id', id)
   }
 
   const addGasto = async (tabla: string, id: number, importe: number) => {
@@ -453,7 +453,7 @@ export default function Home() {
                 <div className="stat-icon"><Icon.wallet /></div>
                 <div className="stat-label">Liquidez</div>
                 <div className="stat-value" style={{ color: 'var(--green)' }}>€{fmt(totalLiquidez)}</div>
-                <div className="stat-delta flat">{cuentas.length} cuentas</div>
+                <div className="stat-delta flat">{cuentas.filter(c => !c.padre_id).length} cuentas · {cuentas.filter(c => c.padre_id).length} apartados</div>
               </div>
               <div className="card stat-card">
                 <div className="stat-icon"><Icon.coin /></div>
@@ -484,32 +484,9 @@ export default function Home() {
                 )}
               </div>
 
-              <div className="card">
-                <div className="card-head">
-                  <div className="card-title">Cuentas</div>
-                  <button className="icon-btn accent" onClick={() => setModal({ type: 'editCuentas' })} title="Editar saldos"><Icon.edit /></button>
-                </div>
-                {cuentas.map(c => {
-                  const eur = aEuros(c)
-                  const pct = totalLiquidez > 0 ? Math.max((eur / totalLiquidez) * 100, 2) : 0
-                  return (
-                    <div key={c.id} className="row">
-                      <div className="acct-avatar" style={{ background: `${c.color}22`, color: c.color, borderColor: `${c.color}55` }}>{c.nombre.slice(0, 2).toUpperCase()}</div>
-                      <div className="row-main">
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
-                          <span className="row-title">{c.nombre}</span>
-                          <span className="row-amount">{c.moneda === 'USD' ? `$${fmt(c.saldo)}` : `€${fmt(c.saldo)}`}</span>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, color: 'var(--text3)', marginTop: 1 }}>
-                          <span>{c.moneda === 'USD' ? `≈ €${fmt(eur)}` : c.tipo}</span>
-                          <span className="mono">{pct.toFixed(0)}%</span>
-                        </div>
-                        <div className="acct-bar-track"><div className="acct-bar-fill" style={{ width: `${pct}%`, background: c.color }} /></div>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
+              <CuentasCard cuentas={cuentas} aEuros={aEuros} fijosMes={fijos.reduce((t, i) => t + Number(i.limite), 0)}
+                variablesMes={variables.reduce((t, i) => t + Number(i.limite), 0)} pago={proximoPago(facturasFiscales, compras, cuotaAutonomo)}
+                porCobrar={totalPendiente} onEdit={() => setModal({ type: 'editCuentas' })} />
             </div>
 
             <div className="dash-grid-2">
@@ -758,7 +735,7 @@ export default function Home() {
                 <ModalEditLimite item={modal.data.item} tabla={modal.data.tabla} onSave={editLimite} onClose={() => setModal(null)} />
               )}
               {modal.type === 'editCuentas' && (
-                <ModalEditCuentas cuentas={cuentas} onUpdate={updateCuentaSaldo} onClose={() => { setModal(null); loadData() }} />
+                <ModalEditCuentas cuentas={cuentas} onUpdate={updateCuenta} onClose={() => { setModal(null); loadData() }} />
               )}
               {modal.type === 'addProyecto' && (
                 <ModalAddProyecto clienteInicial={grupoActivo?.clientes[0]} onAdd={addProyecto} onClose={() => setModal(null)} />
@@ -904,22 +881,37 @@ function ModalEditLimite({ item, tabla, onSave, onClose }: { item: PresupuestoIt
   )
 }
 
-function ModalEditCuentas({ cuentas, onUpdate, onClose }: { cuentas: Cuenta[], onUpdate: (id: number, saldo: number) => void, onClose: () => void }) {
+function ModalEditCuentas({ cuentas, onUpdate, onClose }: { cuentas: Cuenta[], onUpdate: (id: number, patch: Partial<Cuenta>) => Promise<void>, onClose: () => void }) {
   const [values, setValues] = useState<{ [id: number]: string }>(Object.fromEntries(cuentas.map(c => [c.id, String(c.saldo)])))
+  const [rent, setRent] = useState<{ [id: number]: string }>(Object.fromEntries(cuentas.map(c => [c.id, c.rentabilidad_anual != null ? String(c.rentabilidad_anual) : ''])))
+  // Cada cuenta seguida de sus apartados.
+  const ordenadas = cuentas.filter(c => !c.padre_id).flatMap(c => [c, ...cuentas.filter(h => h.padre_id === c.id).sort((a, b) => a.orden - b.orden)])
+  const campo = { background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 7, padding: '6px 10px', color: 'var(--text)', fontSize: 13, fontFamily: 'Inter, sans-serif', outline: 'none' }
+  const guardar = async () => {
+    await Promise.all(ordenadas.map(c => onUpdate(c.id, {
+      saldo: Number(values[c.id]),
+      ...(c.tipo === 'inversion' ? { rentabilidad_anual: rent[c.id] === '' ? null : Number(rent[c.id]) } : {}),
+    })))
+    onClose()
+  }
   return (
     <>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, fontSize: 16, fontWeight: 500 }}>
         Editar saldos <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', fontSize: 20 }}>×</button>
       </div>
-      {cuentas.map(c => (
-        <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+      {ordenadas.map(c => (
+        <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, paddingLeft: c.padre_id ? 18 : 0 }}>
           <div style={{ width: 10, height: 10, borderRadius: '50%', background: c.color, flexShrink: 0 }} />
-          <span style={{ flex: 1, fontSize: 13, color: 'var(--text2)' }}>{c.nombre}</span>
-          <input type="number" value={values[c.id]} onChange={e => setValues({ ...values, [c.id]: e.target.value })}
-            style={{ width: 110, background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 7, padding: '6px 10px', color: 'var(--text)', fontSize: 13, fontFamily: 'Inter, sans-serif', outline: 'none' }} />
+          <span style={{ flex: 1, fontSize: 13, color: c.padre_id ? 'var(--text3)' : 'var(--text2)' }}>
+            {c.padre_id ? `Apartado · ${c.nombre}` : c.tipo === 'operativa' && cuentas.some(h => h.padre_id === c.id) ? `${c.nombre} · disponible` : c.nombre}
+          </span>
+          {c.tipo === 'inversion' && (
+            <input type="number" step="0.01" value={rent[c.id]} onChange={e => setRent({ ...rent, [c.id]: e.target.value })} placeholder="% anual" title="Rentabilidad anual (%)" style={{ ...campo, width: 72 }} />
+          )}
+          <input type="number" value={values[c.id]} onChange={e => setValues({ ...values, [c.id]: e.target.value })} style={{ ...campo, width: 110 }} />
         </div>
       ))}
-      <button onClick={async () => { await Promise.all(cuentas.map(c => onUpdate(c.id, Number(values[c.id])))); onClose() }}
+      <button onClick={guardar}
         style={{ marginTop: 16, width: '100%', padding: '9px 18px', borderRadius: 7, fontSize: 13, cursor: 'pointer', background: 'var(--accent)', color: '#000', border: 'none', fontWeight: 500, fontFamily: 'Inter, sans-serif' }}>
         Guardar todos
       </button>

@@ -24,7 +24,7 @@ type Trimestre = {
 // Estimación directa simplificada (Modelo 130, acumulado desde enero) y
 // Modelo 303 (trimestral). Es una aproximación: no contempla amortizaciones
 // ni la deducción por rendimientos bajos.
-function calcular(anio: number, facturas: Factura[], compras: Compra[], cuotaMensual: number): Trimestre[] {
+export function calcular(anio: number, facturas: Factura[], compras: Compra[], cuotaMensual: number): Trimestre[] {
   const hoy = new Date().toISOString().slice(0, 10)
   const out: Trimestre[] = []
   let pagosPrevios = 0
@@ -60,6 +60,20 @@ function calcular(anio: number, facturas: Factura[], compras: Compra[], cuotaMen
     })
   }
   return out
+}
+
+// Próximo pago trimestral (130 + 303): el último trimestre cerrado mientras
+// su plazo siga abierto; si no, la estimación del trimestre en curso.
+export function proximoPago(facturas: Factura[], compras: Compra[], cuotaMensual: number, hoy = new Date().toISOString().slice(0, 10)) {
+  const y = Number(hoy.slice(0, 4))
+  for (const [anio, q] of [[y - 1, 4], [y, 1], [y, 2], [y, 3], [y, 4]]) {
+    const plazo = q === 4 ? `${anio + 1}-01-30` : `${anio}-${String(q * 3 + 1).padStart(2, '0')}-20`
+    if (hoy > plazo) continue
+    const t = calcular(anio, facturas, compras, cuotaMensual)[q - 1]
+    const iva = Math.max(0, t.iva)
+    return { anio, q, plazo, cerrado: t.estado === 'cerrado', irpf: t.irpf, iva, total: t.irpf + iva }
+  }
+  return null
 }
 
 const btn: React.CSSProperties = { background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 7, padding: '5px 12px', color: 'var(--text2)', fontSize: 12.5, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }

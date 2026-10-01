@@ -484,3 +484,11 @@ BEGIN
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
+
+-- MIGRACIÓN: apartados y rentabilidad de cuentas. padre_id = apartado dentro
+-- de otra cuenta (BBVA · Ahorros / IRPF; el saldo de la cuenta padre es solo el
+-- disponible). tipo define qué muestra el overview: operativa (cubre los fijos
+-- del presupuesto), ahorro, irpf (cubre el próximo pago 130+303), inversion
+-- (rentabilidad_anual %), variable (asignación de gastos variables), cash, otro.
+ALTER TABLE cuentas ADD COLUMN IF NOT EXISTS padre_id INT REFERENCES cuentas(id) ON DELETE CASCADE;
+ALTER TABLE cuentas ADD COLUMN IF NOT EXISTS rentabilidad_anual DECIMAL(5,2);
