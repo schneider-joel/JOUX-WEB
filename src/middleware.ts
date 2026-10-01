@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 // /ab, /th y /t son los links públicos de los timesheets (protegidos por token).
-const PUBLIC_PATHS = [/^\/(ab|th|t)\//, /^\/invoice\//, /^\/login$/, /^\/api\/login$/, /^\/icon/, /^\/apple-icon/]
+// /api/bancos/cron lo llama el cron de Vercel y valida su propio CRON_SECRET.
+const PUBLIC_PATHS = [/^\/(ab|th|t)\//, /^\/api\/bancos\/cron$/, /^\/invoice\//, /^\/login$/, /^\/api\/login$/, /^\/icon/, /^\/apple-icon/]
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl

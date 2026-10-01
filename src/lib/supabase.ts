@@ -17,6 +17,7 @@ class QueryBuilder implements PromiseLike<Resultado> {
   private _returning = false
   private _single = false
   private _maybeSingle = false
+  private _limit?: number
 
   constructor(table: string) { this.table = table }
 
@@ -31,6 +32,7 @@ class QueryBuilder implements PromiseLike<Resultado> {
   delete() { this.op = 'delete'; return this }
   eq(col: string, val: any) { this._filters.push({ col, val }); return this }
   order(col: string, opts?: { ascending?: boolean }) { this._order = { col, ascending: opts?.ascending !== false }; return this }
+  limit(n: number) { this._limit = n; return this }
   single() { this._single = true; return this }
   maybeSingle() { this._maybeSingle = true; return this }
 
@@ -38,7 +40,7 @@ class QueryBuilder implements PromiseLike<Resultado> {
     return {
       table: this.table, op: this.op, columns: this._columns, payload: this._payload,
       filters: this._filters, order: this._order, returning: this._returning,
-      single: this._single, maybeSingle: this._maybeSingle,
+      single: this._single, maybeSingle: this._maybeSingle, limit: this._limit,
     }
   }
 

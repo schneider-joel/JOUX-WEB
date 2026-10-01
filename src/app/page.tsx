@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import ComprasTab from './compras-tab'
 import ImpuestosTab, { proximoPago } from './impuestos-tab'
 import CuentasCard from './cuentas-card'
+import BancosTab from './bancos-tab'
 import { PAISES, PaisFiscal, detectarPais, tipoFacturaDePais } from '@/lib/clientes'
 import { GrupoTimesheet, grupoDeCliente, grupoDeKey, gruposTimesheet, linkPublico, tipoLegacy } from '@/lib/timesheets'
 import { supabase, batchQuery, Compra, Cuenta, Crypto, Factura, PresupuestoItem, Proyecto, DiaTrabajado, PatrimonioSnapshot, ClienteFiscal } from '@/lib/supabase'
@@ -29,7 +30,7 @@ const ultimosMeses = (n: number) => {
 }
 
 // Los timesheets son dinámicos: una pestaña "ts:<key>" por grupo de clientes (ver lib/timesheets).
-type Tab = 'dashboard' | 'facturas' | 'compras' | 'impuestos' | 'presupuesto' | 'clientes' | `ts:${string}`
+type Tab = 'dashboard' | 'facturas' | 'compras' | 'impuestos' | 'presupuesto' | 'clientes' | 'bancos' | `ts:${string}`
 type NuevoProyecto = { nombre: string; cliente: string; numero_proyecto: string; modo_rate: 'hora' | 'dia' }
 type Modal = { type: string; data?: any } | null
 
@@ -167,6 +168,15 @@ function IngresosChart({ facturas }: { facturas: Factura[] }) {
 
 export default function Home() {
   const [tab, setTab] = useState<Tab>('dashboard')
+  // Vuelta de la conexión con un banco: /?tab=bancos&ok=1 o &error=...
+  const [mensajeBanco, setMensajeBanco] = useState<{ ok?: boolean; error?: string } | null>(null)
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search)
+    if (p.get('tab') !== 'bancos') return
+    setTab('bancos')
+    if (p.get('ok') || p.get('error')) setMensajeBanco({ ok: !!p.get('ok'), error: p.get('error') || undefined })
+    window.history.replaceState(null, '', '/')
+  }, [])
   const [modal, setModal] = useState<Modal>(null)
   const [cuentas, setCuentas] = useState<Cuenta[]>([])
   const [crypto, setCrypto] = useState<Crypto[]>([])
@@ -370,6 +380,7 @@ export default function Home() {
         { id: 'compras', label: 'Compras', icon: Icon.wallet },
         { id: 'impuestos', label: 'Impuestos', icon: Icon.trend },
         { id: 'clientes', label: 'Clientes', icon: Icon.card },
+        { id: 'bancos', label: 'Bancos', icon: Icon.link },
       ],
     },
     {
@@ -387,6 +398,7 @@ export default function Home() {
     clientes: ['Clientes', `${clientesFiscales.length} con datos fiscales guardados`],
     compras: ['Compras', 'Facturas de gastos y compras'],
     impuestos: ['Impuestos', 'Estimación trimestral de IRPF (130) e IVA (303)'],
+    bancos: ['Bancos', 'Saldos y movimientos de tus cuentas, en automático'],
   }
   const [titulo, subtitulo] = grupoActivo ? [`Timesheet · ${grupoActivo.label}`, 'Proyectos, días y facturación'] : titulos[tab]
 
@@ -715,6 +727,8 @@ export default function Home() {
             })()}
           </div>
         )}
+
+        {tab === 'bancos' && <BancosTab cuentas={cuentas} mensaje={mensajeBanco} reload={loadData} />}
 
         {/* Timesheet del grupo de clientes activo */}
         {grupoActivo && (

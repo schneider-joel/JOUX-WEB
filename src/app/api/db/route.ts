@@ -9,7 +9,7 @@ import { supabaseServer } from '@/lib/supabase-server'
 const TABLAS_PERMITIDAS = new Set([
   'cuentas', 'crypto', 'facturas', 'presupuesto_fijos', 'presupuesto_variables',
   'configuracion', 'proyectos', 'dias_trabajados', 'patrimonio_snapshots',
-  'clientes_fiscales', 'compras',
+  'clientes_fiscales', 'compras', 'bancos_sesiones', 'bancos_cuentas', 'movimientos',
 ])
 
 export async function POST(req: NextRequest) {
@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
 }
 
 async function ejecutar(spec: any): Promise<{ data: any; error: { message: string } | null }> {
-  const { table, op, columns, payload, filters, order, returning, single, maybeSingle } = spec
+  const { table, op, columns, payload, filters, order, returning, single, maybeSingle, limit } = spec
   if (!TABLAS_PERMITIDAS.has(table)) return { data: null, error: { message: `Tabla no permitida: ${table}` } }
 
   let q: any = supabaseServer.from(table)
@@ -48,6 +48,7 @@ async function ejecutar(spec: any): Promise<{ data: any; error: { message: strin
   for (const f of filters || []) q = q.eq(f.col, f.val)
   if (returning && op !== 'select') q = q.select(columns || '*')
   if (order) q = q.order(order.col, { ascending: order.ascending !== false })
+  if (limit) q = q.limit(limit)
   if (single) q = q.single()
   else if (maybeSingle) q = q.maybeSingle()
 

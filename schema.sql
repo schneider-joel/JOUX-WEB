@@ -492,3 +492,48 @@ $$ LANGUAGE plpgsql;
 -- (rentabilidad_anual %), variable (asignación de gastos variables), cash, otro.
 ALTER TABLE cuentas ADD COLUMN IF NOT EXISTS padre_id INT REFERENCES cuentas(id) ON DELETE CASCADE;
 ALTER TABLE cuentas ADD COLUMN IF NOT EXISTS rentabilidad_anual DECIMAL(5,2);
+
+-- MIGRACIÓN: bancos conectados por open banking (Enable Banking, solo lectura).
+-- bancos_sesiones = permiso por banco (vence a los ≤180 días); bancos_cuentas =
+-- cuentas que devuelve cada permiso, con la cuenta del hub que actualizan
+-- (cuenta_id) y qué saldo usar (tipo_saldo: ITAV disponible, CLBD contable...);
+-- movimientos = transacciones contabilizadas (importe con signo), con
+-- factura_id cuando se concilian con una factura. Sync: src/lib/bancos-sync.ts.
+CREATE TABLE IF NOT EXISTS bancos_sesiones (
+  session_id TEXT PRIMARY KEY,
+  aspsp TEXT NOT NULL,
+  pais TEXT NOT NULL DEFAULT 'ES',
+  valid_until TIMESTAMPTZ,
+  ultimo_sync TIMESTAMPTZ,
+  ultimo_error TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS bancos_cuentas (
+  uid TEXT PRIMARY KEY,
+  session_id TEXT REFERENCES bancos_sesiones(session_id) ON DELETE CASCADE,
+  aspsp TEXT,
+  nombre TEXT,
+  iban TEXT,
+  moneda TEXT,
+  cuenta_id INT REFERENCES cuentas(id) ON DELETE SET NULL,
+  tipo_saldo TEXT,
+  saldos JSONB,
+  actualizado TIMESTAMPTZ
+);
+CREATE TABLE IF NOT EXISTS movimientos (
+  id TEXT PRIMARY KEY,
+  cuenta_uid TEXT REFERENCES bancos_cuentas(uid) ON DELETE CASCADE,
+  fecha DATE NOT NULL,
+  importe DECIMAL(12,2) NOT NULL,
+  moneda TEXT,
+  contraparte TEXT,
+  concepto TEXT,
+  estado TEXT,
+  factura_id INT REFERENCES facturas(id) ON DELETE SET NULL,
+  raw JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS movimientos_fecha_idx ON movimientos (fecha DESC);
+ALTER TABLE bancos_sesiones ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bancos_cuentas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE movimientos ENABLE ROW LEVEL SECURITY;
