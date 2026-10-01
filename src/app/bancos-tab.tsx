@@ -18,6 +18,15 @@ const hace = (d: string) => {
 const NOMBRES_SALDO: Record<string, string> = { ITAV: 'disponible', CLAV: 'disponible', XPCD: 'previsto', CLBD: 'contable', ITBD: 'contable (intradía)', OPBD: 'apertura' }
 const DESTACADOS = /bbva|revolut|wise/i
 
+// El BBVA no manda contraparte en los pagos con tarjeta: el comercio va al
+// final del concepto ("PAGO CON TARJETA EN ... // PAGO CON TARJETA // COMERCIO").
+function describir(m: Movimiento): { titulo: string; detalle: string } {
+  const partes = (m.concepto || '').split(' // ').map(p => p.trim()).filter(Boolean)
+  if (m.contraparte) return { titulo: m.contraparte, detalle: partes[0] && partes[0].toLowerCase() !== m.contraparte.toLowerCase() ? partes[0] : '' }
+  if (partes.length > 1) return { titulo: partes[partes.length - 1], detalle: partes[0] }
+  return { titulo: partes[0] || 'Movimiento', detalle: '' }
+}
+
 const btn: React.CSSProperties = { background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 7, padding: '5px 10px', color: 'var(--text2)', fontSize: 12, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }
 const campo: React.CSSProperties = { background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 7, padding: '5px 8px', color: 'var(--text)', fontSize: 12, fontFamily: 'Inter, sans-serif', outline: 'none' }
 
@@ -176,19 +185,19 @@ export default function BancosTab({ cuentas, mensaje, reload }: { cuentas: Cuent
           <div className="card-head">
             <div className="card-title">Movimientos <span style={{ color: 'var(--text3)', fontWeight: 400 }}>· últimos {movs.length}</span></div>
           </div>
-          {movs.map(m => (
+          {movs.map(m => { const d = describir(m); return (
             <div key={m.id} className="row">
               <div style={{ width: 54, fontSize: 11.5, color: 'var(--text3)', flexShrink: 0 }}>{fecha(m.fecha)}</div>
               <div className="row-main">
-                <div className="row-title">{m.contraparte || m.concepto || 'Movimiento'}</div>
-                <div className="row-sub">{nombreCuenta(m.cuenta_uid)}{m.contraparte && m.concepto ? ` · ${m.concepto}` : ''}</div>
+                <div className="row-title">{d.titulo}</div>
+                <div className="row-sub">{nombreCuenta(m.cuenta_uid)}{d.detalle ? ` · ${d.detalle.toLowerCase()}` : ''}</div>
               </div>
               <div className="row-side">
                 {m.factura_id && <a className="pill pill-green" href={`/invoice/${m.factura_id}`} target="_blank" rel="noopener noreferrer">factura</a>}
                 <span className="row-amount" style={{ color: Number(m.importe) > 0 ? 'var(--green)' : 'var(--text2)' }}>{Number(m.importe) > 0 ? '+' : ''}{eur(Number(m.importe), m.moneda || 'EUR')}</span>
               </div>
             </div>
-          ))}
+          ) })}
         </div>
       )}
     </div>
