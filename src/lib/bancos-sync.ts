@@ -45,15 +45,16 @@ export async function sincronizarBancos() {
         if (ultimo) desde.setUTCDate(desde.getUTCDate() - 5)
         let continuation: string | undefined
         const filas: any[] = []
+        const pendientes: any[] = []
         do {
           const q = new URLSearchParams({ date_from: dia(desde) })
           if (continuation) q.set('continuation_key', continuation)
           const r = await eb<{ transactions: MovimientoEB[]; continuation_key?: string }>(`/accounts/${c.uid}/transactions?${q}`)
           for (const m of r.transactions || []) {
-            if (m.status && m.status !== 'BOOK') continue // los pendientes cambian de id al contabilizarse
+            const pendiente = !!m.status && m.status !== 'BOOK'
             const signo = m.credit_debit_indicator === 'DBIT' ? -1 : 1
-            filas.push({
-              id: idMovimiento(c.uid, m), cuenta_uid: c.uid,
+            ;(pendiente ? pendientes : filas).push({
+              id: pendiente ? `${idMovimiento(c.uid, m)}:${pendientes.length}` : idMovimiento(c.uid, m), cuenta_uid: c.uid,
               fecha: m.booking_date || m.value_date || m.transaction_date,
               importe: signo * Math.abs(Number(m.transaction_amount.amount)), moneda: m.transaction_amount.currency,
               contraparte: (signo > 0 ? m.debtor?.name : m.creditor?.name) || null,
@@ -68,8 +69,15 @@ export async function sincronizarBancos() {
           const { error: e } = await sb.from('movimientos').upsert(filas.filter(f => f.fecha))
           if (e) throw new Error(e.message)
         }
+        // Los pendientes (pagos con tarjeta sin contabilizar) cambian de id al
+        // contabilizarse: se reemplazan enteros en cada sincronización.
+        await sb.from('movimientos').delete().eq('cuenta_uid', c.uid).eq('estado', 'PDNG').is('factura_id', null)
+        if (pendientes.length) {
+          const { error: e } = await sb.from('movimientos').upsert(pendientes.filter(f => f.fecha).map(f => ({ ...f, estado: 'PDNG' })))
+          if (e) throw new Error(e.message)
+        }
         resumen.cuentas++
-        resumen.movimientos += filas.length
+        resumen.movimientos += filas.length + pendientes.length
       } catch (e: any) {
         error = `${c.nombre || c.uid}: ${e.message}`
         resumen.errores.push(`${s.aspsp} · ${error}`)

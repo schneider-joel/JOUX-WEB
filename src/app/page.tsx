@@ -234,6 +234,18 @@ export default function Home() {
 
   useEffect(() => { loadData() }, [loadData])
 
+  // Al abrir el hub, si los bancos llevan más de 3 h sin sincronizar, se
+  // sincronizan en segundo plano (los bancos permiten ~4 lecturas al día).
+  useEffect(() => {
+    supabase.from('bancos_sesiones').select('ultimo_sync').then(async ({ data }) => {
+      if (!data?.length) return
+      const masViejo = Math.min(...data.map((s: { ultimo_sync: string | null }) => s.ultimo_sync ? new Date(s.ultimo_sync).getTime() : 0))
+      if (Date.now() - masViejo < 3 * 3600e3) return
+      const r = await fetch('/api/bancos/sincronizar', { method: 'POST' }).catch(() => null)
+      if (r?.ok) loadData()
+    })
+  }, [loadData])
+
   useEffect(() => {
     fetch('https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=eur')
       .then(r => r.json())

@@ -6,7 +6,7 @@ import { supabase, batchQuery, type Cuenta } from '@/lib/supabase'
 type Sesion = { session_id: string; aspsp: string; valid_until: string | null; ultimo_sync: string | null; ultimo_error: string | null }
 type Saldo = { balance_type: string; name?: string; balance_amount: { amount: string; currency: string } }
 type CuentaBanco = { uid: string; session_id: string; aspsp: string; nombre: string | null; iban: string | null; moneda: string | null; cuenta_id: number | null; tipo_saldo: string | null; saldos: Saldo[] | null; actualizado: string | null }
-type Movimiento = { id: string; cuenta_uid: string; fecha: string; importe: number; moneda: string | null; contraparte: string | null; concepto: string | null; factura_id: number | null }
+type Movimiento = { id: string; cuenta_uid: string; fecha: string; importe: number; moneda: string | null; contraparte: string | null; concepto: string | null; estado: string | null; factura_id: number | null }
 type Aspsp = { name: string; country: string; logo?: string; maximum_consent_validity?: number }
 
 const eur = (n: number, moneda = 'EUR') => new Intl.NumberFormat('es-ES', { style: 'currency', currency: moneda || 'EUR' }).format(n)
@@ -43,7 +43,7 @@ export default function BancosTab({ cuentas, mensaje, reload }: { cuentas: Cuent
     const [s, c, m] = await batchQuery([
       supabase.from('bancos_sesiones').select('session_id,aspsp,valid_until,ultimo_sync,ultimo_error').order('created_at'),
       supabase.from('bancos_cuentas').select('uid,session_id,aspsp,nombre,iban,moneda,cuenta_id,tipo_saldo,saldos,actualizado'),
-      supabase.from('movimientos').select('id,cuenta_uid,fecha,importe,moneda,contraparte,concepto,factura_id').order('fecha', { ascending: false }).limit(150),
+      supabase.from('movimientos').select('id,cuenta_uid,fecha,importe,moneda,contraparte,concepto,estado,factura_id').order('fecha', { ascending: false }).limit(150),
     ])
     setSesiones(s.data || []); setCuentasBanco(c.data || []); setMovs(m.data || []); setCargando(false)
   }, [])
@@ -193,6 +193,7 @@ export default function BancosTab({ cuentas, mensaje, reload }: { cuentas: Cuent
                 <div className="row-sub">{nombreCuenta(m.cuenta_uid)}{d.detalle ? ` · ${d.detalle.toLowerCase()}` : ''}</div>
               </div>
               <div className="row-side">
+                {m.estado === 'PDNG' && <span className="pill pill-amber" title="Pago con tarjeta todavía sin contabilizar por el banco">pendiente</span>}
                 {m.factura_id && <a className="pill pill-green" href={`/invoice/${m.factura_id}`} target="_blank" rel="noopener noreferrer">factura</a>}
                 <span className="row-amount" style={{ color: Number(m.importe) > 0 ? 'var(--green)' : 'var(--text2)' }}>{Number(m.importe) > 0 ? '+' : ''}{eur(Number(m.importe), m.moneda || 'EUR')}</span>
               </div>
