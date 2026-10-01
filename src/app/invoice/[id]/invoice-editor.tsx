@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { nombreArchivoFactura } from './nombre-archivo'
 import { supabase, Factura, ClienteFiscal, DiaTrabajado } from '@/lib/supabase'
 
 const fmt2 = (n: number) => new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
@@ -68,6 +69,9 @@ export default function InvoiceEditor({
   const idioma = factura.idioma === 'en' ? 'en' : 'es'
   const t = textos[idioma]
   const dentroUe = factura.tipo_factura === 'dentro_ue'
+
+  // Mantiene el nombre del PDF al día si se edita el número o el cliente.
+  useEffect(() => { document.title = nombreArchivoFactura(factura.numero, factura.cliente) }, [factura.numero, factura.cliente])
 
   const set = (patch: Partial<Factura>) => setFactura({ ...factura, ...patch })
 

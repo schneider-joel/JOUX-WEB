@@ -1,6 +1,13 @@
 import { cookies } from 'next/headers'
 import { supabaseServer as supabase } from '@/lib/supabase-server'
 import InvoiceEditor from './invoice-editor'
+import { nombreArchivoFactura } from './nombre-archivo'
+
+// El título de la página es el nombre que propone el navegador al guardar el PDF.
+export async function generateMetadata({ params }: { params: { id: string } }) {
+  const { data: f } = await supabase.from('facturas').select('numero, cliente').eq('id', params.id).maybeSingle()
+  return { title: f ? nombreArchivoFactura(f.numero, f.cliente) : 'Factura', robots: { index: false, follow: false } }
+}
 
 export default async function InvoicePage({ params }: { params: { id: string } }) {
   const authCookie = cookies().get('joux_auth')?.value
