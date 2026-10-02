@@ -7,6 +7,7 @@ import CuentasCard from './cuentas-card'
 import BancosTab from './bancos-tab'
 import CompartidosVista from './compartidos-vista'
 import PresupuestoCard, { gastadoPorPartida } from './presupuesto-card'
+import type { GastoCompartido } from '@/lib/compartidos'
 import { PAISES, PaisFiscal, detectarPais, tipoFacturaDePais } from '@/lib/clientes'
 import { GrupoTimesheet, grupoDeCliente, grupoDeKey, gruposTimesheet, linkPublico, tipoLegacy } from '@/lib/timesheets'
 import { supabase, batchQuery, Compra, Cuenta, Crypto, Factura, PresupuestoItem, Proyecto, DiaTrabajado, PatrimonioSnapshot, ClienteFiscal } from '@/lib/supabase'
@@ -186,6 +187,7 @@ export default function Home() {
   const [fijos, setFijos] = useState<PresupuestoItem[]>([])
   // Cuentas del hub que actualiza un banco conectado (no se editan a mano).
   const [cuentasBanco, setCuentasBanco] = useState<number[]>([])
+  const [compartidos, setCompartidos] = useState<GastoCompartido[] | null>(null)
   const [movsBanco, setMovsBanco] = useState<{ fecha: string; importe: number; categoria: string | null; clase: string | null; trabajo?: boolean }[]>([])
   const [variables, setVariables] = useState<PresupuestoItem[]>([])
   const [proyectos, setProyectos] = useState<Proyecto[]>([])
@@ -228,6 +230,7 @@ export default function Home() {
     if (cf.data) setClientesFiscales(cf.data)
     if (co.data) setCompras(co.data)
     if (mv.data) setMovsBanco(mv.data)
+    fetch('/api/compartidos').then(r => r.ok ? r.json() : null).then(j => setCompartidos(j?.gastos || null)).catch(() => {})
     if (bk.data) setCuentasBanco(bk.data.map((b: { cuenta_id: number | null }) => b.cuenta_id).filter(Boolean))
     if (cfg.data) {
       const mes = cfg.data.find((x: any) => x.clave === 'mes_actual')?.valor
@@ -522,10 +525,10 @@ export default function Home() {
               <CuentasCard cuentas={cuentas} aEuros={aEuros} fijosMes={fijos.reduce((t, i) => t + Number(i.limite), 0)}
                 variablesMes={variables.reduce((t, i) => t + Number(i.limite), 0)} pago={proximoPago(facturasFiscales, compras, cuotaAutonomo)}
                 porCobrar={totalPendiente} onEdit={() => setModal({ type: 'editCuentas' })}
-                fijosPendientes={movsBanco.length ? (() => { const g = gastadoPorPartida(movsBanco); return fijos.reduce((t, i) => t + Math.max(0, Number(i.limite) - (g[i.nombre] || 0)), 0) })() : null} />
+                fijosPendientes={movsBanco.length ? (() => { const g = gastadoPorPartida(movsBanco, undefined, undefined, compartidos); return fijos.reduce((t, i) => t + Math.max(0, Number(i.limite) - (g[i.nombre] || 0)), 0) })() : null} />
             </div>
 
-            <PresupuestoCard fijos={fijos} variables={variables} movimientos={movsBanco} />
+            <PresupuestoCard fijos={fijos} variables={variables} movimientos={movsBanco} compartidos={compartidos} />
 
             <div className="dash-grid-2">
               <div className="card">

@@ -27,13 +27,23 @@ export async function sincronizarCompartidos() {
   const cfg = await configCompartidos()
   const [{ data: movs }, { data: ya }] = await Promise.all([
     sb.from('movimientos').select('id,fecha,importe,contraparte,concepto,clase,categoria,estado').gte('fecha', cfg.desde).or('estado.is.null,estado.neq.PDNG'),
-    sb.from('gastos_compartidos').select('movimiento_id').not('movimiento_id', 'is', null),
+    sb.from('gastos_compartidos').select('id,tipo,fecha,importe,pagador,movimiento_id'),
   ])
-  const usados = new Set((ya || []).map(g => g.movimiento_id))
+  const usados = new Set((ya || []).map(g => g.movimiento_id).filter(Boolean))
+  // Apuntados a mano antes de que el banco lo mostrara (p. ej. "Saldar cuenta"):
+  // se enlazan con el movimiento en vez de duplicarse.
+  const manuales = (ya || []).filter(g => !g.movimiento_id)
   const nuevos: any[] = []
   for (const m of movs || []) {
     if (usados.has(m.id)) continue
     const importe = Math.abs(Number(m.importe))
+    const tipo = Number(m.importe) > 0 ? 'liquidacion' : 'gasto'
+    const gemelo = manuales.find(g => g.tipo === tipo && Number(g.importe) === importe && g.pagador === (tipo === 'liquidacion' ? 'pareja' : 'joel') && Math.abs(new Date(g.fecha).getTime() - new Date(m.fecha).getTime()) <= 7 * 864e5)
+    if (gemelo && (m.clase === 'reembolso' || (m.clase === 'gasto' && m.categoria && cfg.categorias.includes(m.categoria)))) {
+      await sb.from('gastos_compartidos').update({ movimiento_id: m.id }).eq('id', gemelo.id)
+      manuales.splice(manuales.indexOf(gemelo), 1)
+      continue
+    }
     if (Number(m.importe) < 0 && m.clase === 'gasto' && m.categoria && cfg.categorias.includes(m.categoria)) {
       nuevos.push({ tipo: 'gasto', fecha: m.fecha, concepto: m.categoria, importe, pagador: 'joel', reparto: 'mitad', categoria: m.categoria, movimiento_id: m.id, creado_por: 'joel' })
     } else if (Number(m.importe) > 0 && m.clase === 'reembolso') {
