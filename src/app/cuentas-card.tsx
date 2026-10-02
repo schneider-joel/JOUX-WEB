@@ -93,7 +93,7 @@ export default function CuentasCard({ cuentas, aEuros, fijosMes, fijosPendientes
   }
   if (otros.length) {
     const total = otros.reduce((s, c) => s + aEuros(c), 0)
-    tiles.push({ key: 'otros', grupo: 'Efectivo', titulo: 'Efectivo y otros', color: '#94a3b8', monto: `€${fmt2(total)}`, linea: '', extra: otros.map(c => ({ nombre: c.nombre.replace(/^Cash \((\w+)\)$/, (_, m) => (m === 'USD' ? 'Efectivo $' : 'Efectivo €')), monto: c.moneda === 'USD' ? `$${fmt(c.saldo)}` : `€${fmt(c.saldo)}` })) })
+    tiles.push({ key: 'otros', grupo: 'Efectivo', titulo: 'Efectivo y otros', color: '#94a3b8', monto: `€${fmt2(total)}`, linea: '', chip: { texto: `${otros.length} cuentas`, estado: 'neutro' }, extra: otros.map(c => ({ nombre: c.nombre.replace(/^Cash \((\w+)\)$/, (_, m) => (m === 'USD' ? 'Efectivo $' : 'Efectivo €')), monto: c.moneda === 'USD' ? `$${fmt(c.saldo)}` : `€${fmt(c.saldo)}` })) })
   }
   const total = cuentas.reduce((s, c) => s + aEuros(c), 0)
 
@@ -108,7 +108,7 @@ export default function CuentasCard({ cuentas, aEuros, fijosMes, fijosPendientes
       </div>
       <div className="acct-grid">
         {tiles.map(t => (
-          <div key={t.key} className="acct-tile">
+          <div key={t.key} className="acct-tile" title={[t.linea, ...(t.extra || []).map(e => `${e.nombre}: ${e.monto}`)].filter(Boolean).join('\n')}>
             <div className="acct-tile-head">
               <div className="acct-avatar" style={{ background: `${t.color}22`, color: t.color, borderColor: `${t.color}55` }}>{t.grupo.slice(0, 2).toUpperCase()}</div>
               <div style={{ minWidth: 0 }}>
@@ -117,17 +117,6 @@ export default function CuentasCard({ cuentas, aEuros, fijosMes, fijosPendientes
               </div>
             </div>
             <div className="acct-tile-monto">{t.monto}</div>
-            {t.extra ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 1, marginTop: 3 }}>
-                {t.extra.map(e => (
-                  <div key={e.nombre} style={{ display: 'flex', justifyContent: 'space-between', gap: 6, fontSize: 10.5, color: 'var(--text3)', whiteSpace: 'nowrap' }}>
-                    <span>{e.nombre}</span><span className="mono">{e.monto}</span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="acct-tile-linea">{t.linea}</div>
-            )}
             <div className="acct-tile-pie">
               {t.progreso !== undefined && (
                 <div className="acct-bar-track" style={{ flex: 1, marginTop: 0 }}>
