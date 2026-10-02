@@ -110,29 +110,28 @@ export default function CuentasCard({ cuentas, aEuros, fijosMes, fijosPendientes
         <button className="icon-btn accent" onClick={onEdit} title="Editar saldos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17z" /><path d="M13.5 6.5l3 3" /></svg></button>
       </div>
       <div className="acct-grid">
-        {tiles.map(t => (
-          <div key={t.key} className="acct-tile" title={[t.linea, ...(t.extra || []).map(e => `${e.nombre}: ${e.monto}`)].filter(Boolean).join('\n')}>
-            <div className="acct-tile-head">
-              {LOGO[t.grupo.toLowerCase()]
+        {tiles.map(t => {
+          const logo = LOGO[t.grupo.toLowerCase()]
+          const color = t.chip ? COLOR_ESTADO[t.chip.estado] : 'var(--text3)'
+          return (
+            <div key={t.key} className="acct-tile" title={[`${t.grupo} · ${t.titulo}`, t.linea, ...(t.extra || []).map(e => `${e.nombre}: ${e.monto}`)].filter(Boolean).join('\n')}>
+              {logo
                 // eslint-disable-next-line @next/next/no-img-element
-                ? <img src={LOGO[t.grupo.toLowerCase()]} alt={t.grupo} className="acct-app-icon" />
-                : <div className="acct-avatar" style={{ background: `${t.color}22`, color: t.color, borderColor: `${t.color}55` }}>{t.grupo.slice(0, 2).toUpperCase()}</div>}
-              <div style={{ minWidth: 0 }}>
-                <div className="acct-tile-grupo">{t.grupo}</div>
+                ? <img src={logo} alt={t.grupo} className="acct-app-icon" />
+                : <div className="acct-app-icon acct-app-icon-vacio" style={{ background: `${t.color}26`, color: t.color }}>{t.grupo.slice(0, 2).toUpperCase()}</div>}
+              <div className="acct-tile-cuerpo">
                 <div className="acct-tile-titulo">{t.titulo}</div>
+                <div className="acct-tile-monto">{t.monto}</div>
+                {t.chip && <div className="acct-tile-estado" style={{ color }}>{t.chip.texto}</div>}
+                {t.progreso !== undefined && (
+                  <div className="acct-bar-track" style={{ marginTop: 6 }}>
+                    <div className="acct-bar-fill" style={{ width: `${Math.min(100, Math.max(3, t.progreso * 100))}%`, background: color === 'var(--text3)' ? t.color : color }} />
+                  </div>
+                )}
               </div>
             </div>
-            <div className="acct-tile-monto">{t.monto}</div>
-            <div className="acct-tile-pie">
-              {t.progreso !== undefined && (
-                <div className="acct-bar-track" style={{ flex: 1, marginTop: 0 }}>
-                  <div className="acct-bar-fill" style={{ width: `${Math.min(100, Math.max(3, t.progreso * 100))}%`, background: t.chip ? COLOR_ESTADO[t.chip.estado] === 'var(--text3)' ? t.color : COLOR_ESTADO[t.chip.estado] : t.color }} />
-                </div>
-              )}
-              {t.chip && <span className="acct-chip" style={{ color: COLOR_ESTADO[t.chip.estado], borderColor: COLOR_ESTADO[t.chip.estado] === 'var(--text3)' ? 'var(--border)' : `color-mix(in srgb, ${COLOR_ESTADO[t.chip.estado]} 40%, transparent)` }}>{t.chip.texto}</span>}
-            </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )
