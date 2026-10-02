@@ -262,17 +262,17 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 }
 
 /* ---- Overview: cuentas en tarjetas y presupuesto ---- */
-.acct-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); gap: 10px; }
-.acct-tile { background: var(--surface2); border: 1px solid var(--border); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; min-width: 0; }
+.acct-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.acct-tile { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; min-width: 0; }
 .acct-tile:hover { border-color: var(--border2); }
-.acct-tile-head { display: flex; align-items: center; gap: 10px; }
-.acct-tile-head .acct-avatar { width: 30px; height: 30px; font-size: 10px; }
-.acct-tile-grupo { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.08em; }
-.acct-tile-titulo { font-size: 13px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.acct-tile-monto { font-family: 'JetBrains Mono', monospace; font-size: 20px; font-weight: 500; letter-spacing: -0.4px; margin-top: 12px; }
-.acct-tile-linea { font-size: 11px; color: var(--text3); margin-top: 3px; line-height: 1.4; min-height: 15px; }
-.acct-tile-pie { display: flex; align-items: center; gap: 8px; margin-top: auto; padding-top: 10px; min-height: 28px; }
-.acct-chip { font-size: 10px; padding: 3px 8px; border-radius: 20px; border: 1px solid var(--border); white-space: nowrap; margin-left: auto; }
+.acct-tile-head { display: flex; align-items: center; gap: 8px; }
+.acct-tile-head .acct-avatar { width: 22px; height: 22px; font-size: 8.5px; border-radius: 6px; }
+.acct-tile-grupo { font-size: 9px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.08em; line-height: 1.2; }
+.acct-tile-titulo { font-size: 12px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.25; }
+.acct-tile-monto { font-family: 'JetBrains Mono', monospace; font-size: 16px; font-weight: 500; letter-spacing: -0.3px; margin-top: 8px; }
+.acct-tile-linea { font-size: 10.5px; color: var(--text3); margin-top: 2px; line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.acct-tile-pie { display: flex; align-items: center; gap: 6px; margin-top: auto; padding-top: 8px; min-height: 22px; }
+.acct-chip { font-size: 9.5px; padding: 2px 7px; border-radius: 20px; border: 1px solid var(--border); white-space: nowrap; margin-left: auto; }
 .presu-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
 .presu-fila { padding: 6px 0; font-size: 12.5px; }
 .presu-barra { position: relative; height: 3px; border-radius: 2px; background: var(--surface3); margin-top: 6px; }
@@ -281,5 +281,5 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .chart-compacto { height: 150px; min-height: 150px; }
 @media (max-width: 860px) {
   .presu-grid { grid-template-columns: 1fr; gap: 18px; }
-  .acct-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  .acct-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

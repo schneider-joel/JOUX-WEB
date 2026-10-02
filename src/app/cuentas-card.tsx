@@ -118,9 +118,9 @@ export default function CuentasCard({ cuentas, aEuros, fijosMes, fijosPendientes
             </div>
             <div className="acct-tile-monto">{t.monto}</div>
             {t.extra ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginTop: 6 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 1, marginTop: 3 }}>
                 {t.extra.map(e => (
-                  <div key={e.nombre} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text3)' }}>
+                  <div key={e.nombre} style={{ display: 'flex', justifyContent: 'space-between', gap: 6, fontSize: 10.5, color: 'var(--text3)', whiteSpace: 'nowrap' }}>
                     <span>{e.nombre}</span><span className="mono">{e.monto}</span>
                   </div>
                 ))}
