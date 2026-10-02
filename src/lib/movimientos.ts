@@ -53,6 +53,8 @@ const REGLAS: Regla0[] = [
   { re: /\bbizum\b/, clase: 'personal' },
   // Otros ingresos
   { re: /bonificaci|cashback|intereses/, clase: 'ingreso', soloIngresos: true },
+  // Pagos a Hacienda (el banco los identifica con el NRC del pago)
+  { re: /^nrc\b|\bnrc\.? \d|agencia tributaria|aeat/, clase: 'gasto', categoria: 'Impuestos' },
   // Fijos
   { re: /\balquiler\b/, clase: 'gasto', categoria: 'Alquiler' },
   { re: /tgss|seguridad social/, clase: 'gasto', categoria: 'Cuota autónomo' },
