@@ -13,7 +13,7 @@ const campo: React.CSSProperties = { width: '100%', background: 'var(--surface2)
 const etiqueta: React.CSSProperties = { display: 'block', fontSize: 12, color: 'var(--text2)', marginBottom: 6 }
 
 type Datos = { quien: Persona; pareja: string; gastos: GastoCompartido[]; token?: string }
-type Borrador = { tipo: 'gasto' | 'liquidacion'; fecha: string; concepto: string; importe: string; pagador: Persona; reparto: 'mitad' | 'otro'; categoria: string }
+type Borrador = { tipo: 'gasto' | 'liquidacion'; fecha: string; concepto: string; importe: string; pagador: Persona; para: Persona[]; categoria: string }
 
 // Vista de la cuenta compartida. La usan el hub (Joel, con su cookie) y el
 // link privado de la pareja (con su token).
@@ -45,13 +45,17 @@ export default function CompartidosVista({ token }: { token?: string }) {
   const s = saldo(datos.gastos) * (yo === 'joel' ? 1 : -1)
   const efecto = (g: GastoCompartido) => (g.pagador === yo ? 1 : -1) * (g.tipo === 'liquidacion' ? Number(g.importe) : deudaDe(g))
 
-  const nuevoGasto = () => setBorrador({ tipo: 'gasto', fecha: hoy(), concepto: '', importe: '', pagador: yo, reparto: 'mitad', categoria: '' })
-  const saldar = () => setBorrador({ tipo: 'liquidacion', fecha: hoy(), concepto: `Saldo de cuentas`, importe: Math.abs(s).toFixed(2), pagador: s > 0 ? otro : yo, reparto: 'mitad', categoria: '' })
+  const nuevoGasto = () => setBorrador({ tipo: 'gasto', fecha: hoy(), concepto: '', importe: '', pagador: yo, para: ['joel', 'pareja'], categoria: '' })
+  const saldar = () => setBorrador({ tipo: 'liquidacion', fecha: hoy(), concepto: `Saldo de cuentas`, importe: Math.abs(s).toFixed(2), pagador: s > 0 ? otro : yo, para: ['joel', 'pareja'], categoria: '' })
+  // "Dividir entre": los dos = a medias; solo quien no pagó = entero para esa
+  // persona; solo quien pagó no genera deuda (no hace falta apuntarlo).
+  const repartoDe = (b: Borrador): 'mitad' | 'otro' | null =>
+    b.para.length === 2 ? 'mitad' : b.para.length === 1 && b.para[0] !== b.pagador ? 'otro' : null
 
   const guardar = async () => {
     if (!borrador) return
     setGuardando(true)
-    const r = await fetch('/api/compartidos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...borrador, token }) }).then(r => r.json())
+    const r = await fetch('/api/compartidos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...borrador, reparto: repartoDe(borrador) || 'mitad', token }) }).then(r => r.json())
     setGuardando(false)
     if (r.error) { alert(r.error); return }
     setBorrador(null)
@@ -111,13 +115,6 @@ export default function CompartidosVista({ token }: { token?: string }) {
                 <input value={borrador.concepto} onChange={e => setBorrador({ ...borrador, concepto: e.target.value })} placeholder="Ej: Compra Mercadona" style={campo} />
               </div>
               <div>
-                <label style={etiqueta}>Para quién</label>
-                <select value={borrador.reparto} onChange={e => setBorrador({ ...borrador, reparto: e.target.value as 'mitad' | 'otro' })} style={campo}>
-                  <option value="mitad">A medias</option>
-                  <option value="otro">Todo para {borrador.pagador === yo ? nombreOtro : 'ti'}</option>
-                </select>
-              </div>
-              <div>
                 <label style={etiqueta}>Categoría (opcional)</label>
                 <select value={borrador.categoria} onChange={e => setBorrador({ ...borrador, categoria: e.target.value })} style={campo}>
                   <option value="">—</option>
@@ -126,16 +123,40 @@ export default function CompartidosVista({ token }: { token?: string }) {
               </div>
             </div>
           )}
-          {Number(borrador.importe) > 0 && (
+          {borrador.tipo === 'gasto' && (
+            <div style={{ marginTop: 12 }}>
+              <label style={etiqueta}>Dividir entre</label>
+              <div style={{ border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
+                {([yo, otro] as Persona[]).map((p, i) => {
+                  const marcado = borrador.para.includes(p)
+                  const parte = marcado && Number(borrador.importe) > 0 ? Number(borrador.importe) / borrador.para.length : 0
+                  return (
+                    <label key={p} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', cursor: 'pointer', borderTop: i ? '1px solid var(--border)' : undefined, background: 'var(--surface2)' }}>
+                      <input type="checkbox" checked={marcado} style={{ width: 18, height: 18, accentColor: 'var(--accent)' }}
+                        onChange={e => setBorrador({ ...borrador, para: e.target.checked ? Array.from(new Set([...borrador.para, p])) : borrador.para.filter(x => x !== p) })} />
+                      <span style={{ flex: 1, fontSize: 14 }}>{p === yo ? `${p === 'joel' ? 'Joel' : datos.pareja} (tú)` : nombreOtro}</span>
+                      <span className="mono" style={{ fontSize: 14, color: marcado ? 'var(--text)' : 'var(--text3)' }}>{eur(parte)}</span>
+                    </label>
+                  )
+                })}
+              </div>
+              {!repartoDe(borrador) && (
+                <div style={{ fontSize: 12, color: 'var(--amber)', marginTop: 6 }}>
+                  {borrador.para.length === 0 ? 'Elige al menos una persona.' : 'Si el gasto es solo de quien lo pagó, no genera deuda: no hace falta apuntarlo.'}
+                </div>
+              )}
+            </div>
+          )}
+          {Number(borrador.importe) > 0 && (borrador.tipo === 'liquidacion' || repartoDe(borrador)) && (
             <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 12 }}>
               {borrador.tipo === 'liquidacion'
                 ? `${borrador.pagador === yo ? 'Tú le pasas' : `${nombreOtro} te pasa`} ${eur(Number(borrador.importe))}.`
-                : `${borrador.pagador === yo ? `${nombreOtro} te debe` : `Le debes a ${nombreOtro}`} ${eur(borrador.reparto === 'otro' ? Number(borrador.importe) : Number(borrador.importe) / 2)} por este gasto.`}
+                : `${borrador.pagador === yo ? `${nombreOtro} te debe` : `Le debes a ${nombreOtro}`} ${eur(repartoDe(borrador) === 'otro' ? Number(borrador.importe) : Number(borrador.importe) / 2)} por este gasto.`}
             </div>
           )}
           <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
             <button className="btn" onClick={() => setBorrador(null)}>Cancelar</button>
-            <button className="btn btn-primary" disabled={guardando || !(Number(borrador.importe) > 0) || (borrador.tipo === 'gasto' && !borrador.concepto.trim())} onClick={guardar} style={{ flex: 1, justifyContent: 'center' }}>
+            <button className="btn btn-primary" disabled={guardando || !(Number(borrador.importe) > 0) || (borrador.tipo === 'gasto' && (!borrador.concepto.trim() || !repartoDe(borrador)))} onClick={guardar} style={{ flex: 1, justifyContent: 'center' }}>
               {guardando ? 'Guardando…' : 'Guardar'}
             </button>
           </div>
