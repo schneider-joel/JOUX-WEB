@@ -55,7 +55,8 @@ export async function sincronizarBancos() {
             const pendiente = !!m.status && m.status !== 'BOOK'
             const signo = m.credit_debit_indicator === 'DBIT' ? -1 : 1
             ;(pendiente ? pendientes : filas).push({
-              id: pendiente ? `${idMovimiento(c.uid, m)}:${pendientes.length}` : idMovimiento(c.uid, m), cuenta_uid: c.uid,
+              // Sin referencia del banco, dos pendientes iguales se distinguen por su posición.
+              id: pendiente && !(m.entry_reference || m.transaction_id) ? `${idMovimiento(c.uid, m)}:${pendientes.length}` : idMovimiento(c.uid, m), cuenta_uid: c.uid,
               fecha: m.booking_date || m.value_date || m.transaction_date,
               importe: signo * Math.abs(Number(m.transaction_amount.amount)), moneda: m.transaction_amount.currency,
               contraparte: (signo > 0 ? m.debtor?.name : m.creditor?.name) || null,
