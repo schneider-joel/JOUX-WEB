@@ -184,6 +184,8 @@ export default function Home() {
   const [crypto, setCrypto] = useState<Crypto[]>([])
   const [facturas, setFacturas] = useState<Factura[]>([])
   const [fijos, setFijos] = useState<PresupuestoItem[]>([])
+  // Cuentas del hub que actualiza un banco conectado (no se editan a mano).
+  const [cuentasBanco, setCuentasBanco] = useState<number[]>([])
   const [movsBanco, setMovsBanco] = useState<{ fecha: string; importe: number; categoria: string | null; clase: string | null; trabajo?: boolean }[]>([])
   const [variables, setVariables] = useState<PresupuestoItem[]>([])
   const [proyectos, setProyectos] = useState<Proyecto[]>([])
@@ -200,7 +202,7 @@ export default function Home() {
   const [lastUpdated, setLastUpdated] = useState<string>('')
 
   const loadData = useCallback(async () => {
-    const [c, cr, f, fi, v, cfg, pr, di, sn, cf, co, mv] = await batchQuery([
+    const [c, cr, f, fi, v, cfg, pr, di, sn, cf, co, mv, bk] = await batchQuery([
       supabase.from('cuentas').select('*').order('orden'),
       supabase.from('crypto').select('*'),
       supabase.from('facturas').select('*').order('fecha'),
@@ -213,6 +215,7 @@ export default function Home() {
       supabase.from('clientes_fiscales').select('*').order('cliente'),
       supabase.from('compras').select('*').order('fecha'),
       supabase.from('movimientos').select('fecha,importe,categoria,clase,trabajo').order('fecha', { ascending: false }).limit(800),
+      supabase.from('bancos_cuentas').select('cuenta_id'),
     ])
     if (c.data) setCuentas(c.data)
     if (cr.data) setCrypto(cr.data)
@@ -225,6 +228,7 @@ export default function Home() {
     if (cf.data) setClientesFiscales(cf.data)
     if (co.data) setCompras(co.data)
     if (mv.data) setMovsBanco(mv.data)
+    if (bk.data) setCuentasBanco(bk.data.map((b: { cuenta_id: number | null }) => b.cuenta_id).filter(Boolean))
     if (cfg.data) {
       const mes = cfg.data.find((x: any) => x.clave === 'mes_actual')?.valor
       const pt = cfg.data.find((x: any) => x.clave === 'presupuesto_total')?.valor
@@ -772,7 +776,7 @@ export default function Home() {
                 <ModalEditLimite item={modal.data.item} tabla={modal.data.tabla} onSave={editLimite} onClose={() => setModal(null)} />
               )}
               {modal.type === 'editCuentas' && (
-                <ModalEditCuentas cuentas={cuentas} onUpdate={updateCuenta} onClose={() => { setModal(null); loadData() }} />
+                <ModalEditCuentas cuentas={cuentas} automaticas={cuentasBanco} onUpdate={updateCuenta} onClose={() => { setModal(null); loadData() }} />
               )}
               {modal.type === 'addProyecto' && (
                 <ModalAddProyecto clienteInicial={grupoActivo?.clientes[0]} onAdd={addProyecto} onClose={() => setModal(null)} />
@@ -918,17 +922,25 @@ function ModalEditLimite({ item, tabla, onSave, onClose }: { item: PresupuestoIt
   )
 }
 
-function ModalEditCuentas({ cuentas, onUpdate, onClose }: { cuentas: Cuenta[], onUpdate: (id: number, patch: Partial<Cuenta>) => Promise<void>, onClose: () => void }) {
+function ModalEditCuentas({ cuentas, automaticas, onUpdate, onClose }: { cuentas: Cuenta[], automaticas: number[], onUpdate: (id: number, patch: Partial<Cuenta>) => Promise<void>, onClose: () => void }) {
   const [values, setValues] = useState<{ [id: number]: string }>(Object.fromEntries(cuentas.map(c => [c.id, String(c.saldo)])))
   const [rent, setRent] = useState<{ [id: number]: string }>(Object.fromEntries(cuentas.map(c => [c.id, c.rentabilidad_anual != null ? String(c.rentabilidad_anual) : ''])))
   // Cada cuenta seguida de sus apartados.
   const ordenadas = cuentas.filter(c => !c.padre_id).flatMap(c => [c, ...cuentas.filter(h => h.padre_id === c.id).sort((a, b) => a.orden - b.orden)])
   const campo = { background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 7, padding: '6px 10px', color: 'var(--text)', fontSize: 13, fontFamily: 'Inter, sans-serif', outline: 'none' }
+  // Las que actualiza el banco (y el apartado de ahorro, que es lo que sobra
+  // del total del banco) no se editan; solo se guarda lo que cambió.
+  const auto = (c: Cuenta) => automaticas.includes(c.id) || (c.tipo === 'ahorro' && !!c.padre_id && automaticas.includes(c.padre_id))
   const guardar = async () => {
-    await Promise.all(ordenadas.map(c => onUpdate(c.id, {
-      saldo: Number(values[c.id]),
-      ...(c.tipo === 'inversion' ? { rentabilidad_anual: rent[c.id] === '' ? null : Number(rent[c.id]) } : {}),
-    })))
+    await Promise.all(ordenadas.flatMap(c => {
+      const patch: Partial<Cuenta> = {}
+      if (!auto(c) && Number(values[c.id]) !== Number(c.saldo)) patch.saldo = Number(values[c.id])
+      if (c.tipo === 'inversion') {
+        const r = rent[c.id] === '' ? null : Number(rent[c.id])
+        if (r !== (c.rentabilidad_anual != null ? Number(c.rentabilidad_anual) : null)) patch.rentabilidad_anual = r
+      }
+      return Object.keys(patch).length ? [onUpdate(c.id, patch)] : []
+    }))
     onClose()
   }
   return (
@@ -945,7 +957,9 @@ function ModalEditCuentas({ cuentas, onUpdate, onClose }: { cuentas: Cuenta[], o
           {c.tipo === 'inversion' && (
             <input type="number" step="0.01" value={rent[c.id]} onChange={e => setRent({ ...rent, [c.id]: e.target.value })} placeholder="% anual" title="Rentabilidad anual (%)" style={{ ...campo, width: 72 }} />
           )}
-          <input type="number" value={values[c.id]} onChange={e => setValues({ ...values, [c.id]: e.target.value })} style={{ ...campo, width: 110 }} />
+          {auto(c)
+            ? <span title={c.tipo === 'ahorro' ? 'Se calcula solo: total del banco − disponible − otros apartados' : 'Se actualiza solo desde el banco'} style={{ ...campo, width: 110, color: 'var(--text3)', display: 'inline-flex', justifyContent: 'space-between' }}><span className="mono">{fmt2(c.saldo)}</span><span style={{ fontSize: 10 }}>auto</span></span>
+            : <input type="number" value={values[c.id]} onChange={e => setValues({ ...values, [c.id]: e.target.value })} style={{ ...campo, width: 110 }} />}
         </div>
       ))}
       <button onClick={guardar}
