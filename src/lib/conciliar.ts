@@ -1,5 +1,6 @@
 import { supabaseServer as sb } from '@/lib/supabase-server'
 import { clasificar, comercio, palabrasClave, textoDe, type Regla } from '@/lib/movimientos'
+import { sincronizarCompartidos } from '@/lib/compartidos-server'
 
 const IVA = 0.21
 const RETENCION = 0.15
@@ -128,5 +129,6 @@ export async function conciliarTodo() {
   const clasificados = await clasificarMovimientos()
   const compras = await conciliarCompras()
   const cobros = await conciliarCobros()
-  return { clasificados, cobros, compras }
+  const compartidos = await sincronizarCompartidos()
+  return { clasificados, cobros, compras, compartidos }
 }

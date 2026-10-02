@@ -564,3 +564,29 @@ CREATE TABLE IF NOT EXISTS reglas_movimientos (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 ALTER TABLE reglas_movimientos ENABLE ROW LEVEL SECURITY;
+
+-- MIGRACIÓN: gastos compartidos con la pareja (tipo Tricount). La pareja
+-- entra por /c/<compartidos_token> (sin acceso al hub). tipo gasto|liquidacion;
+-- reparto mitad|otro (le corresponde entero a quien no pagó). Los pagos de
+-- Joel en compartidos_categorias y las transferencias de clase 'reembolso'
+-- se añaden solos desde el banco (movimiento_id; anulado en vez de borrar).
+CREATE TABLE IF NOT EXISTS gastos_compartidos (
+  id BIGSERIAL PRIMARY KEY,
+  tipo TEXT NOT NULL DEFAULT 'gasto',
+  fecha DATE NOT NULL,
+  concepto TEXT NOT NULL,
+  importe DECIMAL(10,2) NOT NULL CHECK (importe > 0),
+  pagador TEXT NOT NULL CHECK (pagador IN ('joel', 'pareja')),
+  reparto TEXT NOT NULL DEFAULT 'mitad' CHECK (reparto IN ('mitad', 'otro')),
+  categoria TEXT,
+  movimiento_id TEXT UNIQUE REFERENCES movimientos(id) ON DELETE SET NULL,
+  anulado BOOLEAN NOT NULL DEFAULT FALSE,
+  creado_por TEXT NOT NULL DEFAULT 'joel',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS gastos_compartidos_fecha_idx ON gastos_compartidos (fecha DESC);
+ALTER TABLE gastos_compartidos ENABLE ROW LEVEL SECURITY;
+INSERT INTO configuracion (clave, valor) SELECT 'compartidos_token', gen_random_uuid()::text WHERE NOT EXISTS (SELECT 1 FROM configuracion WHERE clave = 'compartidos_token');
+INSERT INTO configuracion (clave, valor) SELECT 'compartidos_pareja', 'Sofía' WHERE NOT EXISTS (SELECT 1 FROM configuracion WHERE clave = 'compartidos_pareja');
+INSERT INTO configuracion (clave, valor) SELECT 'compartidos_desde', '2026-10-01' WHERE NOT EXISTS (SELECT 1 FROM configuracion WHERE clave = 'compartidos_desde');
+INSERT INTO configuracion (clave, valor) SELECT 'compartidos_categorias', 'Alquiler,Agua' WHERE NOT EXISTS (SELECT 1 FROM configuracion WHERE clave = 'compartidos_categorias');

@@ -5,6 +5,7 @@ import ComprasTab from './compras-tab'
 import ImpuestosTab, { proximoPago } from './impuestos-tab'
 import CuentasCard from './cuentas-card'
 import BancosTab from './bancos-tab'
+import CompartidosVista from './compartidos-vista'
 import PresupuestoCard, { gastadoPorPartida } from './presupuesto-card'
 import { PAISES, PaisFiscal, detectarPais, tipoFacturaDePais } from '@/lib/clientes'
 import { GrupoTimesheet, grupoDeCliente, grupoDeKey, gruposTimesheet, linkPublico, tipoLegacy } from '@/lib/timesheets'
@@ -31,7 +32,7 @@ const ultimosMeses = (n: number) => {
 }
 
 // Los timesheets son dinámicos: una pestaña "ts:<key>" por grupo de clientes (ver lib/timesheets).
-type Tab = 'dashboard' | 'facturas' | 'compras' | 'impuestos' | 'presupuesto' | 'clientes' | 'bancos' | `ts:${string}`
+type Tab = 'dashboard' | 'facturas' | 'compras' | 'impuestos' | 'presupuesto' | 'clientes' | 'bancos' | 'compartidos' | `ts:${string}`
 type NuevoProyecto = { nombre: string; cliente: string; numero_proyecto: string; modo_rate: 'hora' | 'dia' }
 type Modal = { type: string; data?: any } | null
 
@@ -397,6 +398,7 @@ export default function Home() {
         { id: 'impuestos', label: 'Impuestos', icon: Icon.trend },
         { id: 'clientes', label: 'Clientes', icon: Icon.card },
         { id: 'bancos', label: 'Bancos', icon: Icon.link },
+        { id: 'compartidos', label: 'Compartidos', icon: Icon.users },
       ],
     },
     {
@@ -415,6 +417,7 @@ export default function Home() {
     compras: ['Compras', 'Facturas de gastos y compras'],
     impuestos: ['Impuestos', 'Estimación trimestral de IRPF (130) e IVA (303)'],
     bancos: ['Bancos', 'Saldos y movimientos de tus cuentas, en automático'],
+    compartidos: ['Gastos compartidos', 'La cuenta con tu pareja: quién pagó qué y quién debe a quién'],
   }
   const [titulo, subtitulo] = grupoActivo ? [`Timesheet · ${grupoActivo.label}`, 'Proyectos, días y facturación'] : titulos[tab]
 
@@ -747,6 +750,7 @@ export default function Home() {
           </div>
         )}
 
+        {tab === 'compartidos' && <CompartidosVista />}
         {tab === 'bancos' && <BancosTab cuentas={cuentas} mensaje={mensajeBanco} reload={loadData} />}
 
         {/* Timesheet del grupo de clientes activo */}
