@@ -2,10 +2,13 @@ import CompartidosVista from '../../compartidos-vista'
 
 export const dynamic = 'force-dynamic'
 
+// Al añadirla a la pantalla de inicio del iPhone se llama "Casona" (como el
+// tricount) y usa el icono de la casa (apple-icon.tsx de esta carpeta).
 export const metadata = {
-  title: 'Gastos compartidos',
+  title: 'Casona · gastos compartidos',
   description: 'Quién pagó qué y quién debe a quién',
   robots: { index: false, follow: false },
+  appleWebApp: { capable: true, title: 'Casona', statusBarStyle: 'black-translucent' as const },
 }
 
 // Link privado de la pareja: solo la cuenta compartida, sin acceso al hub.
