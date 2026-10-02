@@ -2,11 +2,12 @@
 //
 // clase: 'cobro' (pago de un cliente, ligado a facturas) · 'ingreso' (otro
 // ingreso) · 'interno' (traspaso entre tus cuentas) · 'personal' (amigos,
-// pareja, Bizum: no es actividad) · 'gasto'.
+// Bizum: no es actividad) · 'reembolso' (te devuelven parte de un gasto
+// compartido, p. ej. la pareja la mitad del alquiler) · 'gasto'.
 // categoria: nombre de una partida del presupuesto (fijos o variables).
 // trabajo: gasto de la actividad (debería tener su factura en Compras).
 
-export type Clase = 'cobro' | 'ingreso' | 'interno' | 'personal' | 'gasto'
+export type Clase = 'cobro' | 'ingreso' | 'interno' | 'personal' | 'reembolso' | 'gasto'
 
 export type MovimientoBase = {
   importe: number
@@ -21,7 +22,8 @@ export const CLASES: { value: Clase; label: string }[] = [
   { value: 'ingreso', label: 'Otro ingreso' },
   { value: 'gasto', label: 'Gasto' },
   { value: 'interno', label: 'Traspaso entre mis cuentas' },
-  { value: 'personal', label: 'Personal (pareja, amigos)' },
+  { value: 'reembolso', label: 'Me devuelven un gasto compartido' },
+  { value: 'personal', label: 'Personal (amigos, Bizum)' },
 ]
 
 // Nombre legible del comercio o la contraparte. El BBVA lo pone al final del

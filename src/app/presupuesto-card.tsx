@@ -6,22 +6,35 @@ type Mov = { fecha: string; importe: number; categoria: string | null; clase: st
 
 const eur = (n: number) => new Intl.NumberFormat('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(Math.round(n))
 
+// Parte del alquiler que paga la pareja (el alquiler sale entero de tu cuenta
+// y ella te devuelve su mitad junto con otros gastos compartidos).
+export const PARTE_PAREJA_ALQUILER = 0.5
+
 // Gastado este mes en cada partida, a partir de los movimientos del banco
 // (las devoluciones restan). Solo cuenta lo clasificado como gasto; las
 // compras de trabajo no gastan de las partidas indicadas (las variables).
+// Los reembolsos descuentan primero su parte del alquiler; lo que sobra son
+// gastos compartidos devueltos (compartidos).
 export function gastadoPorPartida(movs: Mov[], sinTrabajo: Set<string> = new Set(), mes = new Date().toISOString().slice(0, 7)) {
   const out: Record<string, number> = {}
+  let reembolsos = 0
   for (const m of movs) {
-    if (!m.fecha.startsWith(mes) || m.clase !== 'gasto' || !m.categoria) continue
+    if (!m.fecha.startsWith(mes)) continue
+    if (m.clase === 'reembolso') { reembolsos += Number(m.importe); continue }
+    if (m.clase !== 'gasto' || !m.categoria) continue
     if (m.trabajo && sinTrabajo.has(m.categoria)) continue
     out[m.categoria] = (out[m.categoria] || 0) - Number(m.importe)
   }
-  return out
+  const alquiler = Math.min(reembolsos, Math.max(0, (out['Alquiler'] || 0) * PARTE_PAREJA_ALQUILER))
+  if (alquiler) out['Alquiler'] -= alquiler
+  return Object.assign(out, { __reembolsoAlquiler: alquiler, __compartidos: reembolsos - alquiler })
 }
 
 export default function PresupuestoCard({ fijos, variables, movimientos }: { fijos: PresupuestoItem[]; variables: PresupuestoItem[]; movimientos: Mov[] }) {
   if (!movimientos.length) return null
   const gastado = gastadoPorPartida(movimientos, new Set(variables.map(v => v.nombre)))
+  const reembolsoAlquiler = gastado.__reembolsoAlquiler || 0
+  const compartidos = gastado.__compartidos || 0
   const nombreMes = new Date().toLocaleDateString('es-ES', { month: 'long' })
   const hoy = new Date()
   const avanceMes = hoy.getDate() / new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).getDate()
@@ -69,6 +82,12 @@ export default function PresupuestoCard({ fijos, variables, movimientos }: { fij
         {bloque('Fijos', fijos, true)}
         {bloque('Variables', variables, false)}
       </div>
+      {(reembolsoAlquiler > 0 || compartidos > 0) && (
+        <div style={{ fontSize: 11.5, color: 'var(--text3)', marginTop: 10, borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+          Te devolvieron €{eur(reembolsoAlquiler + compartidos)}: €{eur(reembolsoAlquiler)} de su parte del alquiler (ya descontada arriba)
+          {compartidos > 0 && <> y €{eur(compartidos)} de gastos compartidos, que reducen lo que gastas tú en el mes</>}.
+        </div>
+      )}
     </div>
   )
 }

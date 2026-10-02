@@ -77,7 +77,7 @@ export async function conciliarCobros() {
   const usadas = new Set<number>()
   let cobros = 0
   for (const m of movs || []) {
-    if (yaUsados.has(m.id) || m.clase === 'interno' || m.clase === 'personal') continue
+    if (yaUsados.has(m.id) || m.clase === 'interno' || m.clase === 'personal' || m.clase === 'reembolso') continue
     const texto = textoDe(m)
     const desde = new Date(new Date(m.fecha).getTime() - 150 * DIA).toISOString().slice(0, 10)
     const candidatas = disponibles

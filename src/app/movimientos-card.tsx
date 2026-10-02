@@ -16,7 +16,7 @@ type Filtro = 'todos' | 'sin_categoria' | 'ingresos' | 'trabajo'
 const eur = (n: number) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(n)
 const fechaCorta = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })
 const aCobrar = (f: FacturaMin) => Math.round(Number(f.importe) * (f.tipo_factura === 'dentro_ue' ? 1.06 : 1) * 100) / 100
-const ETIQUETA: Record<Clase, string> = { cobro: 'cobro', ingreso: 'ingreso', gasto: 'gasto', interno: 'traspaso', personal: 'personal' }
+const ETIQUETA: Record<Clase, string> = { cobro: 'cobro', ingreso: 'ingreso', gasto: 'gasto', interno: 'traspaso', personal: 'personal', reembolso: 'reembolso' }
 // "NRC 1006489961626TY071L079" → "NRC": la parte estable del nombre para una regla.
 const patronDe = (texto: string) => texto.replace(/[\s*]*\S*\d{4,}\S*$/, '').trim() || texto
 
@@ -53,7 +53,7 @@ export default function MovimientosCard({ cuentasBanco, version, onCambio }: { c
   const resumen = useMemo(() => {
     const delMes = movs.filter(m => m.fecha.startsWith(mes))
     const suma = (c: Clase) => delMes.filter(m => m.clase === c).reduce((s, m) => s + Number(m.importe), 0)
-    return { cobros: suma('cobro'), ingresos: suma('ingreso'), gastos: suma('gasto'), personal: suma('personal') }
+    return { cobros: suma('cobro'), ingresos: suma('ingreso'), gastos: suma('gasto'), reembolsos: suma('reembolso') }
   }, [movs, mes])
 
   const visibles = movs.filter(m =>
@@ -84,7 +84,7 @@ export default function MovimientosCard({ cuentasBanco, version, onCambio }: { c
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, marginBottom: 14 }}>
-        {[['Cobros de clientes', resumen.cobros, 'var(--green)'], ['Otros ingresos', resumen.ingresos, 'var(--text)'], ['Gastos', resumen.gastos, 'var(--text)'], ['Personal (no cuenta)', resumen.personal, 'var(--text3)']].map(([l, v, c]) => (
+        {[['Cobros de clientes', resumen.cobros, 'var(--green)'], ['Otros ingresos', resumen.ingresos, 'var(--text)'], ['Gastos', resumen.gastos, 'var(--text)'], ['Te devolvieron', resumen.reembolsos, 'var(--text2)']].map(([l, v, c]) => (
           <div key={l as string} style={{ background: 'var(--surface2)', borderRadius: 9, padding: '10px 12px' }}>
             <div style={{ fontSize: 10.5, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{l as string} · este mes</div>
             <div className="mono" style={{ fontSize: 15, marginTop: 4, color: c as string }}>{eur(v as number)}</div>
@@ -181,7 +181,7 @@ function EditorMovimiento({ m, partidas, facturas, onClose, onGuardado }: { m: M
           <label style={etiqueta}>Qué es</label>
           <select value={elegidas.length ? 'cobro' : clase} disabled={elegidas.length > 0} onChange={e => setClase(e.target.value as Clase)} style={campo}>
             {elegidas.length > 0 && <option value="cobro">Cobro de cliente</option>}
-            {CLASES.filter(c => c.value !== 'cobro' && (ingreso || c.value !== 'ingreso')).map(c => <option key={c.value} value={c.value}>{ingreso && c.value === 'gasto' ? 'Devolución de una compra' : c.label}</option>)}
+            {CLASES.filter(c => c.value !== 'cobro' && (ingreso || (c.value !== 'ingreso' && c.value !== 'reembolso'))).map(c => <option key={c.value} value={c.value}>{ingreso && c.value === 'gasto' ? 'Devolución de una compra' : c.label}</option>)}
           </select>
         </div>
 
