@@ -72,7 +72,6 @@ export async function sincronizarBancos() {
         }
         // Los pendientes (pagos con tarjeta sin contabilizar) cambian de id al
         // contabilizarse: se reemplazan enteros en cada sincronización.
-        await sb.from('movimientos').delete().eq('cuenta_uid', c.uid).eq('estado', 'PDNG').is('factura_id', null)
         // Algunos bancos siguen listando como pendiente un pago ya contabilizado:
         // se descarta si ya hay uno contabilizado igual (importe y ±3 días).
         const { data: recientes } = await sb.from('movimientos').select('fecha,importe').eq('cuenta_uid', c.uid).neq('estado', 'PDNG').gte('fecha', dia(new Date(Date.now() - 10 * 864e5)))
@@ -83,6 +82,13 @@ export async function sincronizarBancos() {
           libres.splice(i, 1)
           return false
         })
+        // Se borran los pendientes que el banco ya no lista y los no tocados a
+        // mano; uno clasificado a mano se conserva mientras siga pendiente
+        // (p. ej. un cobro rechazado que el banco aún no ha liberado).
+        const actuales = new Set(nuevos.map(p => p.id))
+        const { data: viejos } = await sb.from('movimientos').select('id,manual').eq('cuenta_uid', c.uid).eq('estado', 'PDNG')
+        const borrar = (viejos || []).filter(v => !v.manual || !actuales.has(v.id)).map(v => v.id)
+        if (borrar.length) await sb.from('movimientos').delete().in('id', borrar)
         if (nuevos.length) {
           const { error: e } = await sb.from('movimientos').upsert(nuevos.filter(f => f.fecha).map(f => ({ ...f, estado: 'PDNG' })))
           if (e) throw new Error(e.message)
