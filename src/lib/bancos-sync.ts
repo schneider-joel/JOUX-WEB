@@ -39,6 +39,19 @@ export async function sincronizarBancos() {
         await sb.from('bancos_cuentas').update({ saldos: balances, actualizado: ahora }).eq('uid', c.uid)
         const saldo = elegirSaldo(balances, c.tipo_saldo)
         if (c.cuenta_id && saldo) await sb.from('cuentas').update({ saldo: Number(saldo.balance_amount.amount) }).eq('id', c.cuenta_id)
+        // Cuenta con apartados (BBVA): el banco solo da el total contable y el
+        // disponible. El apartado de ahorro se calcula como lo que sobra, así el
+        // total siempre cuadra; los demás apartados (IRPF) se editan a mano.
+        const contable = balances.find(b => b.balance_type === 'CLBD')
+        if (c.cuenta_id && saldo && contable && saldo !== contable) {
+          const { data: hijas } = await sb.from('cuentas').select('id,tipo,saldo').eq('padre_id', c.cuenta_id)
+          const ahorro = (hijas || []).find(h => h.tipo === 'ahorro')
+          if (ahorro) {
+            const otras = (hijas || []).filter(h => h.id !== ahorro.id).reduce((t, h) => t + Number(h.saldo), 0)
+            const resto = Math.round((Number(contable.balance_amount.amount) - Number(saldo.balance_amount.amount) - otras) * 100) / 100
+            await sb.from('cuentas').update({ saldo: resto }).eq('id', ahorro.id)
+          }
+        }
 
         // Desde el último movimiento guardado (con margen) o los últimos 90 días.
         const { data: ultimo } = await sb.from('movimientos').select('fecha').eq('cuenta_uid', c.uid).order('fecha', { ascending: false }).limit(1).maybeSingle()
