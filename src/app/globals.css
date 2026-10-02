@@ -262,12 +262,12 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 }
 
 /* ---- Overview: cuentas en tarjetas y presupuesto ---- */
-.acct-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.acct-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; }
 .acct-tile { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; min-width: 0; }
 .acct-tile:hover { border-color: var(--border2); }
 .acct-tile-head { display: flex; align-items: center; gap: 8px; }
-.acct-tile-head .acct-avatar { width: 22px; height: 22px; font-size: 8.5px; border-radius: 6px; }
-.acct-logo { display: block; height: 11px; width: auto; filter: brightness(0) invert(1); opacity: 0.85; margin: 2px 0 4px; }
+.acct-tile-head .acct-avatar { width: 26px; height: 26px; font-size: 9px; border-radius: 28%; }
+.acct-app-icon { width: 26px; height: 26px; border-radius: 28%; flex-shrink: 0; object-fit: cover; }
 .acct-tile-grupo { font-size: 9px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.08em; line-height: 1.2; }
 .acct-tile-titulo { font-size: 12px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.25; }
 .acct-tile-monto { font-family: 'JetBrains Mono', monospace; font-size: 16px; font-weight: 500; letter-spacing: -0.3px; margin-top: 8px; }

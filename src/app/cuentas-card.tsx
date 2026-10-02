@@ -66,8 +66,8 @@ function describir(c: Cuenta, ctx: Ctx): Pick<Tile, 'linea' | 'chip' | 'progreso
 }
 
 const ETIQUETA: Record<string, string> = { operativa: 'Disponible', ahorro: 'Ahorros', irpf: 'IRPF', inversion: 'Inversión', variable: 'Variables' }
-// Logos de los bancos (public/bancos), en blanco sobre el tema oscuro.
-const LOGO: Record<string, string> = { bbva: '/bancos/bbva.png', revolut: '/bancos/revolut.png', wise: '/bancos/wise.png' }
+// Icono de la app de cada banco (de su ficha en el App Store, en public/bancos).
+const LOGO: Record<string, string> = { bbva: '/bancos/bbva-app.png', revolut: '/bancos/revolut-app.png', wise: '/bancos/wise-app.png' }
 
 const COLOR_ESTADO: Record<Estado, string> = { ok: 'var(--green)', aviso: 'var(--amber)', neutro: 'var(--text3)' }
 
@@ -113,21 +113,14 @@ export default function CuentasCard({ cuentas, aEuros, fijosMes, fijosPendientes
         {tiles.map(t => (
           <div key={t.key} className="acct-tile" title={[t.linea, ...(t.extra || []).map(e => `${e.nombre}: ${e.monto}`)].filter(Boolean).join('\n')}>
             <div className="acct-tile-head">
-              {LOGO[t.grupo.toLowerCase()] ? (
-                <div style={{ minWidth: 0 }}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={LOGO[t.grupo.toLowerCase()]} alt={t.grupo} className="acct-logo" />
-                  <div className="acct-tile-titulo">{t.titulo}</div>
-                </div>
-              ) : (
-                <>
-                  <div className="acct-avatar" style={{ background: `${t.color}22`, color: t.color, borderColor: `${t.color}55` }}>{t.grupo.slice(0, 2).toUpperCase()}</div>
-                  <div style={{ minWidth: 0 }}>
-                    <div className="acct-tile-grupo">{t.grupo}</div>
-                    <div className="acct-tile-titulo">{t.titulo}</div>
-                  </div>
-                </>
-              )}
+              {LOGO[t.grupo.toLowerCase()]
+                // eslint-disable-next-line @next/next/no-img-element
+                ? <img src={LOGO[t.grupo.toLowerCase()]} alt={t.grupo} className="acct-app-icon" />
+                : <div className="acct-avatar" style={{ background: `${t.color}22`, color: t.color, borderColor: `${t.color}55` }}>{t.grupo.slice(0, 2).toUpperCase()}</div>}
+              <div style={{ minWidth: 0 }}>
+                <div className="acct-tile-grupo">{t.grupo}</div>
+                <div className="acct-tile-titulo">{t.titulo}</div>
+              </div>
             </div>
             <div className="acct-tile-monto">{t.monto}</div>
             <div className="acct-tile-pie">
