@@ -9,7 +9,7 @@ import { supabaseServer } from '@/lib/supabase-server'
 const TABLAS_PERMITIDAS = new Set([
   'cuentas', 'crypto', 'facturas', 'presupuesto_fijos', 'presupuesto_variables',
   'configuracion', 'proyectos', 'dias_trabajados', 'patrimonio_snapshots',
-  'clientes_fiscales', 'compras', 'bancos_sesiones', 'bancos_cuentas', 'movimientos',
+  'clientes_fiscales', 'compras', 'bancos_sesiones', 'bancos_cuentas', 'movimientos', 'reglas_movimientos',
 ])
 
 export async function POST(req: NextRequest) {

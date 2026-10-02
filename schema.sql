@@ -537,3 +537,30 @@ CREATE INDEX IF NOT EXISTS movimientos_fecha_idx ON movimientos (fecha DESC);
 ALTER TABLE bancos_sesiones ENABLE ROW LEVEL SECURITY;
 ALTER TABLE bancos_cuentas ENABLE ROW LEVEL SECURITY;
 ALTER TABLE movimientos ENABLE ROW LEVEL SECURITY;
+
+-- MIGRACIÓN: clasificación y conciliación de movimientos bancarios
+-- (src/lib/movimientos.ts y src/lib/conciliar.ts, corre tras cada sync).
+-- clase: cobro | ingreso | interno | personal | gasto; categoria = partida del
+-- presupuesto; trabajo = gasto de la actividad (debe tener factura en
+-- Compras: compra_id); manual = clasificado a mano, las reglas no lo pisan;
+-- sin_factura_ok = descartado del aviso de "falta la factura".
+-- facturas.movimiento_id = el cobro del banco que la pagó (varias facturas
+-- pueden apuntar al mismo movimiento). reglas_movimientos = reglas del
+-- usuario (texto contenido → clase/categoría/trabajo), van antes que las
+-- reglas por defecto.
+ALTER TABLE movimientos ADD COLUMN IF NOT EXISTS clase TEXT;
+ALTER TABLE movimientos ADD COLUMN IF NOT EXISTS categoria TEXT;
+ALTER TABLE movimientos ADD COLUMN IF NOT EXISTS trabajo BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE movimientos ADD COLUMN IF NOT EXISTS compra_id BIGINT REFERENCES compras(id) ON DELETE SET NULL;
+ALTER TABLE movimientos ADD COLUMN IF NOT EXISTS manual BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE movimientos ADD COLUMN IF NOT EXISTS sin_factura_ok BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE facturas ADD COLUMN IF NOT EXISTS movimiento_id TEXT REFERENCES movimientos(id) ON DELETE SET NULL;
+CREATE TABLE IF NOT EXISTS reglas_movimientos (
+  id SERIAL PRIMARY KEY,
+  patron TEXT NOT NULL,
+  clase TEXT,
+  categoria TEXT,
+  trabajo BOOLEAN,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE reglas_movimientos ENABLE ROW LEVEL SECURITY;

@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
-import type { Compra } from '@/lib/supabase'
+import { useCallback, useEffect, useState } from 'react'
+import { supabase, type Compra } from '@/lib/supabase'
+import { comercio } from '@/lib/movimientos'
 
 const eur = (n: number) => new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
 const fmtFecha = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -15,8 +16,27 @@ const svg = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLine
 const IconArchivo = () => <svg {...svg}><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5" /></svg>
 const IconX = () => <svg {...svg}><path d="M6 6l12 12M18 6L6 18" /></svg>
 
+type Prefill = { movimientoId?: string; fecha: string; proveedor: string; total: string }
+type Cargo = { id: string; fecha: string; importe: number; contraparte: string | null; concepto: string | null; compra_id: number | null }
+
 export default function ComprasTab({ compras, reload }: { compras: Compra[]; reload: () => void }) {
-  const [modal, setModal] = useState(false)
+  const [modal, setModal] = useState<Prefill | true | false>(false)
+  // Cargos de trabajo del banco que todavía no tienen su factura en Compras.
+  const [sinFactura, setSinFactura] = useState<Cargo[]>([])
+  const cargarCargos = useCallback(async () => {
+    const { data } = await supabase.from('movimientos').select('id,fecha,importe,contraparte,concepto,compra_id').eq('trabajo', true).eq('sin_factura_ok', false).order('fecha', { ascending: false })
+    setSinFactura((data || []).filter((m: Cargo) => !m.compra_id && Number(m.importe) < 0))
+  }, [])
+  useEffect(() => { cargarCargos() }, [cargarCargos])
+  const marcar = async (m: Cargo, patch: Record<string, unknown>) => {
+    await supabase.from('movimientos').update({ ...patch, manual: true }).eq('id', m.id)
+    cargarCargos()
+  }
+  const trasGuardar = async () => {
+    setModal(false)
+    await fetch('/api/bancos/conciliar', { method: 'POST' }).catch(() => null)
+    reload(); cargarCargos()
+  }
   const ordenadas = [...compras].sort((a, b) => b.fecha.localeCompare(a.fecha))
   const grupos = new Map<string, Compra[]>()
   for (const c of ordenadas) {
@@ -31,6 +51,31 @@ export default function ComprasTab({ compras, reload }: { compras: Compra[]; rel
   }
 
   return (
+    <>
+    {sinFactura.length > 0 && (
+      <div className="card" style={{ marginBottom: 14, borderColor: 'var(--amber)' }}>
+        <div className="card-head">
+          <div>
+            <div className="card-title">Cargos de trabajo sin factura <span style={{ color: 'var(--text3)', fontWeight: 400 }}>· {sinFactura.length}</span></div>
+            <div className="card-kicker" style={{ marginTop: 2 }}>Salen en tu banco pero no tienen su factura en Compras: súbela para deducirla</div>
+          </div>
+        </div>
+        {sinFactura.map(m => (
+          <div key={m.id} className="row">
+            <div className="row-main">
+              <div className="row-title">{comercio(m)}</div>
+              <div className="row-sub">{fmtFecha(m.fecha)}</div>
+            </div>
+            <div className="row-side">
+              <span className="row-amount">€{eur(Math.abs(Number(m.importe)))}</span>
+              <button className="btn" onClick={() => setModal({ movimientoId: m.id, fecha: m.fecha, proveedor: comercio(m), total: Math.abs(Number(m.importe)).toFixed(2) })}>Añadir factura</button>
+              <button className="btn btn-ghost" title="Ya tiene su factura (p. ej. un pago en dos veces)" onClick={() => marcar(m, { sin_factura_ok: true })}>Ya la tengo</button>
+              <button className="btn btn-ghost" onClick={() => marcar(m, { trabajo: false })}>No es de trabajo</button>
+            </div>
+          </div>
+        ))}
+      </div>
+    )}
     <div className="card">
       <div className="card-head">
         <div className="card-title">Facturas de compra <span style={{ color: 'var(--text3)', fontWeight: 400 }}>· {compras.length}</span></div>
@@ -63,19 +108,20 @@ export default function ComprasTab({ compras, reload }: { compras: Compra[]; rel
           ))}
         </div>
       ))}
-      {modal && <ModalNuevaCompra onClose={() => setModal(false)} onSaved={() => { setModal(false); reload() }} />}
+      {modal && <ModalNuevaCompra inicial={modal === true ? undefined : modal} onClose={() => setModal(false)} onSaved={trasGuardar} />}
     </div>
+    </>
   )
 }
 
-function ModalNuevaCompra({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+function ModalNuevaCompra({ inicial, onClose, onSaved }: { inicial?: Prefill; onClose: () => void; onSaved: () => void }) {
   const [archivo, setArchivo] = useState<File | null>(null)
-  const [fecha, setFecha] = useState(hoy())
-  const [proveedor, setProveedor] = useState('')
+  const [fecha, setFecha] = useState(inicial?.fecha || hoy())
+  const [proveedor, setProveedor] = useState(inicial?.proveedor || '')
   const [concepto, setConcepto] = useState('')
   const [iva, setIva] = useState('21')
-  const [base, setBase] = useState('')
-  const [total, setTotal] = useState('')
+  const [base, setBase] = useState(inicial ? (Number(inicial.total) / 1.21).toFixed(2) : '')
+  const [total, setTotal] = useState(inicial?.total || '')
   const [deducible, setDeducible] = useState('100')
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState('')

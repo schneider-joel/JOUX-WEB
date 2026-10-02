@@ -2,15 +2,14 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { supabase, batchQuery, type Cuenta } from '@/lib/supabase'
+import MovimientosCard from './movimientos-card'
 
 type Sesion = { session_id: string; aspsp: string; valid_until: string | null; ultimo_sync: string | null; ultimo_error: string | null }
 type Saldo = { balance_type: string; name?: string; balance_amount: { amount: string; currency: string } }
 type CuentaBanco = { uid: string; session_id: string; aspsp: string; nombre: string | null; iban: string | null; moneda: string | null; cuenta_id: number | null; tipo_saldo: string | null; saldos: Saldo[] | null; actualizado: string | null }
-type Movimiento = { id: string; cuenta_uid: string; fecha: string; importe: number; moneda: string | null; contraparte: string | null; concepto: string | null; estado: string | null; factura_id: number | null }
 type Aspsp = { name: string; country: string; logo?: string; maximum_consent_validity?: number }
 
 const eur = (n: number, moneda = 'EUR') => new Intl.NumberFormat('es-ES', { style: 'currency', currency: moneda || 'EUR' }).format(n)
-const fecha = (d: string) => new Date(d.length === 10 ? d + 'T00:00:00' : d).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })
 const hace = (d: string) => {
   const min = Math.round((Date.now() - new Date(d).getTime()) / 60000)
   return min < 60 ? `hace ${min} min` : min < 1440 ? `hace ${Math.round(min / 60)} h` : `hace ${Math.round(min / 1440)} días`
@@ -18,34 +17,24 @@ const hace = (d: string) => {
 const NOMBRES_SALDO: Record<string, string> = { ITAV: 'disponible', CLAV: 'disponible', XPCD: 'previsto', CLBD: 'contable', ITBD: 'contable (intradía)', OPBD: 'apertura' }
 const DESTACADOS = /bbva|revolut|wise/i
 
-// El BBVA no manda contraparte en los pagos con tarjeta: el comercio va al
-// final del concepto ("PAGO CON TARJETA EN ... // PAGO CON TARJETA // COMERCIO").
-function describir(m: Movimiento): { titulo: string; detalle: string } {
-  const partes = (m.concepto || '').split(' // ').map(p => p.trim()).filter(Boolean)
-  if (m.contraparte) return { titulo: m.contraparte, detalle: partes[0] && partes[0].toLowerCase() !== m.contraparte.toLowerCase() ? partes[0] : '' }
-  if (partes.length > 1) return { titulo: partes[partes.length - 1], detalle: partes[0] }
-  return { titulo: partes[0] || 'Movimiento', detalle: '' }
-}
-
 const btn: React.CSSProperties = { background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 7, padding: '5px 10px', color: 'var(--text2)', fontSize: 12, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }
 const campo: React.CSSProperties = { background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 7, padding: '5px 8px', color: 'var(--text)', fontSize: 12, fontFamily: 'Inter, sans-serif', outline: 'none' }
 
 export default function BancosTab({ cuentas, mensaje, reload }: { cuentas: Cuenta[]; mensaje: { ok?: boolean; error?: string } | null; reload: () => void }) {
   const [sesiones, setSesiones] = useState<Sesion[]>([])
   const [cuentasBanco, setCuentasBanco] = useState<CuentaBanco[]>([])
-  const [movs, setMovs] = useState<Movimiento[]>([])
+  const [version, setVersion] = useState(0)
   const [aspsps, setAspsps] = useState<Aspsp[] | null>(null)
   const [buscar, setBuscar] = useState('')
   const [estado, setEstado] = useState<string>('')
   const [cargando, setCargando] = useState(true)
 
   const cargar = useCallback(async () => {
-    const [s, c, m] = await batchQuery([
+    const [s, c] = await batchQuery([
       supabase.from('bancos_sesiones').select('session_id,aspsp,valid_until,ultimo_sync,ultimo_error').order('created_at'),
       supabase.from('bancos_cuentas').select('uid,session_id,aspsp,nombre,iban,moneda,cuenta_id,tipo_saldo,saldos,actualizado'),
-      supabase.from('movimientos').select('id,cuenta_uid,fecha,importe,moneda,contraparte,concepto,estado,factura_id').order('fecha', { ascending: false }).limit(150),
     ])
-    setSesiones(s.data || []); setCuentasBanco(c.data || []); setMovs(m.data || []); setCargando(false)
+    setSesiones(s.data || []); setCuentasBanco(c.data || []); setCargando(false); setVersion(v => v + 1)
   }, [])
   useEffect(() => { cargar() }, [cargar])
 
@@ -66,7 +55,7 @@ export default function BancosTab({ cuentas, mensaje, reload }: { cuentas: Cuent
   const sincronizar = async () => {
     setEstado('Sincronizando…')
     const r = await fetch('/api/bancos/sincronizar', { method: 'POST' }).then(r => r.json())
-    setEstado(r.error ? `Error: ${r.error}` : `${r.cuentas} cuentas y ${r.movimientos} movimientos leídos${r.errores?.length ? ` · ${r.errores.join(' · ')}` : ''}`)
+    setEstado(r.error ? `Error: ${r.error}` : `${r.cuentas} cuentas y ${r.movimientos} movimientos leídos${r.cobros ? ` · ${r.cobros} cobros enlazados con facturas` : ''}${r.errores?.length ? ` · ${r.errores.join(' · ')}` : ''}`)
     await cargar(); reload()
   }
 
@@ -81,10 +70,7 @@ export default function BancosTab({ cuentas, mensaje, reload }: { cuentas: Cuent
     cargar()
   }
 
-  const nombreCuenta = (uid: string) => {
-    const c = cuentasBanco.find(x => x.uid === uid)
-    return c ? `${c.aspsp}${c.iban ? ` ·${c.iban.slice(-4)}` : ''}` : ''
-  }
+
   const filtrados = (aspsps || []).filter(a => a.name.toLowerCase().includes(buscar.toLowerCase()))
     .sort((a, b) => Number(DESTACADOS.test(b.name)) - Number(DESTACADOS.test(a.name)) || a.name.localeCompare(b.name))
 
@@ -180,27 +166,7 @@ export default function BancosTab({ cuentas, mensaje, reload }: { cuentas: Cuent
         })}
       </div>
 
-      {movs.length > 0 && (
-        <div className="card">
-          <div className="card-head">
-            <div className="card-title">Movimientos <span style={{ color: 'var(--text3)', fontWeight: 400 }}>· últimos {movs.length}</span></div>
-          </div>
-          {movs.map(m => { const d = describir(m); return (
-            <div key={m.id} className="row">
-              <div style={{ width: 54, fontSize: 11.5, color: 'var(--text3)', flexShrink: 0 }}>{fecha(m.fecha)}</div>
-              <div className="row-main">
-                <div className="row-title">{d.titulo}</div>
-                <div className="row-sub">{nombreCuenta(m.cuenta_uid)}{d.detalle ? ` · ${d.detalle.toLowerCase()}` : ''}</div>
-              </div>
-              <div className="row-side">
-                {m.estado === 'PDNG' && <span className="pill pill-amber" title="Pago con tarjeta todavía sin contabilizar por el banco">pendiente</span>}
-                {m.factura_id && <a className="pill pill-green" href={`/invoice/${m.factura_id}`} target="_blank" rel="noopener noreferrer">factura</a>}
-                <span className="row-amount" style={{ color: Number(m.importe) > 0 ? 'var(--green)' : 'var(--text2)' }}>{Number(m.importe) > 0 ? '+' : ''}{eur(Number(m.importe), m.moneda || 'EUR')}</span>
-              </div>
-            </div>
-          ) })}
-        </div>
-      )}
+      <MovimientosCard cuentasBanco={cuentasBanco} version={version} onCambio={reload} />
     </div>
   )
 }

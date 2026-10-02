@@ -11,10 +11,21 @@ export type PagoImpuestos = { anio: number; q: number; plazo: string; cerrado: b
 type Linea = { texto: string; ok?: boolean; progreso?: number }
 
 // Cada cuenta según su función (columna tipo): qué cubre su saldo.
-function lineaDe(c: Cuenta, ctx: { fijosMes: number; variablesMes: number; pago: PagoImpuestos | null; porCobrar: number }): Linea {
+function lineaDe(c: Cuenta, ctx: { fijosMes: number; fijosPendientes: number | null; variablesMes: number; pago: PagoImpuestos | null; porCobrar: number }): Linea {
   const saldo = Number(c.saldo)
   switch (c.tipo) {
     case 'operativa': {
+      // Con el banco conectado: lo que queda por pagar de fijos este mes.
+      if (ctx.fijosPendientes !== null) {
+        const falta = ctx.fijosPendientes - saldo
+        return {
+          texto: ctx.fijosPendientes <= 0.5 ? `Fijos del mes pagados (€${fmt(ctx.fijosMes)})`
+            : falta <= 0 ? `Cubre los fijos que quedan por pagar (€${fmt(ctx.fijosPendientes)})`
+            : `Faltan €${fmt2(falta)} para los fijos que quedan (€${fmt(ctx.fijosPendientes)} de €${fmt(ctx.fijosMes)})${ctx.porCobrar > 0 ? ` · por cobrar €${fmt(ctx.porCobrar)}` : ''}`,
+          ok: falta <= 0,
+          progreso: ctx.fijosPendientes > 0 ? saldo / ctx.fijosPendientes : 1,
+        }
+      }
       const falta = ctx.fijosMes - saldo
       return {
         texto: falta <= 0
@@ -58,16 +69,17 @@ function lineaDe(c: Cuenta, ctx: { fijosMes: number; variablesMes: number; pago:
 
 const etiqueta: Record<string, string> = { operativa: 'Disponible', ahorro: 'Ahorros', irpf: 'IRPF', inversion: 'Inversión', variable: 'Variables' }
 
-export default function CuentasCard({ cuentas, aEuros, fijosMes, variablesMes, pago, porCobrar, onEdit }: {
+export default function CuentasCard({ cuentas, aEuros, fijosMes, fijosPendientes = null, variablesMes, pago, porCobrar, onEdit }: {
   cuentas: Cuenta[]
   aEuros: (c: Cuenta) => number
   fijosMes: number
+  fijosPendientes?: number | null
   variablesMes: number
   pago: PagoImpuestos | null
   porCobrar: number
   onEdit: () => void
 }) {
-  const ctx = { fijosMes, variablesMes, pago, porCobrar }
+  const ctx = { fijosMes, fijosPendientes, variablesMes, pago, porCobrar }
   const principales = cuentas.filter(c => !c.padre_id)
   const hijas = (id: number) => cuentas.filter(c => c.padre_id === id).sort((a, b) => a.orden - b.orden)
 

@@ -1,4 +1,5 @@
 import { supabaseServer as sb } from '@/lib/supabase-server'
+import { conciliarTodo } from '@/lib/conciliar'
 import { eb, idMovimiento, type CuentaEB, type MovimientoEB, type SaldoEB } from '@/lib/enablebanking'
 
 // Orden de preferencia del saldo que actualiza la cuenta de JOUX Hub: el
@@ -72,8 +73,18 @@ export async function sincronizarBancos() {
         // Los pendientes (pagos con tarjeta sin contabilizar) cambian de id al
         // contabilizarse: se reemplazan enteros en cada sincronización.
         await sb.from('movimientos').delete().eq('cuenta_uid', c.uid).eq('estado', 'PDNG').is('factura_id', null)
-        if (pendientes.length) {
-          const { error: e } = await sb.from('movimientos').upsert(pendientes.filter(f => f.fecha).map(f => ({ ...f, estado: 'PDNG' })))
+        // Algunos bancos siguen listando como pendiente un pago ya contabilizado:
+        // se descarta si ya hay uno contabilizado igual (importe y ±3 días).
+        const { data: recientes } = await sb.from('movimientos').select('fecha,importe').eq('cuenta_uid', c.uid).neq('estado', 'PDNG').gte('fecha', dia(new Date(Date.now() - 10 * 864e5)))
+        const libres = [...(recientes || [])]
+        const nuevos = pendientes.filter(p => {
+          const i = libres.findIndex(r => Number(r.importe) === p.importe && Math.abs(new Date(r.fecha).getTime() - new Date(p.fecha).getTime()) <= 3 * 864e5)
+          if (i === -1) return true
+          libres.splice(i, 1)
+          return false
+        })
+        if (nuevos.length) {
+          const { error: e } = await sb.from('movimientos').upsert(nuevos.filter(f => f.fecha).map(f => ({ ...f, estado: 'PDNG' })))
           if (e) throw new Error(e.message)
         }
         resumen.cuentas++
@@ -85,5 +96,6 @@ export async function sincronizarBancos() {
     }
     await sb.from('bancos_sesiones').update({ ultimo_sync: ahora, ultimo_error: error }).eq('session_id', s.session_id)
   }
-  return resumen
+  // Clasifica lo nuevo y lo cruza con facturas de venta y de compra.
+  return { ...resumen, ...(await conciliarTodo()) }
 }

@@ -5,6 +5,7 @@ import ComprasTab from './compras-tab'
 import ImpuestosTab, { proximoPago } from './impuestos-tab'
 import CuentasCard from './cuentas-card'
 import BancosTab from './bancos-tab'
+import PresupuestoCard, { gastadoPorPartida } from './presupuesto-card'
 import { PAISES, PaisFiscal, detectarPais, tipoFacturaDePais } from '@/lib/clientes'
 import { GrupoTimesheet, grupoDeCliente, grupoDeKey, gruposTimesheet, linkPublico, tipoLegacy } from '@/lib/timesheets'
 import { supabase, batchQuery, Compra, Cuenta, Crypto, Factura, PresupuestoItem, Proyecto, DiaTrabajado, PatrimonioSnapshot, ClienteFiscal } from '@/lib/supabase'
@@ -182,6 +183,7 @@ export default function Home() {
   const [crypto, setCrypto] = useState<Crypto[]>([])
   const [facturas, setFacturas] = useState<Factura[]>([])
   const [fijos, setFijos] = useState<PresupuestoItem[]>([])
+  const [movsBanco, setMovsBanco] = useState<{ fecha: string; importe: number; categoria: string | null; clase: string | null; trabajo?: boolean }[]>([])
   const [variables, setVariables] = useState<PresupuestoItem[]>([])
   const [proyectos, setProyectos] = useState<Proyecto[]>([])
   const [dias, setDias] = useState<DiaTrabajado[]>([])
@@ -197,7 +199,7 @@ export default function Home() {
   const [lastUpdated, setLastUpdated] = useState<string>('')
 
   const loadData = useCallback(async () => {
-    const [c, cr, f, fi, v, cfg, pr, di, sn, cf, co] = await batchQuery([
+    const [c, cr, f, fi, v, cfg, pr, di, sn, cf, co, mv] = await batchQuery([
       supabase.from('cuentas').select('*').order('orden'),
       supabase.from('crypto').select('*'),
       supabase.from('facturas').select('*').order('fecha'),
@@ -209,6 +211,7 @@ export default function Home() {
       supabase.from('patrimonio_snapshots').select('*').order('fecha'),
       supabase.from('clientes_fiscales').select('*').order('cliente'),
       supabase.from('compras').select('*').order('fecha'),
+      supabase.from('movimientos').select('fecha,importe,categoria,clase,trabajo').order('fecha', { ascending: false }).limit(800),
     ])
     if (c.data) setCuentas(c.data)
     if (cr.data) setCrypto(cr.data)
@@ -220,6 +223,7 @@ export default function Home() {
     if (sn.data) setSnapshots(sn.data)
     if (cf.data) setClientesFiscales(cf.data)
     if (co.data) setCompras(co.data)
+    if (mv.data) setMovsBanco(mv.data)
     if (cfg.data) {
       const mes = cfg.data.find((x: any) => x.clave === 'mes_actual')?.valor
       const pt = cfg.data.find((x: any) => x.clave === 'presupuesto_total')?.valor
@@ -510,8 +514,11 @@ export default function Home() {
 
               <CuentasCard cuentas={cuentas} aEuros={aEuros} fijosMes={fijos.reduce((t, i) => t + Number(i.limite), 0)}
                 variablesMes={variables.reduce((t, i) => t + Number(i.limite), 0)} pago={proximoPago(facturasFiscales, compras, cuotaAutonomo)}
-                porCobrar={totalPendiente} onEdit={() => setModal({ type: 'editCuentas' })} />
+                porCobrar={totalPendiente} onEdit={() => setModal({ type: 'editCuentas' })}
+                fijosPendientes={movsBanco.length ? (() => { const g = gastadoPorPartida(movsBanco); return fijos.reduce((t, i) => t + Math.max(0, Number(i.limite) - (g[i.nombre] || 0)), 0) })() : null} />
             </div>
+
+            <PresupuestoCard fijos={fijos} variables={variables} movimientos={movsBanco} />
 
             <div className="dash-grid-2">
               <div className="card">
