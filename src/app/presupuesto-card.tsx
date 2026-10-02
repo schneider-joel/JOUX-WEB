@@ -48,40 +48,67 @@ export function gastadoPorPartida(movs: Mov[], sinTrabajo: Set<string> = new Set
   return Object.assign(out, { __reembolsoAlquiler: alquiler, __compartidos: reembolsos - alquiler })
 }
 
+function Anillo({ pct, color }: { pct: number; color: string }) {
+  const r = 26, c = 2 * Math.PI * r
+  return (
+    <svg width="64" height="64" viewBox="0 0 64 64" style={{ flexShrink: 0 }}>
+      <circle cx="32" cy="32" r={r} fill="none" stroke="var(--surface3)" strokeWidth="6" />
+      <circle cx="32" cy="32" r={r} fill="none" stroke={color} strokeWidth="6" strokeLinecap="round"
+        strokeDasharray={`${Math.min(1, pct) * c} ${c}`} transform="rotate(-90 32 32)" />
+      <text x="32" y="36" textAnchor="middle" fontSize="13" fontWeight="600" fill="var(--text)" fontFamily="JetBrains Mono, monospace">{Math.round(pct * 100)}%</text>
+    </svg>
+  )
+}
+
 export default function PresupuestoCard({ fijos, variables, movimientos, compartidos = null }: { fijos: PresupuestoItem[]; variables: PresupuestoItem[]; movimientos: Mov[]; compartidos?: GastoCompartido[] | null }) {
   if (!movimientos.length) return null
   const gastado = gastadoPorPartida(movimientos, new Set(variables.map(v => v.nombre)), undefined, compartidos)
-  const reembolsoAlquiler = gastado.__reembolsoAlquiler || 0
-  const devueltos = gastado.__compartidos || 0
   const parteSuya = gastado.__parteSuya || 0
-  const nombreMes = new Date().toLocaleDateString('es-ES', { month: 'long' })
   const hoy = new Date()
-  const avanceMes = hoy.getDate() / new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).getDate()
+  const diasMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).getDate()
+  const avanceMes = hoy.getDate() / diasMes
+  const nombreMes = hoy.toLocaleDateString('es-ES', { month: 'long' })
 
   const bloque = (titulo: string, items: PresupuestoItem[], esFijo: boolean) => {
     const total = items.reduce((s, i) => s + Number(i.limite), 0)
-    const usado = items.reduce((s, i) => s + (gastado[i.nombre] || 0), 0)
+    const usado = items.reduce((s, i) => s + Math.max(0, gastado[i.nombre] || 0), 0)
+    const pct = total > 0 ? usado / total : 0
+    // Variables: comparado con lo que llevas de mes. Fijos: lo que falta pagar.
+    const estado = esFijo
+      ? { color: pct >= 0.999 ? 'var(--green)' : 'var(--accent)', texto: pct >= 0.999 ? 'Todo pagado' : `Quedan €${eur(Math.max(0, total - usado))} por pagar` }
+      : pct > avanceMes + 0.1
+        ? { color: 'var(--amber)', texto: `Por encima del ritmo (día ${hoy.getDate()} de ${diasMes})` }
+        : { color: 'var(--green)', texto: `Vas bien · quedan €${eur(Math.max(0, total - usado))}` }
     return (
-      <div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
-          <span>{titulo}</span><span className="mono">€{eur(usado)} / €{eur(total)}</span>
+      <div className="presu-bloque">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 14 }}>
+          <Anillo pct={pct} color={estado.color} />
+          <div style={{ minWidth: 0 }}>
+            <div className="card-kicker">{titulo}</div>
+            <div className="mono" style={{ fontSize: 18, marginTop: 2 }}>€{eur(usado)} <span style={{ color: 'var(--text3)', fontSize: 13 }}>/ €{eur(total)}</span></div>
+            <div style={{ fontSize: 11.5, color: estado.color, marginTop: 2 }}>{estado.texto}</div>
+          </div>
         </div>
         {items.map(i => {
           const g = gastado[i.nombre] || 0
           const lim = Number(i.limite)
-          const pct = lim > 0 ? g / lim : 0
-          // Variables: ámbar si vas por encima del ritmo del mes; rojo si te pasaste.
-          const color = pct > 1.001 ? 'var(--red)' : !esFijo && pct > avanceMes + 0.15 ? 'var(--amber)' : esFijo && pct >= 0.999 ? 'var(--green)' : 'var(--accent)'
+          const p = lim > 0 ? g / lim : 0
+          const color = p > 1.001 ? 'var(--red)' : esFijo ? (p >= 0.999 ? 'var(--green)' : 'var(--accent)') : p > avanceMes + 0.15 ? 'var(--amber)' : 'var(--accent)'
           return (
-            <div key={i.id} style={{ marginBottom: 9 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5 }}>
-                <span>{i.nombre}</span>
-                <span className="mono" style={{ color: pct > 1.001 ? 'var(--red)' : 'var(--text2)' }}>
-                  €{eur(g)} <span style={{ color: 'var(--text3)' }}>/ €{eur(lim)}</span>
-                  {esFijo && pct >= 0.999 && ' ✓'}
+            <div key={i.id} className="presu-fila">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
+                  <i style={{ width: 6, height: 6, borderRadius: 3, background: g > 0 ? color : 'var(--surface3)', flexShrink: 0 }} />
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{i.nombre}</span>
+                </span>
+                <span className="mono" style={{ fontSize: 11.5, color: p > 1.001 ? 'var(--red)' : 'var(--text2)', flexShrink: 0 }}>
+                  €{eur(g)} <span style={{ color: 'var(--text3)' }}>/ {eur(lim)}</span>{esFijo && p >= 0.999 ? ' ✓' : ''}
                 </span>
               </div>
-              <div className="acct-bar-track"><div className="acct-bar-fill" style={{ width: `${Math.min(100, Math.max(g > 0 ? 2 : 0, pct * 100))}%`, background: color }} /></div>
+              <div className="presu-barra">
+                <div style={{ width: `${Math.min(100, Math.max(g > 0 ? 3 : 0, p * 100))}%`, background: color }} />
+                {!esFijo && <span style={{ left: `${avanceMes * 100}%` }} title="Ritmo del mes" />}
+              </div>
             </div>
           )
         })}
@@ -90,26 +117,20 @@ export default function PresupuestoCard({ fijos, variables, movimientos, compart
   }
 
   return (
-    <div className="card" style={{ marginBottom: 14 }}>
+    <div className="card card-fill">
       <div className="card-head">
         <div>
           <div className="card-title">Presupuesto de {nombreMes}</div>
-          <div className="card-kicker" style={{ marginTop: 2 }}>Calculado solo con tus movimientos del banco · clasifícalos en Bancos</div>
+          <div className="card-kicker" style={{ marginTop: 2 }}>Desde tus movimientos del banco · día {hoy.getDate()} de {diasMes}</div>
         </div>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 24 }}>
+      <div className="presu-grid">
         {bloque('Fijos', fijos, true)}
         {bloque('Variables', variables, false)}
       </div>
       {parteSuya > 0 && (
-        <div style={{ fontSize: 11.5, color: 'var(--text3)', marginTop: 10, borderTop: '1px solid var(--border)', paddingTop: 10 }}>
-          Cada partida cuenta solo tu parte: €{eur(parteSuya)} de lo que pagaste le corresponde a Sofía (según Compartidos).
-        </div>
-      )}
-      {!compartidos && (reembolsoAlquiler > 0 || devueltos > 0) && (
-        <div style={{ fontSize: 11.5, color: 'var(--text3)', marginTop: 10, borderTop: '1px solid var(--border)', paddingTop: 10 }}>
-          Te devolvieron €{eur(reembolsoAlquiler + devueltos)}: €{eur(reembolsoAlquiler)} de su parte del alquiler (ya descontada arriba)
-          {devueltos > 0 && <> y €{eur(devueltos)} de gastos compartidos, que reducen lo que gastas tú en el mes</>}.
+        <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 12 }}>
+          Cada partida cuenta solo tu parte: €{eur(parteSuya)} de lo que pagaste le corresponde a Sofía (Compartidos).
         </div>
       )}
     </div>

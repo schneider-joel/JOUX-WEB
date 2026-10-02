@@ -73,7 +73,11 @@ function useChartSize() {
 
 function PatrimonioChart({ snapshots, actual }: { snapshots: PatrimonioSnapshot[], actual: number }) {
   const { ref, w: W, h: H } = useChartSize()
-  const meses = ultimosMeses(12)
+  // Solo los meses con historial (mínimo 4), para que con pocos datos no
+  // quede un gráfico enorme y vacío.
+  const primero = snapshots.reduce((m, s) => (s.fecha.slice(0, 7) < m ? s.fecha.slice(0, 7) : m), hoyLocal().slice(0, 7))
+  const desdePrimero = ultimosMeses(12).filter(m => m >= primero).length
+  const meses = ultimosMeses(Math.max(4, desdePrimero))
   const mesActual = meses[meses.length - 1]
   const porMes = new Map<string, number>()
   for (const s of [...snapshots].sort((a, b) => a.fecha.localeCompare(b.fecha))) porMes.set(s.fecha.slice(0, 7), Number(s.total))
@@ -94,7 +98,7 @@ function PatrimonioChart({ snapshots, actual }: { snapshots: PatrimonioSnapshot[
   const last = puntos[puntos.length - 1]
 
   return (
-    <div className="chart-wrap" ref={ref}>
+    <div className="chart-wrap chart-compacto" ref={ref}>
       <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H}>
         <defs>
           <linearGradient id="pgrad" x1="0" y1="0" x2="0" y2="1">
@@ -507,28 +511,42 @@ export default function Home() {
               </div>
             </div>
 
+            <CuentasCard cuentas={cuentas} aEuros={aEuros} fijosMes={fijos.reduce((t, i) => t + Number(i.limite), 0)}
+              variablesMes={variables.reduce((t, i) => t + Number(i.limite), 0)} pago={proximoPago(facturasFiscales, compras, cuotaAutonomo)}
+              porCobrar={totalPendiente} onEdit={() => setModal({ type: 'editCuentas' })}
+              fijosPendientes={movsBanco.length ? (() => { const g = gastadoPorPartida(movsBanco, undefined, undefined, compartidos); return fijos.reduce((t, i) => t + Math.max(0, Number(i.limite) - (g[i.nombre] || 0)), 0) })() : null} />
+
             <div className="dash-grid">
-              <div className="card card-fill">
+              <PresupuestoCard fijos={fijos} variables={variables} movimientos={movsBanco} compartidos={compartidos} />
+              <div className="card">
                 <div className="card-head">
                   <div>
-                    <div className="card-title">Evolución del patrimonio</div>
-                    <div className="card-kicker" style={{ marginTop: 2 }}>Últimos 12 meses · un punto por mes</div>
+                    <div className="card-title">Patrimonio</div>
+                    <div className="card-kicker" style={{ marginTop: 2 }}>Evolución mensual</div>
                   </div>
-                  <div className="chart-legend"><span><i style={{ background: '#fb923c' }} />Patrimonio</span></div>
                 </div>
+                <div className="mono" style={{ fontSize: 22, letterSpacing: -0.5 }}>€{fmt(totalPatrimonio)}</div>
+                {deltaMes !== null && (
+                  <div className={`stat-delta ${deltaMes > 0 ? 'up' : deltaMes < 0 ? 'down' : 'flat'}`} style={{ marginTop: 2, marginBottom: 8 }}>
+                    {deltaMes > 0 ? '▲' : deltaMes < 0 ? '▼' : '•'} {deltaMes >= 0 ? '+' : '−'}€{fmt(Math.abs(deltaMes))} vs mes anterior
+                  </div>
+                )}
                 <PatrimonioChart snapshots={snapshots} actual={totalPatrimonio} />
-                {snapshots.filter(s => s.fecha.slice(0, 7) !== mesActualKey).length === 0 && (
-                  <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 8 }}>El historial se registra solo: cada día que abrís el hub se guarda un snapshot y el gráfico se va completando mes a mes.</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+                  {([['Liquidez', totalLiquidez, 'var(--green)'], ['Crypto', totalCrypto, 'var(--purple)'], ['Por cobrar', totalPendiente, 'var(--amber)']] as [string, number, string][]).map(([n, v, c]) => (
+                    <div key={n} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                      <i style={{ width: 6, height: 6, borderRadius: 3, background: c }} />
+                      <span style={{ flex: 1, color: 'var(--text2)' }}>{n}</span>
+                      <span className="mono" style={{ color: 'var(--text)' }}>€{fmt(v)}</span>
+                      <span className="mono" style={{ width: 38, textAlign: 'right', color: 'var(--text3)', fontSize: 11 }}>{totalPatrimonio > 0 ? Math.round(v / (totalPatrimonio + totalPendiente) * 100) : 0}%</span>
+                    </div>
+                  ))}
+                </div>
+                {snapshots.filter(s => s.fecha.slice(0, 7) !== mesActualKey).length < 2 && (
+                  <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 8 }}>Se guarda un punto cada día que abres el hub; el gráfico se completa mes a mes.</div>
                 )}
               </div>
-
-              <CuentasCard cuentas={cuentas} aEuros={aEuros} fijosMes={fijos.reduce((t, i) => t + Number(i.limite), 0)}
-                variablesMes={variables.reduce((t, i) => t + Number(i.limite), 0)} pago={proximoPago(facturasFiscales, compras, cuotaAutonomo)}
-                porCobrar={totalPendiente} onEdit={() => setModal({ type: 'editCuentas' })}
-                fijosPendientes={movsBanco.length ? (() => { const g = gastadoPorPartida(movsBanco, undefined, undefined, compartidos); return fijos.reduce((t, i) => t + Math.max(0, Number(i.limite) - (g[i.nombre] || 0)), 0) })() : null} />
             </div>
-
-            <PresupuestoCard fijos={fijos} variables={variables} movimientos={movsBanco} compartidos={compartidos} />
 
             <div className="dash-grid-2">
               <div className="card">

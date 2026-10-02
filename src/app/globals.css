@@ -260,3 +260,26 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
   .row-amount { font-size: 12px; }
   .chart-wrap { height: 160px; }
 }
+
+/* ---- Overview: cuentas en tarjetas y presupuesto ---- */
+.acct-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); gap: 10px; }
+.acct-tile { background: var(--surface2); border: 1px solid var(--border); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; min-width: 0; }
+.acct-tile:hover { border-color: var(--border2); }
+.acct-tile-head { display: flex; align-items: center; gap: 10px; }
+.acct-tile-head .acct-avatar { width: 30px; height: 30px; font-size: 10px; }
+.acct-tile-grupo { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.08em; }
+.acct-tile-titulo { font-size: 13px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.acct-tile-monto { font-family: 'JetBrains Mono', monospace; font-size: 20px; font-weight: 500; letter-spacing: -0.4px; margin-top: 12px; }
+.acct-tile-linea { font-size: 11px; color: var(--text3); margin-top: 3px; line-height: 1.4; min-height: 15px; }
+.acct-tile-pie { display: flex; align-items: center; gap: 8px; margin-top: auto; padding-top: 10px; min-height: 28px; }
+.acct-chip { font-size: 10px; padding: 3px 8px; border-radius: 20px; border: 1px solid var(--border); white-space: nowrap; margin-left: auto; }
+.presu-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+.presu-fila { padding: 6px 0; font-size: 12.5px; }
+.presu-barra { position: relative; height: 3px; border-radius: 2px; background: var(--surface3); margin-top: 6px; }
+.presu-barra > div { height: 100%; border-radius: 2px; transition: width 0.4s ease; }
+.presu-barra > span { position: absolute; top: -3px; width: 1px; height: 9px; background: var(--text3); opacity: 0.6; }
+.chart-compacto { height: 150px; min-height: 150px; }
+@media (max-width: 860px) {
+  .presu-grid { grid-template-columns: 1fr; gap: 18px; }
+  .acct-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+}
