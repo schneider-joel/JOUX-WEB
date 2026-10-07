@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import ComprasTab from './compras-tab'
-import ImpuestosTab, { proximoPago } from './impuestos-tab'
+import ImpuestosTab, { proximoPago, claveReal, type Reales } from './impuestos-tab'
 import CuentasCard from './cuentas-card'
 import BancosTab from './bancos-tab'
 import CompartidosVista from './compartidos-vista'
@@ -199,6 +199,7 @@ export default function Home() {
   const [clientesFiscales, setClientesFiscales] = useState<ClienteFiscal[]>([])
   const [compras, setCompras] = useState<Compra[]>([])
   const [cuotaAutonomo, setCuotaAutonomo] = useState(0)
+  const [impuestosReales, setImpuestosReales] = useState<Reales>({})
   const [snapshots, setSnapshots] = useState<PatrimonioSnapshot[]>([])
   const [ethPrice, setEthPrice] = useState<number>(2100)
   const [usdToEur, setUsdToEur] = useState<number>(0.92)
@@ -241,6 +242,12 @@ export default function Home() {
       const pt = cfg.data.find((x: any) => x.clave === 'presupuesto_total')?.valor
       const cuota = cfg.data.find((x: any) => x.clave === 'cuota_autonomo_mensual')?.valor
       if (cuota) setCuotaAutonomo(Number(cuota))
+      const reales: Reales = {}
+      for (const x of cfg.data as { clave: string; valor: string }[]) {
+        const m = x.clave.match(/^impuesto_real_(\d{4})_(\d)$/)
+        if (m) try { reales[`${m[1]}-${m[2]}`] = JSON.parse(x.valor) } catch {}
+      }
+      setImpuestosReales(reales)
       if (mes) setMesActual(mes)
       if (pt) setPresupuestoTotal(Number(pt))
     }
@@ -512,7 +519,7 @@ export default function Home() {
             </div>
 
             <CuentasCard cuentas={cuentas} aEuros={aEuros} fijosMes={fijos.reduce((t, i) => t + Number(i.limite), 0)}
-              variablesMes={variables.reduce((t, i) => t + Number(i.limite), 0)} pago={proximoPago(facturasFiscales, compras, cuotaAutonomo)}
+              variablesMes={variables.reduce((t, i) => t + Number(i.limite), 0)} pago={proximoPago(facturasFiscales, compras, cuotaAutonomo, impuestosReales)}
               porCobrar={totalPendiente} onEdit={() => setModal({ type: 'editCuentas' })}
               fijosPendientes={movsBanco.length ? (() => { const g = gastadoPorPartida(movsBanco, undefined, undefined, compartidos); return fijos.reduce((t, i) => t + Math.max(0, Number(i.limite) - (g[i.nombre] || 0)), 0) })() : null} />
 
@@ -709,6 +716,9 @@ export default function Home() {
           <ImpuestosTab facturas={facturasFiscales} compras={compras} cuotaMensual={cuotaAutonomo} onSaveCuota={async n => {
             await supabase.from('configuracion').upsert({ clave: 'cuota_autonomo_mensual', valor: String(n) })
             setCuotaAutonomo(n)
+          }} reales={impuestosReales} onSaveReal={async (anio, q, valor) => {
+            await supabase.from('configuracion').upsert({ clave: claveReal(anio, q), valor: JSON.stringify(valor) })
+            setImpuestosReales(prev => ({ ...prev, [`${anio}-${q}`]: valor }))
           }} />
         )}
 

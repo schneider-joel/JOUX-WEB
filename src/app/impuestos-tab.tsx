@@ -19,12 +19,18 @@ type Trimestre = {
   rendimientoAcum: number; retencionesAcum: number; irpf: number
   ivaRep: number; ivaSop: number; iva: number
   estado: 'cerrado' | 'en curso' | 'futuro'
+  declarado: boolean
 }
+
+// Importes que presentó el gestor, por trimestre ("2026-3"). Sustituyen a la
+// estimación y cuentan como pagos previos en el 130 de los siguientes.
+export type Reales = Record<string, { irpf?: number; iva?: number }>
+export const claveReal = (anio: number, q: number) => `impuesto_real_${anio}_${q}`
 
 // Estimación directa simplificada (Modelo 130, acumulado desde enero) y
 // Modelo 303 (trimestral). Es una aproximación: no contempla amortizaciones
 // ni la deducción por rendimientos bajos.
-export function calcular(anio: number, facturas: Factura[], compras: Compra[], cuotaMensual: number): Trimestre[] {
+export function calcular(anio: number, facturas: Factura[], compras: Compra[], cuotaMensual: number, reales: Reales = {}): Trimestre[] {
   const hoy = new Date().toISOString().slice(0, 10)
   const out: Trimestre[] = []
   let pagosPrevios = 0
@@ -43,7 +49,8 @@ export function calcular(anio: number, facturas: Factura[], compras: Compra[], c
     const neto = ingresosAcum - gastosAcum - cuotaAcum
     const dificil = Math.min(Math.max(0, neto) * DIFICIL_JUSTIFICACION, DIFICIL_MAX_ANUAL)
     const rendimientoAcum = neto - dificil
-    const irpf = Math.max(0, IRPF_130 * rendimientoAcum - retencionesAcum - pagosPrevios)
+    const real = reales[`${anio}-${q}`] || {}
+    const irpf = real.irpf ?? Math.max(0, IRPF_130 * rendimientoAcum - retencionesAcum - pagosPrevios)
     pagosPrevios += irpf
 
     const ivaRep = sum(facturas.filter(delTrim).filter(esUe).map(f => Number(f.importe) * IVA))
@@ -55,8 +62,9 @@ export function calcular(anio: number, facturas: Factura[], compras: Compra[], c
       gastos: sum(compras.filter(delTrim).map(ded)),
       cuota: cuotaMensual * 3,
       rendimientoAcum, retencionesAcum, irpf,
-      ivaRep, ivaSop, iva: ivaRep - ivaSop,
+      ivaRep, ivaSop, iva: real.iva ?? ivaRep - ivaSop,
       estado: hoy > fin ? 'cerrado' : hoy >= ini ? 'en curso' : 'futuro',
+      declarado: real.irpf !== undefined || real.iva !== undefined,
     })
   }
   return out
@@ -64,14 +72,14 @@ export function calcular(anio: number, facturas: Factura[], compras: Compra[], c
 
 // Próximo pago trimestral (130 + 303): el último trimestre cerrado mientras
 // su plazo siga abierto; si no, la estimación del trimestre en curso.
-export function proximoPago(facturas: Factura[], compras: Compra[], cuotaMensual: number, hoy = new Date().toISOString().slice(0, 10)) {
+export function proximoPago(facturas: Factura[], compras: Compra[], cuotaMensual: number, reales: Reales = {}, hoy = new Date().toISOString().slice(0, 10)) {
   const y = Number(hoy.slice(0, 4))
   for (const [anio, q] of [[y - 1, 4], [y, 1], [y, 2], [y, 3], [y, 4]]) {
     const plazo = q === 4 ? `${anio + 1}-01-30` : `${anio}-${String(q * 3 + 1).padStart(2, '0')}-20`
     if (hoy > plazo) continue
-    const t = calcular(anio, facturas, compras, cuotaMensual)[q - 1]
+    const t = calcular(anio, facturas, compras, cuotaMensual, reales)[q - 1]
     const iva = Math.max(0, t.iva)
-    return { anio, q, plazo, cerrado: t.estado === 'cerrado', irpf: t.irpf, iva, total: t.irpf + iva }
+    return { anio, q, plazo, cerrado: t.estado === 'cerrado', declarado: t.declarado, irpf: t.irpf, iva, total: t.irpf + iva }
   }
   return null
 }
@@ -82,15 +90,16 @@ const fechaCorta = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('
 const delTrimestre = (anio: number, q: number) => <T extends { fecha: string }>(x: T) =>
   x.fecha >= `${anio}-${String(q * 3 - 2).padStart(2, '0')}-01` && x.fecha <= `${anio}-${String(q * 3).padStart(2, '0')}-31`
 
-export default function ImpuestosTab({ facturas, compras, cuotaMensual, onSaveCuota }: {
+export default function ImpuestosTab({ facturas, compras, cuotaMensual, onSaveCuota, reales, onSaveReal }: {
   facturas: Factura[]; compras: Compra[]; cuotaMensual: number; onSaveCuota: (n: number) => void
+  reales: Reales; onSaveReal: (anio: number, q: number, valor: { irpf?: number; iva?: number }) => void
 }) {
   const anioActual = new Date().getFullYear()
   const anios = Array.from(new Set([anioActual, ...facturas.map(f => Number(f.fecha.slice(0, 4))), ...compras.map(c => Number(c.fecha.slice(0, 4)))])).sort((a, b) => b - a)
   const [anio, setAnio] = useState(anioActual)
   const [abierto, setAbierto] = useState<number | null>(null)
   const [cuota, setCuota] = useState(String(cuotaMensual || ''))
-  const trims = calcular(anio, facturas, compras, cuotaMensual)
+  const trims = calcular(anio, facturas, compras, cuotaMensual, reales)
 
   const filas: [string, (t: Trimestre) => string, boolean?][] = [
     ['Ingresos del trimestre', t => `€${eur(t.ingresos)}`],
@@ -132,7 +141,7 @@ export default function ImpuestosTab({ facturas, compras, cuotaMensual, onSaveCu
                 <th key={t.q} style={{ textAlign: 'right', padding: '8px 10px', fontWeight: 500, color: t.estado === 'futuro' ? 'var(--text3)' : 'var(--text)' }}>
                   T{t.q}
                   <div style={{ fontSize: 10, fontWeight: 400, color: t.estado === 'en curso' ? 'var(--accent)' : 'var(--text3)' }}>
-                    {t.estado === 'en curso' ? 'en curso' : t.estado === 'futuro' ? '—' : `se presenta ${PLAZOS[t.q - 1]}`}
+                    {t.estado === 'en curso' ? 'en curso' : t.estado === 'futuro' ? '—' : t.declarado ? 'presentado (gestor)' : `se presenta ${PLAZOS[t.q - 1]}`}
                   </div>
                 </th>
               ))}
@@ -149,6 +158,25 @@ export default function ImpuestosTab({ facturas, compras, cuotaMensual, onSaveCu
                 ))}
               </tr>
             ))}
+            <tr style={{ borderTop: '1px solid var(--border)' }}>
+              <td style={{ padding: '8px 10px', color: 'var(--text3)', fontSize: 11.5 }}>Importes del gestor (130 / 303)</td>
+              {trims.map(t => {
+                const real = reales[`${anio}-${t.q}`] || {}
+                const campo = (k: 'irpf' | 'iva') => (
+                  <input key={`${anio}-${t.q}-${k}-${real[k] ?? ''}`} type="number" step="0.01" defaultValue={real[k] ?? ''} placeholder={k === 'irpf' ? '130' : '303'}
+                    onBlur={e => {
+                      const v = e.target.value === '' ? undefined : Number(e.target.value)
+                      if (v !== real[k]) onSaveReal(anio, t.q, { ...real, [k]: v })
+                    }}
+                    style={{ width: 78, background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 6px', color: 'var(--text)', fontSize: 11.5, textAlign: 'right' }} />
+                )
+                return (
+                  <td key={t.q} style={{ padding: '8px 10px', textAlign: 'right' }}>
+                    {t.estado === 'cerrado' && <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>{campo('irpf')}{campo('iva')}</div>}
+                  </td>
+                )
+              })}
+            </tr>
             <tr style={{ borderTop: '1px solid var(--border)' }}>
               <td style={{ padding: '10px 10px', color: 'var(--text3)', fontSize: 11.5 }}>Facturas</td>
               {trims.map(t => {
@@ -195,7 +223,7 @@ export default function ImpuestosTab({ facturas, compras, cuotaMensual, onSaveCu
       )}
 
       <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border)', lineHeight: 1.6 }}>
-        Aproximación, no sustituye a tu gestor. IRPF (130): 20% del rendimiento acumulado desde enero (ingresos − gastos deducibles − cuota de autónomo − 5% de gastos de difícil justificación, máx. 2.000€/año), menos las retenciones del 15% de clientes españoles y lo ya pagado en trimestres anteriores.
+        Aproximación, no sustituye a tu gestor. Cuando el gestor te pase los importes de un trimestre, apúntalos en «Importes del gestor»: sustituyen a la estimación (también en la tarjeta del IRPF) y se descuentan del 130 de los trimestres siguientes. IRPF (130): 20% del rendimiento acumulado desde enero (ingresos − gastos deducibles − cuota de autónomo − 5% de gastos de difícil justificación, máx. 2.000€/año), menos las retenciones del 15% de clientes españoles y lo ya pagado en trimestres anteriores.
         IVA (303): 21% de las facturas a clientes españoles menos el IVA deducible de tus compras. No incluye amortizaciones de compras grandes (más de 300€) ni la deducción por rendimientos bajos.
         El ZIP trae los PDF de las ventas (el original si es una factura ya declarada), los archivos de las compras y un resumen en CSV.
       </div>

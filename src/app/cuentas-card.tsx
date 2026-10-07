@@ -8,7 +8,7 @@ const fmt = (n: number) => new Intl.NumberFormat('es-ES', { maximumFractionDigit
 const fmt2 = (n: number) => new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, ...agrupar }).format(n)
 const fechaCorta = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })
 
-export type PagoImpuestos = { anio: number; q: number; plazo: string; cerrado: boolean; total: number }
+export type PagoImpuestos = { anio: number; q: number; plazo: string; cerrado: boolean; declarado?: boolean; total: number }
 
 type Ctx = { fijosMes: number; fijosPendientes: number | null; variablesMes: number; pago: PagoImpuestos | null; porCobrar: number }
 type Estado = 'ok' | 'aviso' | 'neutro'
@@ -29,11 +29,11 @@ function describir(c: Cuenta, ctx: Ctx): Pick<Tile, 'linea' | 'chip' | 'progreso
     }
     case 'irpf': {
       if (!ctx.pago) return { linea: 'Sin pago trimestral pendiente', chip: { texto: 'Al día', estado: 'ok' } }
-      const { q, plazo, cerrado, total } = ctx.pago
+      const { q, plazo, cerrado, declarado, total } = ctx.pago
       const falta = total - saldo
       return {
-        linea: `T${q}${cerrado ? '' : ' estimado'}: €${fmt2(total)} · hasta el ${fechaCorta(plazo)}`,
-        chip: falta <= 0 ? { texto: 'Cubierto', estado: 'ok' } : { texto: `Faltan €${fmt2(falta)}`, estado: 'aviso' },
+        linea: `T${q}${declarado ? ' (gestor)' : cerrado ? '' : ' estimado'}: €${fmt2(total)} · hasta el ${fechaCorta(plazo)}`,
+        chip: falta <= 0 ? { texto: declarado && falta < -1 ? `Cubierto · sobran €${fmt2(-falta)}` : 'Cubierto', estado: 'ok' } : { texto: `Faltan €${fmt2(falta)}`, estado: 'aviso' },
         progreso: total > 0 ? saldo / total : undefined,
       }
     }

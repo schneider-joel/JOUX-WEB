@@ -590,3 +590,22 @@ INSERT INTO configuracion (clave, valor) SELECT 'compartidos_token', gen_random_
 INSERT INTO configuracion (clave, valor) SELECT 'compartidos_pareja', 'Sofía' WHERE NOT EXISTS (SELECT 1 FROM configuracion WHERE clave = 'compartidos_pareja');
 INSERT INTO configuracion (clave, valor) SELECT 'compartidos_desde', '2026-10-01' WHERE NOT EXISTS (SELECT 1 FROM configuracion WHERE clave = 'compartidos_desde');
 INSERT INTO configuracion (clave, valor) SELECT 'compartidos_categorias', 'Alquiler,Agua' WHERE NOT EXISTS (SELECT 1 FROM configuracion WHERE clave = 'compartidos_categorias');
+
+-- 2026-10-07: el trigger de factura cobrada no suma en cuentas sincronizadas
+-- con el banco (su saldo ya incluye el cobro; antes se contaba dos veces).
+CREATE OR REPLACE FUNCTION public.sumar_factura_cobrada()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+  IF NEW.estado = 'cobrada' AND OLD.estado = 'pendiente' THEN
+    IF NEW.cuenta_destino_id IS NOT NULL
+       AND NOT EXISTS (SELECT 1 FROM bancos_cuentas WHERE cuenta_id = NEW.cuenta_destino_id) THEN
+      UPDATE cuentas
+      SET saldo = saldo + NEW.importe
+      WHERE id = NEW.cuenta_destino_id;
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$function$;
