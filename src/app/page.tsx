@@ -618,7 +618,8 @@ export default function Home() {
               {fueraDeOrden.has(f.id) && <span className="pill pill-amber" title="La fecha no sigue el orden de su número: revisala">fuera de orden</span>}
             </>
           )
-          const cobradas = facturasCobradas.filter(enFiltro).sort((a, b) => b.fecha.localeCompare(a.fecha))
+          // Las más recientes por fecha de cobro (o de emisión si no la tiene).
+          const cobradas = facturasCobradas.filter(enFiltro).sort((a, b) => (b.fecha_cobro || b.fecha).localeCompare(a.fecha_cobro || a.fecha) || b.fecha.localeCompare(a.fecha))
           return (
             <div className="card">
               <div className="card-head">
