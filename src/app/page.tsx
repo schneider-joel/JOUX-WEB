@@ -1216,7 +1216,7 @@ function TimesheetTab({ grupo, proyectos, dias, facturas, clientesFiscales, relo
                   if (p.status !== 'facturado') return null
                   const factura = facturas.find(f => f.proyecto_id === p.id)
                   return factura ? (
-                    <a className="icon-btn accent" href={`/invoice/${factura.id}${/^(ambushed|boldmove)/i.test(factura.cliente) ? '?ref=1' : ''}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} title="Ver/generar factura"><Icon.invoice /></a>
+                    <a className="icon-btn accent" href={`/invoice/${factura.id}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} title="Ver/generar factura"><Icon.invoice /></a>
                   ) : null
                 })()}
                 <select value={p.status} onClick={e => e.stopPropagation()} onChange={e => cambiarStatus(p, e.target.value)}

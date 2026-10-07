@@ -4,7 +4,7 @@ import InvoiceEditor from './invoice-editor'
 import { nombreArchivoFactura, nombreArchivoRef } from './nombre-archivo'
 
 // El título de la página es el nombre que propone el navegador al guardar el PDF.
-// Desde la pestaña del cliente (?ref=1) lleva su nº de referencia del proyecto.
+// Desde el link público del timesheet (?ref=1) lleva su nº de referencia del proyecto.
 type Props = { params: { id: string }; searchParams: { ref?: string } }
 
 async function tituloPorRef(factura: { cliente: string; proyecto_id: number | null }, searchParams: Props['searchParams']) {

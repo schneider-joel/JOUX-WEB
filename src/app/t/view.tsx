@@ -108,7 +108,7 @@ export default function PublicTimesheetView({
                     {statusLabel[p.status] || p.status}
                   </span>
                   {p.status === 'facturado' && factura && (
-                    <a href={`/invoice/${factura.id}`} target="_blank" rel="noopener noreferrer"
+                    <a href={`/invoice/${factura.id}${/^(ambushed|boldmove)/i.test(p.cliente) ? '?ref=1' : ''}`} target="_blank" rel="noopener noreferrer"
                       style={{ fontSize: 11, padding: '3px 10px', borderRadius: 20, background: '#eff6ff', color: '#2563eb', fontWeight: 600, textDecoration: 'none' }}>
                       Invoice ↓
                     </a>
