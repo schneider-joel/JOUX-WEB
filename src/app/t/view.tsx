@@ -121,8 +121,8 @@ export default function PublicTimesheetView({
                 <thead>
                   <tr style={{ borderBottom: '1px solid #e5e5e5', color: '#888' }}>
                     <th style={{ textAlign: 'left', padding: '6px 0', fontWeight: 500 }}>Date</th>
-                    {porHora && <th style={{ textAlign: 'left', padding: '6px 0', fontWeight: 500 }}>Hrs</th>}
                     <th style={{ textAlign: 'left', padding: '6px 0', fontWeight: 500 }}>{porHora ? 'Rate' : 'Day rate'}</th>
+                    {porHora && <th style={{ textAlign: 'left', padding: '6px 0', fontWeight: 500 }}>Hrs</th>}
                     {porHora && <th style={{ textAlign: 'left', padding: '6px 0', fontWeight: 500 }}>Stand by</th>}
                     <th style={{ textAlign: 'right', padding: '6px 0', fontWeight: 500 }}>Total</th>
                   </tr>
@@ -131,8 +131,8 @@ export default function PublicTimesheetView({
                   {diasDe(p.id).map(d => (
                     <tr key={d.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
                       <td style={{ padding: '8px 0' }}>{fmtDate(d.fecha)}</td>
-                      {porHora && <td style={{ padding: '8px 0' }}>{d.hrs ?? '—'}</td>}
                       <td style={{ padding: '8px 0' }}>€{d.rate}</td>
+                      {porHora && <td style={{ padding: '8px 0' }}>{d.hrs ?? '—'}</td>}
                       {porHora && <td style={{ padding: '8px 0' }}>{d.standby_hrs > 0 ? `${d.standby_hrs}h` : '—'}</td>}
                       <td style={{ padding: '8px 0', textAlign: 'right', fontFamily: 'monospace' }}>€{fmt(d.total_day)}</td>
                     </tr>
@@ -149,8 +149,8 @@ export default function PublicTimesheetView({
                     <tfoot>
                       <tr style={{ borderTop: '1px solid #e5e5e5', fontWeight: 600 }}>
                         <td style={{ padding: '8px 0' }}>Total</td>
-                        {porHora && <td style={{ padding: '8px 0' }}>{h(hrs)}</td>}
                         <td style={{ padding: '8px 0' }}>{porHora ? '' : `${diasDe(p.id).length} days`}</td>
+                        {porHora && <td style={{ padding: '8px 0' }}>{h(hrs)}</td>}
                         {porHora && <td style={{ padding: '8px 0' }}>{sb > 0 ? h(sb) : '—'}</td>}
                         <td style={{ padding: '8px 0', textAlign: 'right', fontFamily: 'monospace' }}>€{fmt(totalProyecto(p.id))}</td>
                       </tr>
