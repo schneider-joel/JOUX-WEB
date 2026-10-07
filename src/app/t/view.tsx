@@ -141,6 +141,22 @@ export default function PublicTimesheetView({
                     <tr><td colSpan={porHora ? 5 : 3} style={{ padding: '12px 0', color: '#888' }}>No days logged yet.</td></tr>
                   )}
                 </tbody>
+                {diasDe(p.id).length > 1 && (() => {
+                  const hrs = diasDe(p.id).reduce((t, d) => t + Number(d.hrs || 0), 0)
+                  const sb = diasDe(p.id).reduce((t, d) => t + Number(d.standby_hrs || 0), 0)
+                  const h = (n: number) => `${Number(n.toFixed(2))}h`
+                  return (
+                    <tfoot>
+                      <tr style={{ borderTop: '1px solid #e5e5e5', fontWeight: 600 }}>
+                        <td style={{ padding: '8px 0' }}>Total</td>
+                        {porHora && <td style={{ padding: '8px 0' }}>{h(hrs)}</td>}
+                        <td style={{ padding: '8px 0' }}>{porHora ? '' : `${diasDe(p.id).length} days`}</td>
+                        {porHora && <td style={{ padding: '8px 0' }}>{sb > 0 ? h(sb) : '—'}</td>}
+                        <td style={{ padding: '8px 0', textAlign: 'right', fontFamily: 'monospace' }}>€{fmt(totalProyecto(p.id))}</td>
+                      </tr>
+                    </tfoot>
+                  )
+                })()}
               </table>
             </div>
           )

@@ -1084,6 +1084,9 @@ function TimesheetTab({ grupo, proyectos, dias, facturas, clientesFiscales, relo
 
   const diasDe = (proyectoId: number) => dias.filter(d => d.proyecto_id === proyectoId).sort((a, b) => a.fecha.localeCompare(b.fecha))
   const totalProyecto = (proyectoId: number) => diasDe(proyectoId).reduce((s, d) => s + Number(d.total_day), 0)
+  // Horas trabajadas y de stand by del proyecto (solo los que van por hora).
+  const horasProyecto = (proyectoId: number) => diasDe(proyectoId).reduce((t, d) => ({ hrs: t.hrs + Number(d.hrs || 0), sb: t.sb + Number(d.standby_hrs || 0) }), { hrs: 0, sb: 0 })
+  const fmtHoras = (h: number) => `${Number(h.toFixed(2))}h`
   const ultimaFecha = (proyectoId: number) => {
     const ds = diasDe(proyectoId)
     return ds.length ? ds[ds.length - 1].fecha : ''
@@ -1185,6 +1188,7 @@ function TimesheetTab({ grupo, proyectos, dias, facturas, clientesFiscales, relo
 
       {proyectosFiltrados.map(p => {
         const total = totalProyecto(p.id)
+        const horas = p.modo_rate === 'hora' ? horasProyecto(p.id) : null
         const isOpen = expandido === p.id
         return (
           <div key={p.id} className="proj-card">
@@ -1211,6 +1215,9 @@ function TimesheetTab({ grupo, proyectos, dias, facturas, clientesFiscales, relo
                 </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                {horas && horas.hrs + horas.sb > 0 && (
+                  <div style={{ fontSize: 11.5, color: 'var(--text3)', fontFamily: 'JetBrains Mono, monospace' }}>{fmtHoras(horas.hrs)}{horas.sb > 0 ? ` · SB ${fmtHoras(horas.sb)}` : ''}</div>
+                )}
                 <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 14, fontWeight: 500 }}>€{fmt(total)}</div>
                 {(() => {
                   if (p.status !== 'facturado') return null
@@ -1248,6 +1255,14 @@ function TimesheetTab({ grupo, proyectos, dias, facturas, clientesFiscales, relo
                     <button className="icon-btn danger" style={{ width: 24, height: 24, marginLeft: 8 }} onClick={e => { e.stopPropagation(); deleteDia(d.id) }} title="Borrar día"><Icon.x /></button>
                   </div>
                 ))}
+                {diasDe(p.id).length > 1 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0 2px', fontSize: 12, fontWeight: 500 }}>
+                    <div style={{ width: 70 }}>Total</div>
+                    <div style={{ color: 'var(--text2)', flex: 1 }}>{horas ? `${fmtHoras(horas.hrs)}${horas.sb > 0 ? ` · SB ${fmtHoras(horas.sb)}` : ''}` : `${diasDe(p.id).length} días`}</div>
+                    <div style={{ fontFamily: 'JetBrains Mono, monospace', width: 70, textAlign: 'right' }}>€{fmt2(total)}</div>
+                    <span style={{ width: 112 }} />
+                  </div>
+                )}
                 <button className="btn btn-dashed" style={{ marginTop: 10 }} onClick={() => setModal({ type: 'addDia', data: { proyectoId: p.id, porHora: p.modo_rate === 'hora' } })}><Icon.plus />Nuevo día</button>
               </div>
             )}
