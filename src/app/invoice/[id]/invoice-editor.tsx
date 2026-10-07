@@ -49,6 +49,7 @@ export default function InvoiceEditor({
   ultimoNumero,
   dias = [],
   modoRate,
+  titulo = null,
 }: {
   factura: Factura
   emisor: { nombre: string; nif: string; direccion: string; email: string; telefono: string; iban: string; swift?: string }
@@ -57,6 +58,7 @@ export default function InvoiceEditor({
   ultimoNumero: string
   dias?: DiaTrabajado[]
   modoRate?: string
+  titulo?: string | null
 }) {
   const [factura, setFactura] = useState(initialFactura)
   const [clienteFiscal, setClienteFiscal] = useState<ClienteFiscal>(
@@ -71,7 +73,7 @@ export default function InvoiceEditor({
   const dentroUe = factura.tipo_factura === 'dentro_ue'
 
   // Mantiene el nombre del PDF al día si se edita el número o el cliente.
-  useEffect(() => { document.title = nombreArchivoFactura(factura.numero, factura.cliente) }, [factura.numero, factura.cliente])
+  useEffect(() => { document.title = titulo || nombreArchivoFactura(factura.numero, factura.cliente) }, [titulo, factura.numero, factura.cliente])
 
   const set = (patch: Partial<Factura>) => setFactura({ ...factura, ...patch })
 

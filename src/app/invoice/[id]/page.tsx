@@ -1,15 +1,28 @@
 import { cookies } from 'next/headers'
 import { supabaseServer as supabase } from '@/lib/supabase-server'
 import InvoiceEditor from './invoice-editor'
-import { nombreArchivoFactura } from './nombre-archivo'
+import { nombreArchivoFactura, nombreArchivoRef } from './nombre-archivo'
 
 // El título de la página es el nombre que propone el navegador al guardar el PDF.
-export async function generateMetadata({ params }: { params: { id: string } }) {
-  const { data: f } = await supabase.from('facturas').select('numero, cliente').eq('id', params.id).maybeSingle()
-  return { title: f ? nombreArchivoFactura(f.numero, f.cliente) : 'Factura', robots: { index: false, follow: false } }
+// Desde la pestaña del cliente (?ref=1) lleva su nº de referencia del proyecto.
+type Props = { params: { id: string }; searchParams: { ref?: string } }
+
+async function tituloPorRef(factura: { cliente: string; proyecto_id: number | null }, searchParams: Props['searchParams']) {
+  if (searchParams.ref !== '1' || !factura.proyecto_id) return null
+  const [{ data: p }, { data: emisor }] = await Promise.all([
+    supabase.from('proyectos').select('numero_proyecto').eq('id', factura.proyecto_id).maybeSingle(),
+    supabase.from('configuracion').select('valor').eq('clave', 'emisor_nombre').maybeSingle(),
+  ])
+  return p?.numero_proyecto ? nombreArchivoRef(emisor?.valor || 'Joel Schneider', factura.cliente, p.numero_proyecto) : null
 }
 
-export default async function InvoicePage({ params }: { params: { id: string } }) {
+export async function generateMetadata({ params, searchParams }: Props) {
+  const { data: f } = await supabase.from('facturas').select('numero, cliente, proyecto_id').eq('id', params.id).maybeSingle()
+  const title = f ? (await tituloPorRef(f, searchParams)) || nombreArchivoFactura(f.numero, f.cliente) : 'Factura'
+  return { title, robots: { index: false, follow: false } }
+}
+
+export default async function InvoicePage({ params, searchParams }: Props) {
   const authCookie = cookies().get('joux_auth')?.value
   const editable = !!authCookie && !!process.env.APP_PASSWORD && authCookie === process.env.APP_PASSWORD
 
@@ -49,6 +62,8 @@ export default async function InvoicePage({ params }: { params: { id: string } }
     dias = diasData || []
   }
 
+  const titulo = await tituloPorRef(factura, searchParams)
+
   const cfgVal = (clave: string, fallback = '') => cfg?.find((c: any) => c.clave === clave)?.valor || fallback
 
   const emisor = {
@@ -66,5 +81,5 @@ export default async function InvoicePage({ params }: { params: { id: string } }
 
   const ultimoNumero = maxNumeroActual > 0 ? `${prefijoActual}${maxNumeroActual}` : cfgVal('ultimo_numero_factura', 'F260000')
 
-  return <InvoiceEditor factura={factura} emisor={emisor} clienteFiscalInicial={clienteFiscal} editable={editable} ultimoNumero={ultimoNumero} dias={dias} modoRate={modoRate} />
+  return <InvoiceEditor factura={factura} emisor={emisor} clienteFiscalInicial={clienteFiscal} editable={editable} ultimoNumero={ultimoNumero} dias={dias} modoRate={modoRate} titulo={titulo} />
 }
