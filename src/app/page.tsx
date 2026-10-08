@@ -383,11 +383,6 @@ export default function Home() {
   }
 
 
-  const addFactura = async (data: any) => {
-    await supabase.from('facturas').insert([{ ...data, estado: 'pendiente', origen: 'manual' }])
-    setModal(null)
-    loadData()
-  }
 
 
   const updateCuenta = async (id: number, patch: Partial<Cuenta>) => {
@@ -494,10 +489,8 @@ export default function Home() {
           <div className="header-actions">
             <NotificacionesBoton onIr={t => setTab(t as Tab)} />
             <button className="btn" onClick={() => loadData()}><Icon.refresh />Actualizar</button>
-            {/* Las facturas salen de los proyectos; "Nueva factura" (sin proyecto) solo en su pestaña. */}
-            <button className={`btn${tab === 'clientes' || tab === 'facturas' ? '' : ' btn-primary'}`} onClick={() => setModal({ type: 'addProyecto' })}><Icon.plus />Nuevo proyecto</button>
+            <button className={`btn${tab === 'clientes' ? '' : ' btn-primary'}`} onClick={() => setModal({ type: 'addProyecto' })}><Icon.plus />Nuevo proyecto</button>
             {tab === 'clientes' && <button className="btn btn-primary" onClick={() => setModal({ type: 'editCliente' })}><Icon.plus />Nuevo cliente</button>}
-            {tab === 'facturas' && <button className="btn btn-primary" onClick={() => setModal({ type: 'addFactura' })}><Icon.plus />Nueva factura</button>}
           </div>
         </header>
 
@@ -827,9 +820,6 @@ export default function Home() {
         {modal && (
           <div className="modal-bg" onClick={() => setModal(null)}>
             <div className="modal" onClick={e => e.stopPropagation()}>
-              {modal.type === 'addFactura' && (
-                <ModalAddFactura cuentas={cuentas} clientesFiscales={clientesFiscales} onAdd={addFactura} onClose={() => setModal(null)} />
-              )}
               {modal.type === 'addGasto' && (
                 <ModalAddGasto item={modal.data.item} tabla={modal.data.tabla} onAdd={addGasto} onClose={() => setModal(null)} />
               )}
@@ -853,89 +843,6 @@ export default function Home() {
   )
 }
 
-
-function ModalAddFactura({ cuentas, clientesFiscales, onAdd, onClose }: { cuentas: Cuenta[], clientesFiscales: ClienteFiscal[], onAdd: (d: any) => void, onClose: () => void }) {
-  const [form, setForm] = useState({ cliente: clientesFiscales[0]?.cliente || '', descripcion: '', importe: '', fecha: new Date().toISOString().split('T')[0], cuenta_destino_id: '', idioma: 'es' })
-  const [nuevoCliente, setNuevoCliente] = useState(clientesFiscales.length === 0)
-  const [nuevoNombre, setNuevoNombre] = useState('')
-  const [nuevoIdentificador, setNuevoIdentificador] = useState('')
-  const [nuevoDireccion, setNuevoDireccion] = useState('')
-  const fieldStyle = { width: '100%', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 7, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'Inter, sans-serif', outline: 'none' }
-
-  const confirmar = async () => {
-    let cliente = form.cliente
-    if (nuevoCliente) {
-      if (!nuevoNombre) return
-      cliente = nuevoNombre
-      await supabase.from('clientes_fiscales').upsert({ cliente: nuevoNombre, identificador: nuevoIdentificador, direccion: nuevoDireccion, pais: detectarPais(nuevoIdentificador, nuevoDireccion) })
-    }
-    if (!cliente || !form.importe) return
-    const pais = nuevoCliente ? detectarPais(nuevoIdentificador, nuevoDireccion) : clientesFiscales.find(c => c.cliente === cliente)?.pais
-    onAdd({ ...form, cliente, importe: Number(form.importe), tipo_factura: tipoFacturaDePais(pais), cuenta_destino_id: form.cuenta_destino_id ? Number(form.cuenta_destino_id) : null })
-  }
-
-  return (
-    <>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, fontSize: 16, fontWeight: 500 }}>
-        Nueva factura <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', fontSize: 20 }}>×</button>
-      </div>
-      <div style={{ marginBottom: 14 }}>
-        <label style={{ display: 'block', fontSize: 12, color: 'var(--text2)', marginBottom: 6 }}>Cliente</label>
-        {!nuevoCliente ? (
-          <select value={form.cliente} onChange={e => {
-            if (e.target.value === '__nuevo__') { setNuevoCliente(true); return }
-            setForm({ ...form, cliente: e.target.value })
-          }} style={fieldStyle}>
-            {clientesFiscales.map(c => <option key={c.cliente} value={c.cliente}>{c.cliente}</option>)}
-            <option value="__nuevo__">+ Cliente nuevo...</option>
-          </select>
-        ) : (
-          <div style={{ border: '1px solid var(--border)', borderRadius: 7, padding: 12 }}>
-            <input value={nuevoNombre} onChange={e => setNuevoNombre(e.target.value)} placeholder="Nombre del cliente" style={{ ...fieldStyle, marginBottom: 8 }} />
-            <input value={nuevoIdentificador} onChange={e => setNuevoIdentificador(e.target.value)} placeholder="Identificador fiscal (NIF/CIF, VAT...)" style={{ ...fieldStyle, marginBottom: 8 }} />
-            <textarea value={nuevoDireccion} onChange={e => setNuevoDireccion(e.target.value)} placeholder="Dirección" rows={2} style={{ ...fieldStyle, resize: 'vertical' as const, marginBottom: clientesFiscales.length > 0 ? 8 : 0 }} />
-            {clientesFiscales.length > 0 && (
-              <button type="button" onClick={() => setNuevoCliente(false)} style={{ fontSize: 11, color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>← Elegir cliente guardado</button>
-            )}
-          </div>
-        )}
-      </div>
-      {[
-        { label: 'Descripción (opcional)', key: 'descripcion', type: 'text', placeholder: 'Proyecto, treatment...' },
-        { label: 'Importe (€)', key: 'importe', type: 'number', placeholder: '0' },
-        { label: 'Fecha de cobro', key: 'fecha', type: 'date', placeholder: '' },
-      ].map(f => (
-        <div key={f.key} style={{ marginBottom: 14 }}>
-          <label style={{ display: 'block', fontSize: 12, color: 'var(--text2)', marginBottom: 6 }}>{f.label}</label>
-          <input type={f.type} placeholder={f.placeholder} value={(form as any)[f.key]}
-            onChange={e => setForm({ ...form, [f.key]: e.target.value })}
-            style={fieldStyle} />
-        </div>
-      ))}
-      <div style={{ marginBottom: 14 }}>
-        <label style={{ display: 'block', fontSize: 12, color: 'var(--text2)', marginBottom: 6 }}>Cuenta destino (cuando se cobre)</label>
-        <select value={form.cuenta_destino_id} onChange={e => setForm({ ...form, cuenta_destino_id: e.target.value })} style={fieldStyle}>
-          <option value="">Seleccionar cuenta...</option>
-          {cuentas.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-        </select>
-      </div>
-      <div style={{ marginBottom: 14 }}>
-        <label style={{ display: 'block', fontSize: 12, color: 'var(--text2)', marginBottom: 6 }}>Idioma del invoice</label>
-        <select value={form.idioma} onChange={e => setForm({ ...form, idioma: e.target.value })} style={fieldStyle}>
-          <option value="es">Español</option>
-          <option value="en">English</option>
-        </select>
-      </div>
-      <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
-        <button onClick={onClose} style={{ padding: '9px 18px', borderRadius: 7, fontSize: 13, cursor: 'pointer', background: 'var(--surface2)', color: 'var(--text2)', border: '1px solid var(--border)', fontFamily: 'Inter, sans-serif' }}>Cancelar</button>
-        <button onClick={confirmar}
-          style={{ flex: 1, padding: '9px 18px', borderRadius: 7, fontSize: 13, cursor: 'pointer', background: 'var(--accent)', color: '#000', border: 'none', fontWeight: 500, fontFamily: 'Inter, sans-serif' }}>
-          Añadir
-        </button>
-      </div>
-    </>
-  )
-}
 
 function ModalAddGasto({ item, tabla, onAdd, onClose }: { item: PresupuestoItem, tabla: string, onAdd: (tabla: string, id: number, importe: number) => void, onClose: () => void }) {
   const [importe, setImporte] = useState('')
