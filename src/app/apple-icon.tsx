@@ -1,28 +1,12 @@
 import { ImageResponse } from 'next/og'
+import { svgJo } from './marca-jo'
 
 export const size = { width: 180, height: 180 }
 export const contentType = 'image/png'
 
+// Icono de la pantalla de inicio: cuadrado, iOS ya le pone las esquinas.
 export default function AppleIcon() {
-  return new ImageResponse(
-    (
-      <div
-        style={{
-          width: '100%',
-          height: '100%',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: 'linear-gradient(135deg, #fb923c 0%, #c2410c 100%)',
-          fontFamily: 'sans-serif',
-          fontWeight: 700,
-          fontSize: 108,
-          color: '#fff',
-        }}
-      >
-        J
-      </div>
-    ),
-    { ...size }
-  )
+  const src = `data:image/svg+xml;base64,${Buffer.from(svgJo(0)).toString('base64')}`
+  // eslint-disable-next-line @next/next/no-img-element
+  return new ImageResponse(<img src={src} width={size.width} height={size.height} alt="" />, { ...size })
 }

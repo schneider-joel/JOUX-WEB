@@ -1,29 +1,12 @@
 import { ImageResponse } from 'next/og'
+import { svgJo } from './marca-jo'
 
 export const size = { width: 32, height: 32 }
 export const contentType = 'image/png'
 
+// Favicon "Jō" (con esquinas redondeadas).
 export default function Icon() {
-  return new ImageResponse(
-    (
-      <div
-        style={{
-          width: '100%',
-          height: '100%',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: 'linear-gradient(135deg, #fb923c 0%, #c2410c 100%)',
-          borderRadius: 7,
-          fontFamily: 'sans-serif',
-          fontWeight: 700,
-          fontSize: 20,
-          color: '#fff',
-        }}
-      >
-        J
-      </div>
-    ),
-    { ...size }
-  )
+  const src = `data:image/svg+xml;base64,${Buffer.from(svgJo(830)).toString('base64')}`
+  // eslint-disable-next-line @next/next/no-img-element
+  return new ImageResponse(<img src={src} width={size.width} height={size.height} alt="" />, { ...size })
 }

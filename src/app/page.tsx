@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import ComprasTab from './compras-tab'
 import NotificacionesBoton from './notificaciones-boton'
-import LogoJoux from './logo-joux'
+import { GLIFO_JO, VIEWBOX_JO } from './marca-jo'
 import ImpuestosTab, { proximoPago, claveReal, type Reales } from './impuestos-tab'
 import CuentasCard from './cuentas-card'
 import BancosTab from './bancos-tab'
@@ -460,8 +460,14 @@ export default function Home() {
     <div className="app">
       <aside className="sidebar">
         <div className="brand">
-          <LogoJoux className="brand-logo" titulo="JOUX Hub" />
-          <div className="brand-sub">Hub · Finanzas</div>
+          <svg className="brand-mark" viewBox={VIEWBOX_JO} role="img" aria-label="JOUX Hub">
+            <rect x="-704" y="-1369" width="3700" height="3700" rx="830" fill="#0a0908" />
+            <g fill="#fff" dangerouslySetInnerHTML={{ __html: GLIFO_JO }} />
+          </svg>
+          <div>
+            <div className="brand-name">JOUX Hub</div>
+            <div className="brand-sub">Finanzas</div>
+          </div>
         </div>
         <div className="nav-scroll">
           <div className="nav-group">
