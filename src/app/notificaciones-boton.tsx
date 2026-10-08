@@ -32,10 +32,10 @@ export default function NotificacionesBoton() {
     }).catch(() => setEstado('no-soportado'))
   }, [])
 
-  const avisar = (texto: string) => { setMensaje(texto); setTimeout(() => setMensaje(''), 4000) }
+  const avisar = (texto: string) => { setMensaje(texto); setTimeout(() => setMensaje(''), 7000) }
 
   const pulsar = async () => {
-    if (estado === 'instalar') return avisar('En iPhone: Compartir → Añadir a pantalla de inicio, y abre el hub desde ese icono.')
+    if (estado === 'instalar') return avisar('En iPhone las notificaciones solo funcionan con el hub en la pantalla de inicio: Compartir → Añadir a pantalla de inicio, y ábrelo desde ese icono.')
     if (estado === 'bloqueado') return avisar('Las notificaciones están bloqueadas para este sitio en los ajustes del navegador.')
     if (estado === 'no-soportado') return avisar('Este navegador no admite notificaciones push.')
     if (estado === 'activo') {
@@ -69,7 +69,8 @@ export default function NotificacionesBoton() {
         </svg>
       </button>
       {mensaje && (
-        <span style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, width: 260, padding: '8px 10px', borderRadius: 8, background: 'var(--surface2)', border: '1px solid var(--border)', color: 'var(--text2)', fontSize: 12, lineHeight: 1.45, zIndex: 50 }}>{mensaje}</span>
+        // Abajo y centrado: junto al botón se salía de la pantalla en el móvil.
+        <span role="status" style={{ position: 'fixed', left: '50%', bottom: 'calc(24px + env(safe-area-inset-bottom))', transform: 'translateX(-50%)', width: 'min(340px, calc(100vw - 32px))', padding: '12px 14px', borderRadius: 10, background: 'var(--surface2)', border: '1px solid var(--border)', color: 'var(--text)', fontSize: 13, lineHeight: 1.45, zIndex: 1000, boxShadow: '0 8px 30px rgba(0,0,0,.4)' }}>{mensaje}</span>
       )}
     </span>
   )
