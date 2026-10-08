@@ -35,6 +35,7 @@ const ultimosMeses = (n: number) => {
 
 // Los timesheets son dinámicos: una pestaña "ts:<key>" por grupo de clientes (ver lib/timesheets).
 type Tab = 'dashboard' | 'facturas' | 'compras' | 'impuestos' | 'presupuesto' | 'clientes' | 'bancos' | 'compartidos' | `ts:${string}`
+type Seccion = { id: string; label: string; icon: () => JSX.Element; tabs: { id: Tab; label: string; badge?: number }[] }
 type NuevoProyecto = { nombre: string; cliente: string; numero_proyecto: string; modo_rate: 'hora' | 'dia' }
 type Modal = { type: string; data?: any } | null
 
@@ -176,6 +177,12 @@ function IngresosChart({ facturas }: { facturas: Factura[] }) {
 
 export default function Home() {
   const [tab, setTab] = useState<Tab>('dashboard')
+  // Última subpestaña abierta de cada sección (p. ej. volver a Compras dentro de Facturación).
+  const [ultimaPestana, setUltimaPestana] = useState<Record<string, Tab>>({})
+  useEffect(() => {
+    const sec = tab.startsWith('ts:') ? 'timesheets' : ['facturas', 'compras', 'impuestos', 'clientes'].includes(tab) ? 'facturacion' : null
+    if (sec) setUltimaPestana(u => (u[sec] === tab ? u : { ...u, [sec]: tab }))
+  }, [tab])
   // Vuelta de la conexión con un banco: /?tab=bancos&ok=1 o &error=...
   const [mensajeBanco, setMensajeBanco] = useState<{ ok?: boolean; error?: string } | null>(null)
   useEffect(() => {
@@ -410,25 +417,31 @@ export default function Home() {
     </div>
   )
 
-  const navGroups: { label: string; items: { id: Tab; label: string; icon: () => JSX.Element; badge?: number }[] }[] = [
+  // Pocas secciones (caben en la barra inferior del móvil); las que agrupan
+  // varias pestañas las muestran como subpestañas bajo el título.
+  const timesheets = gruposTimesheet(proyectos).map(g => ({
+    id: `ts:${g.key}` as Tab, label: g.label,
+    badge: proyectos.filter(p => g.clientes.includes(p.cliente) && p.status === 'activo').length,
+  }))
+  const secciones: Seccion[] = [
+    { id: 'overview', label: 'Overview', icon: Icon.home, tabs: [{ id: 'dashboard', label: 'Overview' }] },
+    { id: 'timesheets', label: 'Timesheets', icon: Icon.clock, tabs: timesheets },
     {
-      label: 'General', items: [
-        { id: 'dashboard', label: 'Overview', icon: Icon.home },
-        { id: 'facturas', label: 'Facturas', icon: Icon.invoice, badge: facturasPendientes.length },
-        { id: 'compras', label: 'Compras', icon: Icon.wallet },
-        { id: 'impuestos', label: 'Impuestos', icon: Icon.trend },
-        { id: 'clientes', label: 'Clientes', icon: Icon.card },
-        { id: 'bancos', label: 'Bancos', icon: Icon.link },
-        { id: 'compartidos', label: 'Compartidos', icon: Icon.users },
+      id: 'facturacion', label: 'Facturación', icon: Icon.invoice, tabs: [
+        { id: 'facturas', label: 'Facturas', badge: facturasPendientes.length },
+        { id: 'compras', label: 'Compras' },
+        { id: 'impuestos', label: 'Impuestos' },
+        { id: 'clientes', label: 'Clientes' },
       ],
     },
-    {
-      label: 'Timesheets', items: gruposTimesheet(proyectos).map(g => ({
-        id: `ts:${g.key}` as Tab, label: g.label, icon: g.clientes.length > 1 ? Icon.users : Icon.clock,
-        badge: proyectos.filter(p => g.clientes.includes(p.cliente) && p.status === 'activo').length,
-      })),
-    },
+    { id: 'bancos', label: 'Bancos', icon: Icon.link, tabs: [{ id: 'bancos', label: 'Bancos' }] },
+    { id: 'compartidos', label: 'Compartidos', icon: Icon.users, tabs: [{ id: 'compartidos', label: 'Compartidos' }] },
   ]
+  const seccionActiva = secciones.find(s => s.tabs.some(t => t.id === tab)) || secciones[0]
+  const abrirSeccion = (s: Seccion) => {
+    const ultimo = ultimaPestana[s.id]
+    setTab(ultimo && s.tabs.some(t => t.id === ultimo) ? ultimo : s.tabs[0]?.id || 'dashboard')
+  }
   const grupoActivo = tab.startsWith('ts:') ? grupoDeKey(tab.slice(3)) : null
   const titulos: Record<string, [string, string]> = {
     dashboard: ['Overview', 'Patrimonio, cuentas y facturación'],
@@ -453,17 +466,17 @@ export default function Home() {
           </div>
         </div>
         <div className="nav-scroll">
-          {navGroups.map(g => (
-            <div className="nav-group" key={g.label}>
-              <div className="nav-section-label">{g.label}</div>
-              {g.items.map(n => (
-                <button key={n.id} className={`nav-btn${tab === n.id ? ' active' : ''}`} onClick={() => setTab(n.id)}>
-                  <n.icon /><span>{n.label}</span>
-                  {!!n.badge && <span className="nav-badge">{n.badge}</span>}
+          <div className="nav-group">
+            {secciones.map(s => {
+              const badge = s.tabs.reduce((t, x) => t + (x.badge || 0), 0)
+              return (
+                <button key={s.id} className={`nav-btn${seccionActiva.id === s.id ? ' active' : ''}`} onClick={() => abrirSeccion(s)}>
+                  <s.icon /><span>{s.label}</span>
+                  {!!badge && <span className="nav-badge">{badge}</span>}
                 </button>
-              ))}
-            </div>
-          ))}
+              )
+            })}
+          </div>
         </div>
         <div className="nav-foot">{lastUpdated && `sync ${lastUpdated}`}</div>
       </aside>
@@ -483,6 +496,16 @@ export default function Home() {
             {tab === 'facturas' && <button className="btn btn-primary" onClick={() => setModal({ type: 'addFactura' })}><Icon.plus />Nueva factura</button>}
           </div>
         </header>
+
+        {seccionActiva.tabs.length > 1 && (
+          <nav className="subnav">
+            {seccionActiva.tabs.map(t => (
+              <button key={t.id} className={`subnav-btn${tab === t.id ? ' active' : ''}`} onClick={() => setTab(t.id)}>
+                {t.label}{!!t.badge && <span className="subnav-badge">{t.badge}</span>}
+              </button>
+            ))}
+          </nav>
+        )}
 
         {/* Dashboard Tab */}
         {tab === 'dashboard' && (
