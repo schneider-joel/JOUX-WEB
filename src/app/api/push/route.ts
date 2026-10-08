@@ -9,13 +9,25 @@ export const dynamic = 'force-dynamic'
 export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}))
   if (body.prueba) {
-    const enviadas = await notificar({ titulo: 'JOUX Hub', cuerpo: 'Las notificaciones funcionan. Te avisaré de cada cobro que llegue.', url: '/?tab=facturas', etiqueta: 'prueba' })
+    const enviadas = await notificar({ titulo: 'JOUX Hub', cuerpo: 'Las notificaciones funcionan. Te avisaré de cada cobro que llegue.', url: '/?tab=facturas', etiqueta: 'prueba' }, { guardar: false })
     return NextResponse.json({ enviadas })
   }
   const s = body.suscripcion
   if (!s?.endpoint || !s?.keys) return NextResponse.json({ error: 'Suscripción inválida' }, { status: 400 })
   const { error } = await sb.from('push_suscripciones').upsert({ endpoint: s.endpoint, keys: s.keys, dispositivo: body.dispositivo || null }, { onConflict: 'endpoint' })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ ok: true })
+}
+
+// Historial de la campana del hub.
+export async function GET() {
+  const { data } = await sb.from('notificaciones').select('id,titulo,cuerpo,url,leida,created_at').order('created_at', { ascending: false }).limit(30)
+  return NextResponse.json({ notificaciones: data || [] })
+}
+
+// Marca todas como leídas (al abrir el panel).
+export async function PATCH() {
+  await sb.from('notificaciones').update({ leida: true }).eq('leida', false)
   return NextResponse.json({ ok: true })
 }
 

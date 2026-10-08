@@ -475,7 +475,7 @@ export default function Home() {
             <div className="page-sub">{subtitulo}</div>
           </div>
           <div className="header-actions">
-            <NotificacionesBoton />
+            <NotificacionesBoton onIr={t => setTab(t as Tab)} />
             <button className="btn" onClick={() => loadData()}><Icon.refresh />Actualizar</button>
             <button className={`btn${grupoActivo ? ' btn-primary' : ''}`} onClick={() => setModal({ type: 'addProyecto' })}><Icon.plus />Nuevo proyecto</button>
             {tab === 'clientes' ? (

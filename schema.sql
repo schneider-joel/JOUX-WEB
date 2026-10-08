@@ -619,3 +619,14 @@ create table if not exists push_suscripciones (
   created_at timestamptz default now()
 );
 alter table push_suscripciones enable row level security;
+
+-- 2026-10-08: historial de notificaciones de la campana del hub.
+create table if not exists notificaciones (
+  id bigserial primary key,
+  titulo text not null,
+  cuerpo text,
+  url text,
+  leida boolean not null default false,
+  created_at timestamptz default now()
+);
+alter table notificaciones enable row level security;

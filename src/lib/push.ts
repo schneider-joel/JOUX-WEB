@@ -9,7 +9,10 @@ if (publica && privada) webpush.setVapidDetails('https://joux-web.vercel.app', p
 
 export type Aviso = { titulo: string; cuerpo: string; url?: string; etiqueta?: string }
 
-export async function notificar(aviso: Aviso) {
+// Guarda el aviso en el historial de la campana del hub (salvo { guardar: false },
+// p. ej. la notificación de prueba) y lo manda por push a los dispositivos.
+export async function notificar(aviso: Aviso, { guardar = true } = {}) {
+  if (guardar) await sb.from('notificaciones').insert({ titulo: aviso.titulo, cuerpo: aviso.cuerpo, url: aviso.url || null })
   if (!publica || !privada) return 0
   const { data: subs } = await sb.from('push_suscripciones').select('id,endpoint,keys')
   let enviadas = 0
