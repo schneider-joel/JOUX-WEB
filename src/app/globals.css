@@ -285,11 +285,26 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .acct-tile-titulo { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.08em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .acct-tile-monto { font-family: 'JetBrains Mono', monospace; font-size: 20px; font-weight: 500; letter-spacing: -0.4px; line-height: 1.2; margin-top: 2px; white-space: nowrap; }
 .acct-tile-estado { font-size: 11px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.presu-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
-.presu-fila { padding: 6px 0; font-size: 12.5px; }
-.presu-barra { position: relative; height: 3px; border-radius: 2px; background: var(--surface3); margin-top: 6px; }
-.presu-barra > div { height: 100%; border-radius: 2px; transition: width 400ms var(--ease-out); }
-.presu-barra > span { position: absolute; top: -3px; width: 1px; height: 9px; background: var(--text3); opacity: 0.6; }
+.presu-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+.presu-resumen { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+.presu-cifra { font-size: 15px; font-weight: 500; letter-spacing: -0.02em; }
+.presu-cifra span, .presu-monto span { color: var(--text3); font-weight: 400; }
+.presu-estado { font-size: 11.5px; margin-top: 6px; }
+.presu-barra { position: relative; border-radius: 99px; background: var(--surface3); }
+.presu-barra > div { height: 100%; border-radius: 99px; transition: width 400ms var(--ease-out); }
+.presu-barra > span { position: absolute; width: 1.5px; border-radius: 1px; background: var(--text2); opacity: 0.5; }
+.presu-lista { list-style: none; margin-top: 14px; display: flex; flex-direction: column; }
+.presu-lista li { display: flex; align-items: center; gap: 10px; padding: 7px 0; font-size: 12.5px; border-top: 1px solid var(--border); }
+.presu-lista li.presu-var { display: grid; grid-template-columns: 1fr auto; row-gap: 6px; padding: 8px 0; }
+.presu-lista li.presu-var .presu-barra { grid-column: 1 / -1; }
+.presu-nombre { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+.presu-lista li.pagado .presu-nombre { color: var(--text2); }
+.presu-monto { font-size: 12px; color: var(--text2); flex-shrink: 0; }
+.presu-check { width: 16px; height: 16px; border-radius: 50%; flex-shrink: 0; border: 1.5px solid var(--border2); display: inline-flex; align-items: center; justify-content: center; }
+.presu-check.ok { background: var(--green-dim); border-color: transparent; }
+.presu-check.ok svg { width: 10px; height: 10px; fill: none; stroke: var(--green); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.presu-check.medio { border-color: var(--text3); border-style: dashed; }
+.presu-nota { font-size: 11px; color: var(--text3); margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
 .chart-compacto { height: 150px; min-height: 150px; }
 @media (max-width: 860px) {
   .presu-grid { grid-template-columns: 1fr; gap: 18px; }
