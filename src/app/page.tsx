@@ -477,12 +477,10 @@ export default function Home() {
           <div className="header-actions">
             <NotificacionesBoton onIr={t => setTab(t as Tab)} />
             <button className="btn" onClick={() => loadData()}><Icon.refresh />Actualizar</button>
-            <button className={`btn${grupoActivo ? ' btn-primary' : ''}`} onClick={() => setModal({ type: 'addProyecto' })}><Icon.plus />Nuevo proyecto</button>
-            {tab === 'clientes' ? (
-              <button className="btn btn-primary" onClick={() => setModal({ type: 'editCliente' })}><Icon.plus />Nuevo cliente</button>
-            ) : tab === 'compras' || tab === 'impuestos' || grupoActivo ? null : (
-              <button className="btn btn-primary" onClick={() => setModal({ type: 'addFactura' })}><Icon.plus />Nueva factura</button>
-            )}
+            {/* Las facturas salen de los proyectos; "Nueva factura" (sin proyecto) solo en su pestaña. */}
+            <button className={`btn${tab === 'clientes' || tab === 'facturas' ? '' : ' btn-primary'}`} onClick={() => setModal({ type: 'addProyecto' })}><Icon.plus />Nuevo proyecto</button>
+            {tab === 'clientes' && <button className="btn btn-primary" onClick={() => setModal({ type: 'editCliente' })}><Icon.plus />Nuevo cliente</button>}
+            {tab === 'facturas' && <button className="btn btn-primary" onClick={() => setModal({ type: 'addFactura' })}><Icon.plus />Nueva factura</button>}
           </div>
         </header>
 
