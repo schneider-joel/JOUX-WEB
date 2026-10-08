@@ -8,7 +8,7 @@ import ImpuestosTab, { proximoPago, claveReal, type Reales } from './impuestos-t
 import CuentasCard from './cuentas-card'
 import BancosTab from './bancos-tab'
 import CompartidosVista from './compartidos-vista'
-import PresupuestoCard, { gastadoPorPartida } from './presupuesto-card'
+import PresupuestoCards, { gastadoPorPartida } from './presupuesto-card'
 import type { GastoCompartido } from '@/lib/compartidos'
 import { PAISES, PaisFiscal, detectarPais, tipoFacturaDePais } from '@/lib/clientes'
 import { GrupoTimesheet, grupoDeCliente, grupoDeKey, gruposTimesheet, linkPublico, tipoLegacy } from '@/lib/timesheets'
@@ -545,8 +545,8 @@ export default function Home() {
               porCobrar={totalPendiente} onEdit={() => setModal({ type: 'editCuentas' })}
               fijosPendientes={movsBanco.length ? (() => { const g = gastadoPorPartida(movsBanco, undefined, undefined, compartidos); return fijos.reduce((t, i) => t + Math.max(0, Number(i.limite) - (g[i.nombre] || 0)), 0) })() : null} />
 
-            <div className="dash-grid">
-              <PresupuestoCard fijos={fijos} variables={variables} movimientos={movsBanco} compartidos={compartidos} />
+            <div className="dash-grid-3">
+              <PresupuestoCards fijos={fijos} variables={variables} movimientos={movsBanco} compartidos={compartidos} />
               <div className="card">
                 <div className="card-head">
                   <div>

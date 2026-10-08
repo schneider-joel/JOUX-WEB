@@ -58,91 +58,78 @@ function Linea({ pct, color }: { pct: number; color: string }) {
   )
 }
 
-export default function PresupuestoCard({ fijos, variables, movimientos, compartidos = null }: { fijos: PresupuestoItem[]; variables: PresupuestoItem[]; movimientos: Mov[]; compartidos?: GastoCompartido[] | null }) {
+type Partida = { id: number; nombre: string; gastado: number; limite: number }
+
+// Una tarjeta por bloque (fijos / variables), con el mismo diseño de fila.
+function BloquePresupuesto({ titulo, partidas, estado, colorDe, nota }: {
+  titulo: string
+  partidas: Partida[]
+  estado: { texto: string; color: string }
+  colorDe: (p: Partida) => string
+  nota?: string
+}) {
+  const usado = partidas.reduce((s, p) => s + p.gastado, 0)
+  const total = partidas.reduce((s, p) => s + p.limite, 0)
+  return (
+    <div className="card presu-card">
+      <div className="presu-cabecera">
+        <div className="card-title">{titulo}</div>
+        <div className="mono presu-cifra">€{eur(usado)} <span>/ €{eur(total)}</span></div>
+      </div>
+      <div className="presu-estado" style={{ color: estado.color }}>{estado.texto}</div>
+      <ul className="presu-lista">
+        {partidas.map(p => {
+          const pct = p.limite > 0 ? p.gastado / p.limite : 0
+          const color = colorDe(p)
+          return (
+            <li key={p.id}>
+              <span className="presu-nombre">{p.nombre}</span>
+              <Linea pct={pct} color={color} />
+              <span className="mono presu-monto" style={pct > 1.001 ? { color: 'var(--red)' } : undefined}>€{eur(p.gastado)} <span>/ {eur(p.limite)}</span></span>
+            </li>
+          )
+        })}
+      </ul>
+      {nota && <div className="presu-nota">{nota}</div>}
+    </div>
+  )
+}
+
+// Presupuesto del mes: dos tarjetas (fijos y variables) para el grid del overview.
+export default function PresupuestoCards({ fijos, variables, movimientos, compartidos = null }: { fijos: PresupuestoItem[]; variables: PresupuestoItem[]; movimientos: Mov[]; compartidos?: GastoCompartido[] | null }) {
   if (!movimientos.length) return null
   const gastado = gastadoPorPartida(movimientos, new Set(variables.map(v => v.nombre)), undefined, compartidos)
   const parteSuya = gastado.__parteSuya || 0
   const hoy = new Date()
   const diasMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).getDate()
   const avanceMes = hoy.getDate() / diasMes
-  const nombreMes = hoy.toLocaleDateString('es-ES', { month: 'long' })
 
-  const suma = (items: PresupuestoItem[]) => ({
-    total: items.reduce((s, i) => s + Number(i.limite), 0),
-    usado: items.reduce((s, i) => s + Math.max(0, gastado[i.nombre] || 0), 0),
-  })
-  const f = suma(fijos), v = suma(variables)
-  const pctV = v.total > 0 ? v.usado / v.total : 0
-  const vaAlto = pctV > avanceMes + 0.1
+  const partidas = (items: PresupuestoItem[]): Partida[] => items.map(i => ({ id: i.id, nombre: i.nombre, gastado: Math.max(0, gastado[i.nombre] || 0), limite: Number(i.limite) }))
+  const pf = partidas(fijos), pv = partidas(variables)
+  const sum = (ps: Partida[], k: 'gastado' | 'limite') => ps.reduce((s, p) => s + p[k], 0)
+  const faltaF = sum(pf, 'limite') - sum(pf, 'gastado')
+  const usadoV = sum(pv, 'gastado'), totalV = sum(pv, 'limite')
+  const pctV = totalV > 0 ? usadoV / totalV : 0
 
   return (
-    <div className="card card-fill">
-      <div className="card-head" style={{ alignItems: 'flex-start' }}>
-        <div>
-          <div className="card-title">Presupuesto de {nombreMes}</div>
-          <div className="card-kicker" style={{ marginTop: 2 }}>Día {hoy.getDate()} de {diasMes}</div>
-        </div>
-        <div className="mono" style={{ fontSize: 13, color: 'var(--text2)', textAlign: 'right' }}>
-          €{eur(f.usado + v.usado)} <span style={{ color: 'var(--text3)' }}>/ €{eur(f.total + v.total)}</span>
-        </div>
-      </div>
-
-      <div className="presu-grid">
-        {/* Fijos: pagado o no, como una lista de comprobación. */}
-        <section>
-          <div className="presu-resumen">
-            <span className="card-kicker">Fijos</span>
-            <span className="mono presu-cifra">€{eur(f.usado)} <span>/ €{eur(f.total)}</span></span>
-          </div>
-          <div className="presu-estado" style={{ color: f.usado >= f.total - 0.5 ? 'var(--green)' : 'var(--text3)' }}>
-            {f.usado >= f.total - 0.5 ? 'Todo pagado' : `Quedan €${eur(f.total - f.usado)} por pagar`}
-          </div>
-          <ul className="presu-lista">
-            {fijos.map(i => {
-              const g = Math.max(0, gastado[i.nombre] || 0), lim = Number(i.limite)
-              const pagado = g >= lim * 0.95, parcial = !pagado && g > 0
-              return (
-                <li key={i.id} className={pagado ? 'pagado' : ''}>
-                  <span className={`presu-check${pagado ? ' ok' : parcial ? ' medio' : ''}`} aria-hidden="true">
-                    {pagado && <svg viewBox="0 0 12 12"><path d="M2.5 6.2 5 8.5l4.5-5" /></svg>}
-                  </span>
-                  <span className="presu-nombre">{i.nombre}</span>
-                  <span className="mono presu-monto">{parcial ? <>€{eur(g)} <span>/ {eur(lim)}</span></> : `€${eur(pagado ? g : lim)}`}</span>
-                </li>
-              )
-            })}
-          </ul>
-        </section>
-
-        {/* Variables: cuánto llevas frente al ritmo del mes. */}
-        <section>
-          <div className="presu-resumen">
-            <span className="card-kicker">Variables</span>
-            <span className="mono presu-cifra">€{eur(v.usado)} <span>/ €{eur(v.total)}</span></span>
-          </div>
-          <div className="presu-estado" style={{ color: pctV > 1 ? 'var(--red)' : vaAlto ? 'var(--amber)' : 'var(--text3)' }}>
-            {pctV > 1 ? `Te has pasado €${eur(v.usado - v.total)}` : vaAlto ? `Algo por encima del ritmo · quedan €${eur(v.total - v.usado)}` : `Vas bien · quedan €${eur(v.total - v.usado)}`}
-          </div>
-          <ul className="presu-lista">
-            {variables.map(i => {
-              const g = Math.max(0, gastado[i.nombre] || 0), lim = Number(i.limite)
-              const p = lim > 0 ? g / lim : 0
-              const color = p > 1.001 ? 'var(--red)' : p > avanceMes + 0.15 ? 'var(--amber)' : 'var(--text)'
-              return (
-                <li key={i.id}>
-                  <span className="presu-nombre">{i.nombre}</span>
-                  <Linea pct={p} color={color} />
-                  <span className="mono presu-monto" style={p > 1.001 ? { color: 'var(--red)' } : undefined}>€{eur(g)} <span>/ {eur(lim)}</span></span>
-                </li>
-              )
-            })}
-          </ul>
-        </section>
-      </div>
-
-      {parteSuya > 0 && (
-        <div className="presu-nota">Solo cuenta tu parte: €{eur(parteSuya)} de lo que pagaste es de Sofía (Compartidos).</div>
-      )}
-    </div>
+    <>
+      <BloquePresupuesto
+        titulo="Fijos"
+        partidas={pf}
+        estado={faltaF <= 0.5 ? { texto: 'Todo pagado', color: 'var(--green)' } : { texto: `Quedan €${eur(faltaF)} por pagar`, color: 'var(--text3)' }}
+        colorDe={p => (p.gastado >= p.limite * 0.95 ? 'var(--green)' : 'var(--text2)')}
+        nota={parteSuya > 0 ? `Solo cuenta tu parte: €${eur(parteSuya)} de lo que pagaste es de Sofía.` : undefined}
+      />
+      <BloquePresupuesto
+        titulo="Variables"
+        partidas={pv}
+        estado={pctV > 1
+          ? { texto: `Te has pasado €${eur(usadoV - totalV)}`, color: 'var(--red)' }
+          : pctV > avanceMes + 0.1
+            ? { texto: `Algo por encima del ritmo · quedan €${eur(totalV - usadoV)}`, color: 'var(--amber)' }
+            : { texto: `Vas bien · quedan €${eur(totalV - usadoV)}`, color: 'var(--text3)' }}
+        colorDe={p => (p.gastado > p.limite ? 'var(--red)' : p.gastado / p.limite > avanceMes + 0.15 ? 'var(--amber)' : 'var(--text)')}
+      />
+    </>
   )
 }
