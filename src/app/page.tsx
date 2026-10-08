@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import ComprasTab from './compras-tab'
 import NotificacionesBoton from './notificaciones-boton'
+import LogoJoux from './logo-joux'
 import ImpuestosTab, { proximoPago, claveReal, type Reales } from './impuestos-tab'
 import CuentasCard from './cuentas-card'
 import BancosTab from './bancos-tab'
@@ -459,11 +460,8 @@ export default function Home() {
     <div className="app">
       <aside className="sidebar">
         <div className="brand">
-          <div className="brand-mark">J</div>
-          <div>
-            <div className="brand-name">JOUX Hub</div>
-            <div className="brand-sub">Finanzas</div>
-          </div>
+          <LogoJoux className="brand-logo" titulo="JOUX Hub" />
+          <div className="brand-sub">Hub · Finanzas</div>
         </div>
         <div className="nav-scroll">
           <div className="nav-group">
