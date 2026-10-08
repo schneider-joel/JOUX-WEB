@@ -49,13 +49,12 @@ export function gastadoPorPartida(movs: Mov[], sinTrabajo: Set<string> = new Set
   return Object.assign(out, { __reembolsoAlquiler: alquiler, __compartidos: reembolsos - alquiler })
 }
 
-// Barra fina con marcador opcional del ritmo del mes.
-function Barra({ pct, color, ritmo, alto = 4 }: { pct: number; color: string; ritmo?: number; alto?: number }) {
+// Línea corta junto a la cifra de cada partida (sin pista de ancho completo).
+function Linea({ pct, color }: { pct: number; color: string }) {
   return (
-    <div className="presu-barra" style={{ height: alto }}>
-      <div style={{ width: `${Math.min(100, Math.max(pct > 0 ? 2 : 0, pct * 100))}%`, background: color }} />
-      {ritmo !== undefined && <span style={{ left: `${ritmo * 100}%`, top: -3, height: alto + 6 }} title="Ritmo del mes" />}
-    </div>
+    <span className="presu-linea" aria-hidden="true">
+      <span style={{ width: `${Math.min(100, Math.max(pct > 0 ? 6 : 0, pct * 100))}%`, background: color }} />
+    </span>
   )
 }
 
@@ -95,7 +94,6 @@ export default function PresupuestoCard({ fijos, variables, movimientos, compart
             <span className="card-kicker">Fijos</span>
             <span className="mono presu-cifra">€{eur(f.usado)} <span>/ €{eur(f.total)}</span></span>
           </div>
-          <Barra pct={f.total ? f.usado / f.total : 0} color={f.usado >= f.total - 0.5 ? 'var(--green)' : 'var(--text2)'} />
           <div className="presu-estado" style={{ color: f.usado >= f.total - 0.5 ? 'var(--green)' : 'var(--text3)' }}>
             {f.usado >= f.total - 0.5 ? 'Todo pagado' : `Quedan €${eur(f.total - f.usado)} por pagar`}
           </div>
@@ -122,7 +120,6 @@ export default function PresupuestoCard({ fijos, variables, movimientos, compart
             <span className="card-kicker">Variables</span>
             <span className="mono presu-cifra">€{eur(v.usado)} <span>/ €{eur(v.total)}</span></span>
           </div>
-          <Barra pct={pctV} color={pctV > 1 ? 'var(--red)' : vaAlto ? 'var(--amber)' : 'var(--accent)'} ritmo={avanceMes} />
           <div className="presu-estado" style={{ color: pctV > 1 ? 'var(--red)' : vaAlto ? 'var(--amber)' : 'var(--text3)' }}>
             {pctV > 1 ? `Te has pasado €${eur(v.usado - v.total)}` : vaAlto ? `Algo por encima del ritmo · quedan €${eur(v.total - v.usado)}` : `Vas bien · quedan €${eur(v.total - v.usado)}`}
           </div>
@@ -130,12 +127,12 @@ export default function PresupuestoCard({ fijos, variables, movimientos, compart
             {variables.map(i => {
               const g = Math.max(0, gastado[i.nombre] || 0), lim = Number(i.limite)
               const p = lim > 0 ? g / lim : 0
-              const color = p > 1.001 ? 'var(--red)' : p > avanceMes + 0.15 ? 'var(--amber)' : 'var(--text2)'
+              const color = p > 1.001 ? 'var(--red)' : p > avanceMes + 0.15 ? 'var(--amber)' : 'var(--text)'
               return (
-                <li key={i.id} className="presu-var">
+                <li key={i.id}>
                   <span className="presu-nombre">{i.nombre}</span>
+                  <Linea pct={p} color={color} />
                   <span className="mono presu-monto" style={p > 1.001 ? { color: 'var(--red)' } : undefined}>€{eur(g)} <span>/ {eur(lim)}</span></span>
-                  <Barra pct={p} color={color} alto={3} />
                 </li>
               )
             })}
