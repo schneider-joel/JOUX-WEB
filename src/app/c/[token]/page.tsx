@@ -8,6 +8,8 @@ export const metadata = {
   title: 'Casona · gastos compartidos',
   description: 'Quién pagó qué y quién debe a quién',
   robots: { index: false, follow: false },
+  // Sin el manifest del hub: el icono de Casona tiene que abrir este link.
+  manifest: null,
   appleWebApp: { capable: true, title: 'Casona', statusBarStyle: 'black-translucent' as const },
 }
 

@@ -609,3 +609,13 @@ BEGIN
   RETURN NEW;
 END;
 $function$;
+
+-- 2026-10-08: suscripciones de notificaciones push (un registro por dispositivo).
+create table if not exists push_suscripciones (
+  id bigserial primary key,
+  endpoint text unique not null,
+  keys jsonb not null,
+  dispositivo text,
+  created_at timestamptz default now()
+);
+alter table push_suscripciones enable row level security;

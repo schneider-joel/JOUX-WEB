@@ -1,6 +1,7 @@
 import { supabaseServer as sb } from '@/lib/supabase-server'
 import { clasificar, comercio, palabrasClave, textoDe, type Regla } from '@/lib/movimientos'
 import { sincronizarCompartidos } from '@/lib/compartidos-server'
+import { notificar } from '@/lib/push'
 
 const IVA = 0.21
 const RETENCION = 0.15
@@ -76,6 +77,8 @@ export async function conciliarCobros() {
     }
   }
   const usadas = new Set<number>()
+  const avisos: { cliente: string; numeros: string[]; importe: number }[] = []
+  const hace10dias = new Date(Date.now() - 10 * DIA).toISOString().slice(0, 10)
   let cobros = 0
   for (const m of movs || []) {
     if (yaUsados.has(m.id) || m.clase === 'interno' || m.clase === 'personal' || m.clase === 'reembolso') continue
@@ -90,7 +93,19 @@ export async function conciliarCobros() {
     await sb.from('facturas').update({ estado: 'cobrada', fecha_cobro: m.fecha, movimiento_id: m.id, ...(cuenta ? { cuenta_destino_id: cuenta } : {}) }).in('id', elegidas.map(f => f.id))
     await sb.from('movimientos').update({ clase: 'cobro', categoria: null }).eq('id', m.id)
     elegidas.forEach(f => usadas.add(f.id))
+    // Solo avisa de cobros nuevos (no de facturas antiguas ya cobradas a mano).
+    if (m.fecha >= hace10dias && elegidas.some(f => f.estado === 'pendiente')) {
+      avisos.push({ cliente: elegidas[0].cliente, numeros: elegidas.map(f => f.numero).filter(Boolean), importe: Number(m.importe) })
+    }
     cobros++
+  }
+  const eur = (n: number) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(n)
+  for (const a of avisos) {
+    await notificar({
+      titulo: `Cobro recibido · ${a.cliente}`,
+      cuerpo: `${eur(a.importe)} → ${a.numeros.length > 1 ? `facturas ${a.numeros.join(', ')}` : `factura ${a.numeros[0] || ''}`}`,
+      url: '/?tab=facturas',
+    }).catch(() => {})
   }
   return cobros
 }

@@ -6,6 +6,9 @@ export const metadata: Metadata = {
   metadataBase: new URL(process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : 'http://localhost:3000'),
   title: 'JOUX Hub',
   description: 'Panel financiero personal',
+  // Para añadir el hub a la pantalla de inicio (en iPhone es lo que permite
+  // recibir notificaciones push).
+  manifest: '/manifest.webmanifest',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',

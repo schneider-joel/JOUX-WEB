@@ -5,7 +5,7 @@ import type { NextRequest } from 'next/server'
 // /api/bancos/cron lo llama el cron de Vercel y valida su propio CRON_SECRET.
 // /c/<token> es el link privado de la pareja para los gastos compartidos; su
 // API valida el token (o el cookie del hub) por su cuenta.
-const PUBLIC_PATHS = [/^\/(ab|th|t|c)\//, /^\/api\/bancos\/cron$/, /^\/api\/compartidos$/, /^\/invoice\//, /^\/login$/, /^\/api\/login$/, /^\/icon/, /^\/apple-icon/]
+const PUBLIC_PATHS = [/^\/(ab|th|t|c)\//, /^\/api\/bancos\/cron$/, /^\/api\/compartidos$/, /^\/invoice\//, /^\/login$/, /^\/api\/login$/, /^\/icon/, /^\/apple-icon/, /^\/sw\.js$/, /^\/manifest\.webmanifest$/]
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl

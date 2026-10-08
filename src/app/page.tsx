@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import ComprasTab from './compras-tab'
+import NotificacionesBoton from './notificaciones-boton'
 import ImpuestosTab, { proximoPago, claveReal, type Reales } from './impuestos-tab'
 import CuentasCard from './cuentas-card'
 import BancosTab from './bancos-tab'
@@ -179,6 +180,8 @@ export default function Home() {
   const [mensajeBanco, setMensajeBanco] = useState<{ ok?: boolean; error?: string } | null>(null)
   useEffect(() => {
     const p = new URLSearchParams(window.location.search)
+    // Al tocar una notificación de cobro: /?tab=facturas
+    if (p.get('tab') === 'facturas') { setTab('facturas'); window.history.replaceState(null, '', '/'); return }
     if (p.get('tab') !== 'bancos') return
     setTab('bancos')
     if (p.get('ok') || p.get('error')) setMensajeBanco({ ok: !!p.get('ok'), error: p.get('error') || undefined })
@@ -472,6 +475,7 @@ export default function Home() {
             <div className="page-sub">{subtitulo}</div>
           </div>
           <div className="header-actions">
+            <NotificacionesBoton />
             <button className="btn" onClick={() => loadData()}><Icon.refresh />Actualizar</button>
             <button className={`btn${grupoActivo ? ' btn-primary' : ''}`} onClick={() => setModal({ type: 'addProyecto' })}><Icon.plus />Nuevo proyecto</button>
             {tab === 'clientes' ? (
