@@ -97,6 +97,11 @@ export default function NotificacionesBoton({ onIr }: { onIr?: (tab: string) => 
     if (tab) onIr?.(tab)
   }
 
+  const eliminar = (id: number) => {
+    setLista(l => l.filter(n => n.id !== id))
+    fetch('/api/push', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notificacion: id }) }).catch(() => {})
+  }
+
   const pushTexto: Record<Estado, string> = {
     cargando: '',
     activo: 'Push activado en este dispositivo',
@@ -126,7 +131,8 @@ export default function NotificacionesBoton({ onIr }: { onIr?: (tab: string) => 
             <div style={{ overflowY: 'auto', flex: 1 }}>
               {lista.length === 0 && <div style={{ padding: '24px 14px', fontSize: 12.5, color: 'var(--text3)', textAlign: 'center' }}>Aún no hay notificaciones. Aquí aparecerá cada cobro que se vincule a una factura.</div>}
               {lista.map(n => (
-                <button key={n.id} onClick={() => ir(n)} style={{ display: 'flex', gap: 10, width: '100%', textAlign: 'left', padding: '11px 14px', background: n.leida ? 'transparent' : 'var(--surface2)', border: 'none', borderBottom: '1px solid var(--border)', cursor: n.url ? 'pointer' : 'default', fontFamily: 'inherit', color: 'inherit' }}>
+                <div key={n.id} style={{ display: 'flex', alignItems: 'flex-start', background: n.leida ? 'transparent' : 'var(--surface2)', borderBottom: '1px solid var(--border)' }}>
+                <button onClick={() => ir(n)} style={{ display: 'flex', gap: 10, flex: 1, minWidth: 0, textAlign: 'left', padding: '11px 0 11px 14px', background: 'none', border: 'none', cursor: n.url ? 'pointer' : 'default', fontFamily: 'inherit', color: 'inherit' }}>
                   <i style={{ width: 7, height: 7, borderRadius: 4, marginTop: 5, flexShrink: 0, background: n.leida ? 'transparent' : 'var(--accent)' }} />
                   <span style={{ minWidth: 0, flex: 1 }}>
                     <span style={{ display: 'block', fontSize: 12.5, fontWeight: 500, color: 'var(--text)' }}>{n.titulo}</span>
@@ -134,6 +140,10 @@ export default function NotificacionesBoton({ onIr }: { onIr?: (tab: string) => 
                     <span style={{ display: 'block', fontSize: 11, color: 'var(--text3)', marginTop: 3 }}>{hace(n.created_at)}</span>
                   </span>
                 </button>
+                <button className="icon-btn danger" onClick={() => eliminar(n.id)} title="Quitar del panel" aria-label="Quitar del panel" style={{ width: 24, height: 24, margin: '10px 10px 0 6px', flexShrink: 0 }}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+                </button>
+                </div>
               ))}
             </div>
             <div style={{ padding: '10px 14px', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>

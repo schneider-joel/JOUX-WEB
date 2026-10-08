@@ -31,8 +31,10 @@ export async function PATCH() {
   return NextResponse.json({ ok: true })
 }
 
+// { notificacion: id } la quita del panel; { endpoint } desactiva el push de un dispositivo.
 export async function DELETE(req: Request) {
-  const { endpoint } = await req.json().catch(() => ({}))
+  const { endpoint, notificacion } = await req.json().catch(() => ({}))
+  if (notificacion) await sb.from('notificaciones').delete().eq('id', notificacion)
   if (endpoint) await sb.from('push_suscripciones').delete().eq('endpoint', endpoint)
   return NextResponse.json({ ok: true })
 }
