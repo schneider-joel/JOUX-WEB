@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import ComprasTab from './compras-tab'
 import NotificacionesBoton from './notificaciones-boton'
+import ModoPrivado from './modo-privado'
 import { GLIFO_JO, VIEWBOX_JO } from './marca-jo'
 import ImpuestosTab, { proximoPago, claveReal, type Reales } from './impuestos-tab'
 import CuentasCard from './cuentas-card'
@@ -487,6 +488,7 @@ export default function Home() {
             <div className="page-sub">{subtitulo}</div>
           </div>
           <div className="header-actions">
+            <ModoPrivado />
             <NotificacionesBoton onIr={t => setTab(t as Tab)} />
             <button className="btn" onClick={() => loadData()}><Icon.refresh />Actualizar</button>
             <button className={`btn${tab === 'clientes' ? '' : ' btn-primary'}`} onClick={() => setModal({ type: 'addProyecto' })}><Icon.plus />Nuevo proyecto</button>
