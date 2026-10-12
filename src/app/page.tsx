@@ -10,7 +10,7 @@ import CuentasCard from './cuentas-card'
 import MarcaCard from './marca-card'
 import { totalACobrar, desglose, desgloseFactura } from '@/lib/importes'
 import MarcaTab from './marca-tab'
-import { DEMO_MARCAS, DEMO_PROYECTOS, demoMarcasActivo } from '@/lib/marcas'
+import { DEMO_FACTURAS, DEMO_MARCAS, DEMO_PROYECTOS, demoMarcasActivo, esAgencia } from '@/lib/marcas'
 import BancosTab from './bancos-tab'
 import CompartidosVista from './compartidos-vista'
 import PresupuestoCards, { gastadoPorPartida } from './presupuesto-card'
@@ -426,17 +426,23 @@ export default function Home() {
 
   // Pocas secciones (caben en la barra inferior del móvil); las que agrupan
   // varias pestañas las muestran como subpestañas bajo el título.
-  const timesheets = gruposTimesheet(proyectos).map(g => ({
-    id: `ts:${g.key}` as Tab, label: g.label,
-    badge: proyectos.filter(p => g.clientes.includes(p.cliente) && p.status === 'activo').length,
-  }))
+  // Agencias (marcas de precio cerrado): una pestaña por marca; sus clientes no van a Timesheets.
+  // Hasta la migración solo existen en la demo (?demo=marcas); después saldrán de la tabla `marcas`.
   const demoMarcas = demoMarcasActivo()
-  const marcasLista = demoMarcas ? DEMO_MARCAS : []   // las marcas reales saldrán de los proyectos con `marca` tras la migración
-  const marcasTabs = marcasLista.map(m => ({ id: `mk:${m.key}` as Tab, label: m.nombre, badge: DEMO_PROYECTOS.filter(p => p.marca === m.key && p.estado === 'activo').length }))
+  const marcasLista = demoMarcas ? DEMO_MARCAS : []
+  const agencias = marcasLista.filter(esAgencia)
+  const deAgencia = (p: Proyecto) => agencias.some(m => m.key === p.marca)
+  const proyectosTs = proyectos.filter(p => !deAgencia(p))
+  const timesheets = gruposTimesheet(proyectosTs).map(g => ({
+    id: `ts:${g.key}` as Tab, label: g.label,
+    badge: proyectosTs.filter(p => g.clientes.includes(p.cliente) && p.status === 'activo').length,
+  }))
+  // Badge = pagos pendientes de cobro de la agencia.
+  const marcasTabs = agencias.map(m => ({ id: `mk:${m.key}` as Tab, label: m.nombre, badge: DEMO_PROYECTOS.filter(p => p.marca === m.key).flatMap(p => p.pagos).filter(x => x.estado === 'pendiente').length }))
   const secciones: Seccion[] = [
     { id: 'overview', label: 'Overview', icon: Icon.home, tabs: [{ id: 'dashboard', label: 'Overview' }] },
     { id: 'timesheets', label: 'Timesheets', icon: Icon.clock, tabs: timesheets },
-    ...(marcasTabs.length ? [{ id: 'marcas', label: 'Marcas', icon: Icon.coin, tabs: marcasTabs }] : []),
+    ...(marcasTabs.length ? [{ id: 'agencias', label: 'Agencias', icon: Icon.coin, tabs: marcasTabs }] : []),
     {
       id: 'facturacion', label: 'Facturación', icon: Icon.invoice, tabs: [
         { id: 'facturas', label: 'Facturas', badge: facturasPendientes.length },
@@ -464,8 +470,8 @@ export default function Home() {
     bancos: ['Bancos', 'Saldos y movimientos de tus cuentas, en automático'],
     compartidos: ['Gastos compartidos', 'La cuenta con tu pareja: quién pagó qué y quién debe a quién'],
   }
-  const marcaActiva = tab.startsWith('mk:') ? marcasLista.find(m => `mk:${m.key}` === tab) || null : null
-  const [titulo, subtitulo] = grupoActivo ? [`Timesheet · ${grupoActivo.label}`, 'Proyectos, días y facturación'] : marcaActiva ? [`Marca · ${marcaActiva.nombre}`, 'Clientes y proyectos de precio cerrado (50 % / 50 %)'] : titulos[tab]
+  const marcaActiva = tab.startsWith('mk:') ? agencias.find(m => `mk:${m.key}` === tab) || null : null
+  const [titulo, subtitulo] = grupoActivo ? [`Timesheet · ${grupoActivo.label}`, 'Proyectos, días y facturación'] : marcaActiva ? [`Agencia · ${marcaActiva.nombre}`, 'Clientes con web de precio cerrado: 50 % al empezar, 50 % al publicar'] : titulos[tab]
 
   return (
     <div className="app">
@@ -506,7 +512,7 @@ export default function Home() {
             <ModoPrivado />
             <NotificacionesBoton onIr={t => setTab(t as Tab)} />
             <button className="btn" onClick={() => loadData()}><Icon.refresh />Actualizar</button>
-            <button className={`btn${tab === 'clientes' ? '' : ' btn-primary'}`} onClick={() => setModal({ type: 'addProyecto' })}><Icon.plus />Nuevo proyecto</button>
+            {!marcaActiva && <button className={`btn${tab === 'clientes' ? '' : ' btn-primary'}`} onClick={() => setModal({ type: 'addProyecto' })}><Icon.plus />Nuevo proyecto</button>}
             {tab === 'clientes' && <button className="btn btn-primary" onClick={() => setModal({ type: 'editCliente' })}><Icon.plus />Nuevo cliente</button>}
           </div>
         </header>
@@ -562,7 +568,8 @@ export default function Home() {
               porCobrar={totalPendiente} onEdit={() => setModal({ type: 'editCuentas' })}
               fijosPendientes={movsBanco.length ? (() => { const g = gastadoPorPartida(movsBanco, undefined, undefined, compartidos); return fijos.reduce((t, i) => t + Math.max(0, Number(i.limite) - (g[i.nombre] || 0)), 0) })() : null} />
 
-            <MarcaCard />
+            {/* Se ve en la demo o cuando la columna `marca` ya existe en facturas. */}
+            {(demoMarcas || facturas.some(f => 'marca' in f)) && <MarcaCard facturas={demoMarcas ? DEMO_FACTURAS : facturas} marcas={marcasLista} demo={demoMarcas} />}
 
             <div className="dash-grid-3">
               <PresupuestoCards fijos={fijos} variables={variables} movimientos={movsBanco} compartidos={compartidos} />
@@ -831,7 +838,8 @@ export default function Home() {
         {tab === 'bancos' && <BancosTab cuentas={cuentas} mensaje={mensajeBanco} reload={loadData} />}
 
         {/* Timesheet del grupo de clientes activo */}
-        {marcaActiva && <MarcaTab key={marcaActiva.key} marca={marcaActiva} proyectos={DEMO_PROYECTOS} demo={demoMarcas} />}
+        {marcaActiva && <MarcaTab key={marcaActiva.key} marca={marcaActiva} proyectos={DEMO_PROYECTOS} demo={demoMarcas}
+          numerosExistentes={facturas.map(f => f.numero)} clientes={clientesFiscales} />}
         {grupoActivo && (
           <TimesheetTab key={grupoActivo.key} grupo={grupoActivo} proyectos={proyectos} dias={dias} facturas={facturas} clientesFiscales={clientesFiscales} reload={loadData} />
         )}

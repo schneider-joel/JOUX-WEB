@@ -304,6 +304,22 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 }
 @media (max-width: 760px) { .dash-grid-3 { grid-template-columns: 1fr; } }
 .chart-compacto { height: 150px; min-height: 150px; }
+/* Marcas y agencias */
+.marca-fila { display: grid; grid-template-columns: 150px 1fr auto; gap: 16px; align-items: center; padding: 12px 0; border-top: 1px solid var(--border); }
+.agencia-resumen { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.agencia-fila { display: grid; grid-template-columns: minmax(0, 1.5fr) 90px 1fr 1fr; gap: 16px; align-items: center; padding: 12px 0; border-top: 1px solid var(--border); }
+.agencia-cabecera { font-size: 10.5px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.08em; padding: 0 0 8px; border-top: none; }
+.agencia-pago { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; }
+.agencia-pago-etq { display: none; font-size: 10.5px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; }
+@media (max-width: 760px) {
+  .marca-fila { grid-template-columns: 1fr auto; }
+  .marca-fila > :nth-child(2) { grid-column: 1 / -1; grid-row: 2; }
+  .agencia-resumen { grid-template-columns: 1fr 1fr; }
+  .agencia-cabecera { display: none; }
+  .agencia-fila { grid-template-columns: 1fr auto; gap: 10px 12px; padding: 14px 0; }
+  .agencia-pago { grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 10px; }
+  .agencia-pago-etq { display: block; width: 100%; }
+}
 @media (max-width: 860px) {
   .acct-grid { grid-template-columns: 1fr; }
   .acct-app-icon { width: 48px; height: 48px; }

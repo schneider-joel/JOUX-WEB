@@ -178,6 +178,7 @@ export type Proyecto = {
   status: StatusProyecto
   numero_proyecto?: string
   modo_rate?: 'hora' | 'dia'
+  marca?: string | null                // tras la migración de marcas
   created_at: string
 }
 

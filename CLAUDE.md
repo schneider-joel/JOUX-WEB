@@ -48,7 +48,12 @@ Panel financiero personal de Joel, autónomo en España: facturación, timesheet
 
 - **Compartidos** (`gastos_compartidos`, `src/lib/compartidos*.ts`): cuenta con Sofía (link privado `/c/<token>`, PWA "Casona"). Se añaden solos el alquiler, el agua y Mercadona pagado con Revolut, a medias. El presupuesto cuenta solo la parte de Joel.
 - **Timesheets**: un grupo por clientes (`src/lib/timesheets.ts`), con links públicos de solo lectura. Desde el link de Ambushed/BoldMove la factura se descarga como `JOEL SCHNEIDER - CLIENTE - REF` (`?ref=1`).
-- **Marcas** (Arkevo): `marca-card.tsx`, `marca-tab.tsx`, `src/lib/marcas.ts`. La pestaña solo se ve con `?demo=marcas` hasta que exista la columna `marca`.
+- **Marcas y agencias**: `src/lib/marcas.ts`, `marca-tab.tsx` (pestaña de agencia), `marca-card.tsx` («Ingresos por marca»). **Fase 1 (oct 2026): solo interfaz con `?demo=marcas`, sin escrituras.** Fase 2 pendiente del OK de Joel al diseño: migración aditiva.
+  - Valores de `marca`: `arkevo` (y futuras agencias; precio cerrado) · `joel` (a mi nombre: Custom Websites, Hans, Tays) · `ab` (Ambushed/BoldMove, por hora). Tabla `marcas (key, nombre, modo, dominio)` con `modo` `cerrado|dia|hora`: una agencia nueva = una fila.
+  - Agencia = 50 % al empezar y 50 % al publicar en **un proyecto con dos pagos**; «Facturar pago N» crea su propia factura (número correlativo, IVA/retención según país). Nunca dos proyectos.
+  - Los clientes de agencias no salen en Timesheets: sección «Agencias», una pestaña por marca, una fila por cliente (web, precio, pago 1 / pago 2).
+  - «Ingresos por marca» lee solo la columna `facturas.marca` (sin deducirla de la descripción); se oculta mientras la columna no exista.
+  - No tocar el trigger `crear_factura_desde_proyecto` ni los treatments.
 - **Modo privado** (`modo-privado.tsx`): tapa los importes del texto ya pintado. No depende de los formateadores.
 
 ## Convenciones

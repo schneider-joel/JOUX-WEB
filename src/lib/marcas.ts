@@ -1,31 +1,68 @@
-// Marcas (Arkevo, y las que vengan): una marca NO es un cliente, es un negocio que tiene clientes.
-// Pestaña = marca; dentro, una sección por cliente y debajo sus proyectos (de precio cerrado, 50 % / 50 %).
-// De momento los datos reales no tienen `marca`; con ?demo=marcas se ve la pestaña con datos de ejemplo.
-export type Marca = { key: string; nombre: string }
+// Marcas: cómo se factura cada parte del negocio. Espejo de la futura tabla `marcas`
+// (key, nombre, modo, dominio): una agencia nueva es una fila, sin tocar código.
+// - modo 'cerrado' = agencia de nicho (Arkevo…): precio cerrado, 50 % al empezar y 50 % al publicar.
+//   Sus clientes no van a Timesheets sino a la sección «Agencias», una pestaña por marca.
+// - 'dia' / 'hora' = trabajo con timesheet (a mi nombre, Ambushed/BoldMove).
+// Hasta la migración, todo esto solo se ve con ?demo=marcas y no lee ni escribe nada.
+export type ModoMarca = 'cerrado' | 'dia' | 'hora'
+export type Marca = { key: string; nombre: string; modo: ModoMarca; dominio: string | null }
 export type PaisFiscal = 'ES' | 'UE' | 'EXT'
-export type Hito = 'sin_facturar' | 'pendiente' | 'cobrada'
-export type ProyectoMarca = {
-  id: number; marca: string; cliente: string; nombre: string; plan: string
-  precio: number                      // base, sin impuestos
+
+// Un pago del proyecto = una factura propia (numeración correlativa) cuando se factura.
+export type Pago = { estado: 'sin_facturar' | 'pendiente' | 'cobrada'; numero?: string; fecha?: string }
+
+// Un cliente de agencia = un proyecto de precio cerrado con dos pagos (no dos proyectos).
+export type ProyectoAgencia = {
+  id: number; marca: string; cliente: string
+  web: string                          // dominio de la web que se le hace
+  plan: string
+  precio: number                       // base, sin impuestos
   pais: PaisFiscal
-  estado: 'activo' | 'completado' | 'facturado'
-  inicio: Hito; fin: Hito             // factura del 50 % al empezar y del 50 % al publicar
+  pagos: [Pago, Pago]
 }
+
+export const esAgencia = (m: Pick<Marca, 'modo'>) => m.modo === 'cerrado'
+export const ETIQUETA_PAGO = ['50 % al empezar', '50 % al publicar'] as const
 
 export const demoMarcasActivo = () => typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('demo') === 'marcas'
 
 export const DEMO_MARCAS: Marca[] = [
-  { key: 'arkevo', nombre: 'Arkevo' },
-  { key: 'clinicas', nombre: 'Clínicas (ejemplo)' },
+  { key: 'arkevo', nombre: 'Arkevo', modo: 'cerrado', dominio: 'arkevostudio.com' },
+  { key: 'clinic', nombre: 'Clinic (ejemplo)', modo: 'cerrado', dominio: null },
+  { key: 'joel', nombre: 'Joel Schneider', modo: 'dia', dominio: 'joelschneider.io' },
+  { key: 'ab', nombre: 'Ambushed / BoldMove', modo: 'hora', dominio: null },
 ]
 
-export const DEMO_PROYECTOS: ProyectoMarca[] = [
-  { id: -1, marca: 'arkevo', cliente: 'Estudio Ejemplo SL', nombre: 'Web Estudio Ejemplo', plan: 'Studio', precio: 3900, pais: 'ES', estado: 'activo', inicio: 'cobrada', fin: 'sin_facturar' },
-  { id: -2, marca: 'arkevo', cliente: 'Estudio Ejemplo SL', nombre: 'Landing concurso', plan: 'Essential', precio: 990, pais: 'ES', estado: 'completado', inicio: 'cobrada', fin: 'pendiente' },
-  { id: -3, marca: 'arkevo', cliente: 'Construcciones Muestra', nombre: 'Web Construcciones Muestra', plan: 'Essential', precio: 990, pais: 'ES', estado: 'activo', inicio: 'pendiente', fin: 'sin_facturar' },
-  { id: -4, marca: 'arkevo', cliente: 'Muestra Architects Ltd', nombre: 'Website Muestra', plan: 'Signature', precio: 8500, pais: 'EXT', estado: 'activo', inicio: 'sin_facturar', fin: 'sin_facturar' },
-  { id: -5, marca: 'clinicas', cliente: 'Clínica Dental Ejemplo', nombre: 'Web Clínica Ejemplo', plan: 'Studio', precio: 2500, pais: 'ES', estado: 'activo', inicio: 'pendiente', fin: 'sin_facturar' },
+const anio = new Date().getFullYear()
+export const DEMO_PROYECTOS: ProyectoAgencia[] = [
+  { id: -1, marca: 'arkevo', cliente: 'Estudio Ejemplo SL', web: 'estudioejemplo.es', plan: 'Studio', precio: 3900, pais: 'ES',
+    pagos: [{ estado: 'cobrada', numero: `F-${anio}-31`, fecha: `${anio}-09-02` }, { estado: 'pendiente', numero: `F-${anio}-36`, fecha: `${anio}-10-06` }] },
+  { id: -2, marca: 'arkevo', cliente: 'Construcciones Muestra SA', web: 'construccionesmuestra.com', plan: 'Essential', precio: 990, pais: 'ES',
+    pagos: [{ estado: 'pendiente', numero: `F-${anio}-35`, fecha: `${anio}-10-01` }, { estado: 'sin_facturar' }] },
+  { id: -3, marca: 'arkevo', cliente: 'Muestra Architects Ltd', web: 'muestra-architects.co.uk', plan: 'Signature', precio: 8500, pais: 'EXT',
+    pagos: [{ estado: 'sin_facturar' }, { estado: 'sin_facturar' }] },
+  { id: -4, marca: 'clinic', cliente: 'Clínica Dental Ejemplo SL', web: 'clinicaejemplo.es', plan: 'Studio', precio: 2500, pais: 'ES',
+    pagos: [{ estado: 'sin_facturar' }, { estado: 'sin_facturar' }] },
 ]
 
-// Lo que paga realmente el cliente por una base: con IVA 21 % y retención 15 % si es de España.
-export const aCobrar = (base: number, pais: PaisFiscal) => Math.round(base * (pais === 'ES' ? 1 + 0.21 - 0.15 : 1) * 100) / 100
+// Facturas de ejemplo para la tarjeta «Ingresos por marca» (ya con su columna `marca`).
+const hoy = new Date().toISOString().slice(0, 10)
+export const DEMO_FACTURAS = [
+  { id: -1, cliente: 'Estudio Ejemplo SL', importe: 1950, fecha: hoy, estado: 'cobrada', tipo_factura: 'dentro_ue', marca: 'arkevo' },
+  { id: -2, cliente: 'Estudio Ejemplo SL', importe: 1950, fecha: hoy, estado: 'pendiente', tipo_factura: 'dentro_ue', marca: 'arkevo' },
+  { id: -3, cliente: 'Construcciones Muestra SA', importe: 495, fecha: hoy, estado: 'pendiente', tipo_factura: 'dentro_ue', marca: 'arkevo' },
+  { id: -4, cliente: 'Hans Emanuel', importe: 2400, fecha: hoy, estado: 'cobrada', tipo_factura: 'fuera_ue', marca: 'joel' },
+  { id: -5, cliente: 'Tays Perez', importe: 1800, fecha: hoy, estado: 'pendiente', tipo_factura: 'fuera_ue', marca: 'joel' },
+  { id: -6, cliente: 'Ambushed', importe: 5320, fecha: hoy, estado: 'cobrada', tipo_factura: 'fuera_ue', marca: 'ab' },
+  { id: -7, cliente: 'BoldMove', importe: 1260, fecha: hoy, estado: 'pendiente', tipo_factura: 'fuera_ue', marca: 'ab' },
+]
+
+// Siguiente número correlativo del año a partir de las facturas cargadas (solo para la vista previa;
+// el número real lo pone siguiente_numero_factura() en la base de datos).
+export const siguienteNumero = (numeros: (string | undefined | null)[], year = anio) => {
+  const n = numeros.reduce((max, x) => {
+    const m = x?.match(new RegExp(`^F-${year}-(\\d+)$`))
+    return m ? Math.max(max, Number(m[1])) : max
+  }, 0)
+  return `F-${year}-${n + 1}`
+}
