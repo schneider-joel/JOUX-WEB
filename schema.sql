@@ -630,3 +630,66 @@ create table if not exists notificaciones (
   created_at timestamptz default now()
 );
 alter table notificaciones enable row level security;
+
+-- MIGRACIÓN: marcas y agencias (2026-10-12, solo aditiva: tabla nueva, columnas nuevas que admiten vacío, función nueva).
+-- Una agencia nueva = una fila en marcas con modo 'cerrado'. No toca crear_factura_desde_proyecto.
+-- Agencia = proyecto de precio cerrado con dos pagos (50 % al empezar, 50 % al publicar); cada pago es
+-- una factura propia creada con crear_factura_pago(proyecto, 1|2).
+CREATE TABLE IF NOT EXISTS marcas (
+  key TEXT PRIMARY KEY CHECK (key ~ '^[a-z0-9-]+$'),
+  nombre TEXT NOT NULL,
+  modo TEXT NOT NULL CHECK (modo IN ('cerrado', 'dia', 'hora')),
+  dominio TEXT,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+ALTER TABLE marcas ENABLE ROW LEVEL SECURITY;
+INSERT INTO marcas (key, nombre, modo, dominio) VALUES
+  ('arkevo', 'Arkevo', 'cerrado', 'arkevostudio.com'),
+  ('joel', 'Joel Schneider', 'dia', 'joelschneider.io'),
+  ('ab', 'Ambushed / BoldMove', 'hora', NULL)
+ON CONFLICT (key) DO NOTHING;
+
+ALTER TABLE proyectos ADD COLUMN IF NOT EXISTS marca TEXT REFERENCES marcas(key);
+ALTER TABLE proyectos ADD COLUMN IF NOT EXISTS web TEXT;
+ALTER TABLE proyectos ADD COLUMN IF NOT EXISTS plan TEXT;
+ALTER TABLE proyectos ADD COLUMN IF NOT EXISTS precio_cerrado NUMERIC(10,2);
+-- Un proyecto de precio cerrado nunca pasa a 'facturado': al salir de ese estado, el trigger
+-- crear_factura_desde_proyecto borraría sus facturas pendientes.
+ALTER TABLE proyectos ADD CONSTRAINT proyectos_cerrado_sin_facturado
+  CHECK (precio_cerrado IS NULL OR status IS DISTINCT FROM 'facturado');
+
+ALTER TABLE facturas ADD COLUMN IF NOT EXISTS marca TEXT REFERENCES marcas(key);
+ALTER TABLE facturas ADD COLUMN IF NOT EXISTS pago SMALLINT CHECK (pago IN (1, 2));
+CREATE UNIQUE INDEX IF NOT EXISTS facturas_pago_unico ON facturas (proyecto_id, pago) WHERE pago IS NOT NULL;
+
+CREATE OR REPLACE FUNCTION crear_factura_pago(p_proyecto INT, p_pago SMALLINT)
+RETURNS facturas LANGUAGE plpgsql AS $$
+DECLARE pr proyectos; m marcas; v_pais TEXT; v_base NUMERIC(10,2); f facturas;
+BEGIN
+  IF p_pago NOT IN (1, 2) THEN RAISE EXCEPTION 'El pago tiene que ser 1 o 2'; END IF;
+  SELECT * INTO pr FROM proyectos WHERE id = p_proyecto FOR UPDATE;
+  IF pr.id IS NULL OR pr.precio_cerrado IS NULL THEN RAISE EXCEPTION 'El proyecto % no es de precio cerrado', p_proyecto; END IF;
+  SELECT * INTO m FROM marcas WHERE key = pr.marca;
+  IF m.modo IS DISTINCT FROM 'cerrado' THEN RAISE EXCEPTION 'La marca % no es una agencia', pr.marca; END IF;
+  IF p_pago = 2 AND NOT EXISTS (SELECT 1 FROM facturas WHERE proyecto_id = pr.id AND pago = 1) THEN
+    RAISE EXCEPTION 'Primero hay que facturar el pago 1'; END IF;
+  SELECT pais INTO v_pais FROM clientes_fiscales WHERE cliente = pr.cliente;
+  IF NOT FOUND OR v_pais IS NULL THEN RAISE EXCEPTION 'Faltan los datos fiscales de %', pr.cliente; END IF;
+  -- Sin alta en el ROI no se factura sin IVA a la UE: se habla antes con el gestor.
+  IF v_pais = 'UE' THEN RAISE EXCEPTION 'Cliente de la UE: sin alta en el ROI, consúltalo con el gestor antes de facturar'; END IF;
+  -- Si el precio tiene céntimos impares, el segundo pago se lleva el resto.
+  v_base := CASE WHEN p_pago = 1 THEN round(pr.precio_cerrado / 2, 2) ELSE pr.precio_cerrado - round(pr.precio_cerrado / 2, 2) END;
+  INSERT INTO facturas (cliente, descripcion, importe, fecha, fecha_vencimiento, estado, origen, proyecto_id,
+                        numero, tipo_factura, idioma, marca, pago)
+  VALUES (pr.cliente,
+          concat_ws(' · ', m.nombre, 'Web ' || coalesce(pr.plan, '') || coalesce(' (' || pr.web || ')', ''),
+                    CASE p_pago WHEN 1 THEN '50 % al empezar' ELSE '50 % al publicar' END),
+          v_base, CURRENT_DATE, CURRENT_DATE + 30, 'pendiente', 'manual', pr.id,
+          siguiente_numero_factura(),
+          CASE WHEN v_pais = 'ES' THEN 'dentro_ue' ELSE 'fuera_ue' END,
+          CASE WHEN v_pais = 'ES' THEN 'es' ELSE 'en' END,
+          m.key, p_pago)
+  RETURNING * INTO f;
+  RETURN f;
+END $$;
+REVOKE EXECUTE ON FUNCTION crear_factura_pago(INT, SMALLINT) FROM PUBLIC, anon, authenticated;
