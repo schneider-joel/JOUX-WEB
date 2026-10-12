@@ -36,14 +36,15 @@ export const facturaSueltaAAgencia = (f: { id: number; cliente: string; descripc
 
 // Proyecto real (columnas de la migración de marcas) → fila de agencia, con sus dos facturas por `pago`.
 type ProyectoBD = { id: number; cliente: string; nombre: string; marca?: string | null; web?: string | null; plan?: string | null; precio_cerrado?: number | string | null }
-type FacturaBD = { id: number; proyecto_id?: number | null; pago?: number | null; numero?: string | null; fecha: string; estado: string; importe: number | string }
+type FacturaBD = { id: number; proyecto_id?: number | null; pago?: number | null; numero?: string | null; fecha: string; estado: string; importe: number | string; fiscal?: boolean | null }
 export const aProyectoAgencia = (p: ProyectoBD, facturas: FacturaBD[], clientes: { cliente: string; pais?: string | null }[]): ProyectoAgencia => {
   const pago = (n: 1 | 2): Pago => {
     const f = facturas.find(x => x.proyecto_id === p.id && x.pago === n)
     return f ? { estado: f.estado === 'cobrada' ? 'cobrada' : 'pendiente', numero: f.numero || undefined, fecha: f.fecha, facturaId: f.id } : { estado: 'sin_facturar' }
   }
   // Sin precio cerrado = web de antes (p. ej. facturada desde un timesheet): se muestra su factura única.
-  const vieja = p.precio_cerrado == null ? facturas.find(x => x.proyecto_id === p.id && !x.pago) : undefined
+  // Los registros internos del timesheet (fiscal = false) no son facturas: la real va aparte.
+  const vieja = p.precio_cerrado == null ? facturas.find(x => x.proyecto_id === p.id && !x.pago && x.fiscal !== false) : undefined
   return {
     unica: vieja ? { estado: vieja.estado === 'cobrada' ? 'cobrada' : 'pendiente', numero: vieja.numero || undefined, fecha: vieja.fecha, facturaId: vieja.id, importe: Number(vieja.importe) } : undefined,
     id: p.id, marca: p.marca || '', cliente: p.cliente, web: p.web || p.nombre, plan: p.plan || '',

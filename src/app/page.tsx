@@ -440,7 +440,9 @@ export default function Home() {
   const agencias = marcasLista.filter(esAgencia)
   const deAgencia = (p: Proyecto) => agencias.some(m => m.key === p.marca)
   const proyectosAgencia = demoMarcas ? DEMO_PROYECTOS : [
-    ...proyectos.filter(deAgencia).map(p => aProyectoAgencia(p, facturas, clientesFiscales)),
+    // Webs antiguas sin precio cerrado y sin factura fiscal propia (solo el registro interno del timesheet) no salen:
+    // su factura real está entre las sueltas de abajo.
+    ...proyectos.filter(deAgencia).map(p => aProyectoAgencia(p, facturas, clientesFiscales)).filter(p => p.unica || p.precio > 0 || proyectos.find(x => x.id === p.id)?.precio_cerrado != null),
     // Webs facturadas a mano, sin proyecto (Hans Emanuel Productions, Jaleo…): una fila por factura.
     ...facturas.filter(f => !f.proyecto_id && f.fiscal !== false && agencias.some(m => m.key === f.marca)).map(facturaSueltaAAgencia),
   ]
