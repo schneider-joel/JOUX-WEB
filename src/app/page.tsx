@@ -10,7 +10,7 @@ import CuentasCard from './cuentas-card'
 import MarcaCard from './marca-card'
 import { totalACobrar, desglose, desgloseFactura } from '@/lib/importes'
 import MarcaTab, { type AccionesAgencia } from './marca-tab'
-import { DEMO_FACTURAS, DEMO_MARCAS, DEMO_PROYECTOS, aProyectoAgencia, demoMarcasActivo, esAgencia, porOrden, type Marca } from '@/lib/marcas'
+import { DEMO_FACTURAS, DEMO_MARCAS, DEMO_PROYECTOS, aProyectoAgencia, facturaSueltaAAgencia, demoMarcasActivo, esAgencia, porOrden, type Marca } from '@/lib/marcas'
 import BancosTab from './bancos-tab'
 import CompartidosVista from './compartidos-vista'
 import PresupuestoCards, { gastadoPorPartida } from './presupuesto-card'
@@ -439,7 +439,11 @@ export default function Home() {
   const marcasLista = [...(demoMarcas ? DEMO_MARCAS : marcas)].sort(porOrden)
   const agencias = marcasLista.filter(esAgencia)
   const deAgencia = (p: Proyecto) => agencias.some(m => m.key === p.marca)
-  const proyectosAgencia = demoMarcas ? DEMO_PROYECTOS : proyectos.filter(deAgencia).map(p => aProyectoAgencia(p, facturas, clientesFiscales))
+  const proyectosAgencia = demoMarcas ? DEMO_PROYECTOS : [
+    ...proyectos.filter(deAgencia).map(p => aProyectoAgencia(p, facturas, clientesFiscales)),
+    // Webs facturadas a mano, sin proyecto (Hans Emanuel Productions, Jaleo…): una fila por factura.
+    ...facturas.filter(f => !f.proyecto_id && f.fiscal !== false && agencias.some(m => m.key === f.marca)).map(facturaSueltaAAgencia),
+  ]
   const accionesAgencia: AccionesAgencia = {
     facturar: async (proyecto_id, pago) => {
       const r = await fetch('/api/agencias/facturar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ proyecto_id, pago }) })

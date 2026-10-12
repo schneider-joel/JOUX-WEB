@@ -24,6 +24,16 @@ export type ProyectoAgencia = {
   unica?: Pago & { importe: number }   // webs anteriores a los dos pagos: su factura única (base)
 }
 
+// Factura de una marca de webs hecha a mano, sin proyecto (webs de antes de los dos pagos): una fila
+// con su factura única. El id negativo evita chocar con los de proyectos.
+export const facturaSueltaAAgencia = (f: { id: number; cliente: string; descripcion?: string | null; importe: number | string; fecha: string; estado: string; numero?: string | null; tipo_factura?: string | null; marca?: string | null }): ProyectoAgencia => ({
+  id: -f.id, marca: f.marca || '', cliente: f.cliente, web: f.descripcion || '', plan: '',
+  precio: Number(f.importe),
+  pais: f.tipo_factura === 'dentro_ue' ? 'ES' : 'EXT',
+  pagos: [{ estado: 'sin_facturar' }, { estado: 'sin_facturar' }],
+  unica: { estado: f.estado === 'cobrada' ? 'cobrada' : 'pendiente', numero: f.numero || undefined, fecha: f.fecha, facturaId: f.id, importe: Number(f.importe) },
+})
+
 // Proyecto real (columnas de la migración de marcas) → fila de agencia, con sus dos facturas por `pago`.
 type ProyectoBD = { id: number; cliente: string; nombre: string; marca?: string | null; web?: string | null; plan?: string | null; precio_cerrado?: number | string | null }
 type FacturaBD = { id: number; proyecto_id?: number | null; pago?: number | null; numero?: string | null; fecha: string; estado: string; importe: number | string }

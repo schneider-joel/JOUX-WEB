@@ -121,7 +121,7 @@ export default function MarcaTab({ marca, proyectos: iniciales, numerosExistente
 
       <div className="card">
         <div className="card-head">
-          <div className="card-title">Clientes <span style={{ color: 'var(--text3)', fontWeight: 400 }}>· {proyectos.length}</span></div>
+          <div className="card-title">Clientes <span style={{ color: 'var(--text3)', fontWeight: 400 }}>· {new Set(proyectos.map(p => p.cliente)).size}</span></div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             {demo && <span className="mono" title="Datos de ejemplo: no se escribe nada en la base de datos" style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, background: 'var(--amber-dim)', color: 'var(--amber)' }}>DEMO</span>}
             <button className="btn" onClick={() => setNuevo(true)} style={{ whiteSpace: 'nowrap' }}>+ Cliente</button>
@@ -137,7 +137,9 @@ export default function MarcaTab({ marca, proyectos: iniciales, numerosExistente
           <div key={p.id} className="agencia-fila">
             <div style={{ minWidth: 0 }}>
               <div className="agencia-cliente">{p.cliente}</div>
-              <a className="agencia-web" href={`https://${p.web}`} target="_blank" rel="noopener noreferrer">{p.web}</a>
+              {/^[^\s/]+\.[a-z]{2,}$/i.test(p.web)
+                ? <a className="agencia-web" href={`https://${p.web}`} target="_blank" rel="noopener noreferrer">{p.web}</a>
+                : <span className="agencia-web">{p.web}</span>}
             </div>
             <div className="mono agencia-precio">{eurCorto(p.precio)}</div>
             {p.unica ? (
