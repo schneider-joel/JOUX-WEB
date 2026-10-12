@@ -317,6 +317,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .agencia-precio { font-size: 13px; color: var(--text2); text-align: right; }
 .agencia-pago { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; margin: -8px -10px; padding: 8px 10px; border-radius: 8px; background: none; border: none; color: inherit; font: inherit; text-align: left; cursor: pointer; transition: background 160ms var(--ease-out); }
 .agencia-pago:disabled { cursor: default; opacity: 0.55; }
+.agencia-pago-unica { grid-column: span 2; text-decoration: none; }
 .agencia-pago-num { display: flex; align-items: center; gap: 8px; font-size: 13px; }
 .agencia-pago-num i { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
 .agencia-pago-sub { font-size: 11.5px; color: var(--text3); padding-left: 14px; white-space: nowrap; }

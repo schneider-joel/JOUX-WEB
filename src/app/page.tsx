@@ -10,13 +10,13 @@ import CuentasCard from './cuentas-card'
 import MarcaCard from './marca-card'
 import { totalACobrar, desglose, desgloseFactura } from '@/lib/importes'
 import MarcaTab, { type AccionesAgencia } from './marca-tab'
-import { DEMO_FACTURAS, DEMO_MARCAS, DEMO_PROYECTOS, aProyectoAgencia, demoMarcasActivo, esAgencia, type Marca } from '@/lib/marcas'
+import { DEMO_FACTURAS, DEMO_MARCAS, DEMO_PROYECTOS, aProyectoAgencia, demoMarcasActivo, esAgencia, porOrden, type Marca } from '@/lib/marcas'
 import BancosTab from './bancos-tab'
 import CompartidosVista from './compartidos-vista'
 import PresupuestoCards, { gastadoPorPartida } from './presupuesto-card'
 import type { GastoCompartido } from '@/lib/compartidos'
 import { PAISES, PaisFiscal, detectarPais, tipoFacturaDePais } from '@/lib/clientes'
-import { GrupoTimesheet, grupoDeCliente, grupoDeKey, gruposTimesheet, linkPublico, tipoLegacy } from '@/lib/timesheets'
+import { GrupoTimesheet, grupoDeCliente, gruposTimesheet, linkPublico, tipoLegacy } from '@/lib/timesheets'
 import { supabase, batchQuery, Compra, Cuenta, Crypto, Factura, PresupuestoItem, Proyecto, DiaTrabajado, PatrimonioSnapshot, ClienteFiscal } from '@/lib/supabase'
 
 const fmt = (n: number) => new Intl.NumberFormat('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(Math.round(n))
@@ -191,7 +191,7 @@ export default function Home() {
   // Última subpestaña abierta de cada sección (p. ej. volver a Compras dentro de Facturación).
   const [ultimaPestana, setUltimaPestana] = useState<Record<string, Tab>>({})
   useEffect(() => {
-    const sec = tab.startsWith('ts:') ? 'timesheets' : ['facturas', 'compras', 'impuestos', 'clientes'].includes(tab) ? 'facturacion' : null
+    const sec = tab.startsWith('ts:') ? 'treatments' : tab.startsWith('mk:') ? 'webs' : ['facturas', 'compras', 'impuestos', 'clientes'].includes(tab) ? 'facturacion' : null
     if (sec) setUltimaPestana(u => (u[sec] === tab ? u : { ...u, [sec]: tab }))
   }, [tab])
   // Vuelta de la conexión con un banco: /?tab=bancos&ok=1 o &error=...
@@ -378,12 +378,14 @@ export default function Home() {
 
   // El proyecto va al timesheet de su cliente (o al del grupo al que pertenece).
   const addProyecto = async (data: NuevoProyecto) => {
-    // Los proyectos con timesheet son de Ambushed/BoldMove o a mi nombre; los de agencia se crean desde su pestaña.
-    const marca = grupoDeCliente(data.cliente).key === 'ab' ? 'ab' : 'joel'
+    // Los proyectos con timesheet son treatments: Ambushed/BoldMove (ab) o The Pitch Lab (Tays/Hans y
+    // clientes nuevos, o la marca de la pestaña abierta). Las webs se crean desde su pestaña en Webs.
+    const grupo = grupoDeCliente(data.cliente).key
+    const marca = grupo === 'ab' ? 'ab' : grupo === 'th' ? 'pitchlab' : tab.startsWith('ts:') ? tab.slice(3) : 'pitchlab'
     await supabase.from('proyectos').insert([{ ...data, tipo: tipoLegacy(data.cliente), status: 'activo', marca }])
     setModal(null)
     await loadData()
-    setTab(`ts:${grupoDeCliente(data.cliente).key}`)
+    setTab(`ts:${marca}`)
   }
 
   const saveClienteFiscal = async (c: ClienteFiscal) => {
@@ -434,7 +436,7 @@ export default function Home() {
   // Agencias (marcas de precio cerrado): una pestaña por marca; sus clientes no van a Timesheets.
   // Con ?demo=marcas se ven datos de ejemplo y nada se escribe.
   const demoMarcas = demoMarcasActivo()
-  const marcasLista = demoMarcas ? DEMO_MARCAS : marcas
+  const marcasLista = [...(demoMarcas ? DEMO_MARCAS : marcas)].sort(porOrden)
   const agencias = marcasLista.filter(esAgencia)
   const deAgencia = (p: Proyecto) => agencias.some(m => m.key === p.marca)
   const proyectosAgencia = demoMarcas ? DEMO_PROYECTOS : proyectos.filter(deAgencia).map(p => aProyectoAgencia(p, facturas, clientesFiscales))
@@ -452,22 +454,26 @@ export default function Home() {
     },
     // Proyecto de precio cerrado: nunca pasa a «facturado» (lo impide la base de datos), se factura por pagos.
     nuevo: async p => {
-      const { error } = await supabase.from('proyectos').insert([{ nombre: `Web ${p.web}`, cliente: p.cliente, tipo: tipoLegacy(p.cliente), status: 'activo', modo_rate: 'dia', marca: p.marca, web: p.web, plan: p.plan, precio_cerrado: p.precio }])
+      const { error } = await supabase.from('proyectos').insert([{ nombre: `Web ${p.web}`, cliente: p.cliente, tipo: tipoLegacy(p.cliente), status: 'activo', modo_rate: 'dia', marca: p.marca, web: p.web, plan: p.plan || null, precio_cerrado: p.precio }])
       if (error) return error.message
       await loadData(); return null
     },
   }
+  // Treatments: una pestaña por marca con timesheet (Ambushed/BoldMove, The Pitch Lab…); dentro, un
+  // bloque por cliente o grupo con su propio link público. Un cliente nuevo no crea pestaña.
+  const marcasTs = marcasLista.filter(m => !esAgencia(m))
   const proyectosTs = proyectos.filter(p => !deAgencia(p))
-  const timesheets = gruposTimesheet(proyectosTs).map(g => ({
-    id: `ts:${g.key}` as Tab, label: g.label,
-    badge: proyectosTs.filter(p => g.clientes.includes(p.cliente) && p.status === 'activo').length,
+  const marcaTsDe = (p: Proyecto) => marcasTs.some(m => m.key === p.marca) ? p.marca! : grupoDeCliente(p.cliente).key === 'ab' ? 'ab' : 'pitchlab'
+  const timesheets = marcasTs.map(m => ({
+    id: `ts:${m.key}` as Tab, label: m.nombre,
+    badge: proyectosTs.filter(p => marcaTsDe(p) === m.key && p.status === 'activo').length,
   }))
-  // Badge = pagos pendientes de cobro de la agencia.
+  // Badge = pagos pendientes de cobro de la marca.
   const marcasTabs = agencias.map(m => ({ id: `mk:${m.key}` as Tab, label: m.nombre, badge: proyectosAgencia.filter(p => p.marca === m.key).flatMap(p => p.pagos).filter(x => x.estado === 'pendiente').length }))
   const secciones: Seccion[] = [
     { id: 'overview', label: 'Overview', icon: Icon.home, tabs: [{ id: 'dashboard', label: 'Overview' }] },
-    { id: 'timesheets', label: 'Timesheets', icon: Icon.clock, tabs: timesheets },
-    ...(marcasTabs.length ? [{ id: 'agencias', label: 'Agencias', icon: Icon.coin, tabs: marcasTabs }] : []),
+    { id: 'treatments', label: 'Treatments', icon: Icon.clock, tabs: timesheets },
+    ...(marcasTabs.length ? [{ id: 'webs', label: 'Webs', icon: Icon.coin, tabs: marcasTabs }] : []),
     {
       id: 'facturacion', label: 'Facturación', icon: Icon.invoice, tabs: [
         { id: 'facturas', label: 'Facturas', badge: facturasPendientes.length },
@@ -484,7 +490,9 @@ export default function Home() {
     const ultimo = ultimaPestana[s.id]
     setTab(ultimo && s.tabs.some(t => t.id === ultimo) ? ultimo : s.tabs[0]?.id || 'dashboard')
   }
-  const grupoActivo = tab.startsWith('ts:') ? grupoDeKey(tab.slice(3)) : null
+  const marcaTsActiva = tab.startsWith('ts:') ? marcasTs.find(m => `ts:${m.key}` === tab) || null : null
+  const proyectosMarcaTs = marcaTsActiva ? proyectosTs.filter(p => marcaTsDe(p) === marcaTsActiva.key) : []
+  const gruposMarcaTs = gruposTimesheet(proyectosMarcaTs).filter(g => proyectosMarcaTs.some(p => g.clientes.includes(p.cliente)))
   const titulos: Record<string, [string, string]> = {
     dashboard: ['Overview', 'Patrimonio, cuentas y facturación'],
     facturas: ['Facturas', `${facturasPendientes.length} pendientes · €${fmt(totalPendiente)} por cobrar`],
@@ -496,7 +504,8 @@ export default function Home() {
     compartidos: ['Gastos compartidos', 'La cuenta con tu pareja: quién pagó qué y quién debe a quién'],
   }
   const marcaActiva = tab.startsWith('mk:') ? agencias.find(m => `mk:${m.key}` === tab) || null : null
-  const [titulo, subtitulo] = grupoActivo ? [`Timesheet · ${grupoActivo.label}`, 'Proyectos, días y facturación'] : marcaActiva ? [`Agencia · ${marcaActiva.nombre}`, 'Clientes con web de precio cerrado: 50 % al empezar, 50 % al publicar'] : titulos[tab]
+  const [titulo, subtitulo] = marcaTsActiva ? [marcaTsActiva.nombre, 'Treatments · proyectos, días y facturación']
+    : marcaActiva ? [marcaActiva.nombre, 'Webs de precio cerrado · 50 % al empezar, 50 % al publicar'] : titulos[tab] || ['', '']
 
   return (
     <div className="app">
@@ -861,12 +870,18 @@ export default function Home() {
         {tab === 'compartidos' && <CompartidosVista />}
         {tab === 'bancos' && <BancosTab cuentas={cuentas} mensaje={mensajeBanco} reload={loadData} />}
 
-        {/* Timesheet del grupo de clientes activo */}
+        {/* Webs: una pestaña por marca de precio cerrado. Treatments: un bloque por cliente o grupo, cada uno con su link. */}
         {marcaActiva && <MarcaTab key={marcaActiva.key} marca={marcaActiva} proyectos={proyectosAgencia} demo={demoMarcas}
           numerosExistentes={facturas.map(f => f.numero)} clientes={clientesFiscales} acciones={demoMarcas ? undefined : accionesAgencia} />}
-        {grupoActivo && (
-          <TimesheetTab key={grupoActivo.key} grupo={grupoActivo} proyectos={proyectos} dias={dias} facturas={facturas} clientesFiscales={clientesFiscales} reload={loadData} />
+        {marcaTsActiva && gruposMarcaTs.length === 0 && (
+          <div className="card chart-empty">Todavía no hay proyectos en {marcaTsActiva.nombre}. Crea uno con «Nuevo proyecto».</div>
         )}
+        {marcaTsActiva && gruposMarcaTs.map(g => (
+          <div key={g.key} style={{ marginBottom: gruposMarcaTs.length > 1 ? 28 : 0 }}>
+            {gruposMarcaTs.length > 1 && <div className="card-kicker" style={{ margin: '0 2px 10px' }}>{g.label}</div>}
+            <TimesheetTab grupo={g} proyectos={proyectosMarcaTs} dias={dias} facturas={facturas} clientesFiscales={clientesFiscales} reload={loadData} />
+          </div>
+        ))}
 
         {/* Modals */}
         {modal && (
@@ -882,7 +897,7 @@ export default function Home() {
                 <ModalEditCuentas cuentas={cuentas} automaticas={cuentasBanco} onUpdate={updateCuenta} onClose={() => { setModal(null); loadData() }} />
               )}
               {modal.type === 'addProyecto' && (
-                <ModalAddProyecto clienteInicial={grupoActivo?.clientes[0]} onAdd={addProyecto} onClose={() => setModal(null)} />
+                <ModalAddProyecto clienteInicial={marcaTsActiva?.key === 'ab' ? 'Ambushed' : undefined} onAdd={addProyecto} onClose={() => setModal(null)} />
               )}
               {modal.type === 'editCliente' && (
                 <ModalCliente cliente={modal.data?.cliente} onSave={saveClienteFiscal} onClose={() => setModal(null)} />

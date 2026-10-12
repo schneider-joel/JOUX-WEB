@@ -11,7 +11,7 @@ import type { Marca } from '@/lib/marcas'
 type F = { id: number; cliente: string; importe: number; fecha: string; estado: string; tipo_factura?: string | null; marca?: string | null; fiscal?: boolean | null }
 
 const eur = (n: number) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', useGrouping: 'always' } as Intl.NumberFormatOptions).format(n)
-const MODO_TXT = { cerrado: 'agencia · precio cerrado', dia: 'por día', hora: 'por hora' }
+const MODO_TXT = { cerrado: 'webs · precio cerrado', dia: 'por día', hora: 'por hora' }
 
 type F2 = F & { proyecto_id?: number | null }
 export default function MarcaCard({ facturas, proyectos, marcas, demo }: { facturas: F2[]; proyectos: { id: number; marca?: string | null }[]; marcas: Marca[]; demo: boolean }) {

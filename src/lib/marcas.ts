@@ -5,7 +5,9 @@
 // - 'dia' / 'hora' = trabajo con timesheet (a mi nombre, Ambushed/BoldMove).
 // Con ?demo=marcas se ven datos de ejemplo y no se escribe nada.
 export type ModoMarca = 'cerrado' | 'dia' | 'hora'
-export type Marca = { key: string; nombre: string; modo: ModoMarca; dominio: string | null }
+export type Marca = { key: string; nombre: string; modo: ModoMarca; dominio: string | null; orden?: number | null }
+// Orden de la tarjeta y de las pestañas (columna `orden`); sin orden, al final.
+export const porOrden = (a: Marca, b: Marca) => (a.orden ?? 99) - (b.orden ?? 99)
 export type PaisFiscal = 'ES' | 'UE' | 'EXT'
 
 // Un pago del proyecto = una factura propia (numeración correlativa) cuando se factura.
@@ -19,19 +21,23 @@ export type ProyectoAgencia = {
   precio: number                       // base, sin impuestos
   pais: PaisFiscal | null              // null = el cliente aún no tiene datos fiscales
   pagos: [Pago, Pago]
+  unica?: Pago & { importe: number }   // webs anteriores a los dos pagos: su factura única (base)
 }
 
 // Proyecto real (columnas de la migración de marcas) → fila de agencia, con sus dos facturas por `pago`.
 type ProyectoBD = { id: number; cliente: string; nombre: string; marca?: string | null; web?: string | null; plan?: string | null; precio_cerrado?: number | string | null }
-type FacturaBD = { id: number; proyecto_id?: number | null; pago?: number | null; numero?: string | null; fecha: string; estado: string }
+type FacturaBD = { id: number; proyecto_id?: number | null; pago?: number | null; numero?: string | null; fecha: string; estado: string; importe: number | string }
 export const aProyectoAgencia = (p: ProyectoBD, facturas: FacturaBD[], clientes: { cliente: string; pais?: string | null }[]): ProyectoAgencia => {
   const pago = (n: 1 | 2): Pago => {
     const f = facturas.find(x => x.proyecto_id === p.id && x.pago === n)
     return f ? { estado: f.estado === 'cobrada' ? 'cobrada' : 'pendiente', numero: f.numero || undefined, fecha: f.fecha, facturaId: f.id } : { estado: 'sin_facturar' }
   }
+  // Sin precio cerrado = web de antes (p. ej. facturada desde un timesheet): se muestra su factura única.
+  const vieja = p.precio_cerrado == null ? facturas.find(x => x.proyecto_id === p.id && !x.pago) : undefined
   return {
+    unica: vieja ? { estado: vieja.estado === 'cobrada' ? 'cobrada' : 'pendiente', numero: vieja.numero || undefined, fecha: vieja.fecha, facturaId: vieja.id, importe: Number(vieja.importe) } : undefined,
     id: p.id, marca: p.marca || '', cliente: p.cliente, web: p.web || p.nombre, plan: p.plan || '',
-    precio: Number(p.precio_cerrado || 0),
+    precio: Number(p.precio_cerrado ?? (vieja ? vieja.importe : 0)),
     pais: (clientes.find(c => c.cliente === p.cliente)?.pais as PaisFiscal | undefined) || null,
     pagos: [pago(1), pago(2)],
   }
@@ -43,10 +49,11 @@ export const ETIQUETA_PAGO = ['50 % al empezar', '50 % al publicar'] as const
 export const demoMarcasActivo = () => typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('demo') === 'marcas'
 
 export const DEMO_MARCAS: Marca[] = [
-  { key: 'arkevo', nombre: 'Arkevo', modo: 'cerrado', dominio: 'arkevostudio.com' },
-  { key: 'clinic', nombre: 'Clinic (ejemplo)', modo: 'cerrado', dominio: null },
-  { key: 'joel', nombre: 'Joel Schneider', modo: 'dia', dominio: 'joelschneider.io' },
-  { key: 'ab', nombre: 'Ambushed / BoldMove', modo: 'hora', dominio: null },
+  { key: 'ab', nombre: 'Ambushed / BoldMove', modo: 'hora', dominio: null, orden: 1 },
+  { key: 'pitchlab', nombre: 'The Pitch Lab', modo: 'dia', dominio: 'thepitchlab.xyz', orden: 2 },
+  { key: 'custom', nombre: 'Custom Websites', modo: 'cerrado', dominio: 'joelschneider.io', orden: 3 },
+  { key: 'arkevo', nombre: 'Arkevo', modo: 'cerrado', dominio: 'arkevostudio.com', orden: 4 },
+  { key: 'clinic', nombre: 'Clinic (ejemplo)', modo: 'cerrado', dominio: null, orden: 5 },
 ]
 
 const anio = new Date().getFullYear()
@@ -57,6 +64,10 @@ export const DEMO_PROYECTOS: ProyectoAgencia[] = [
     pagos: [{ estado: 'pendiente', numero: `F-${anio}-35`, fecha: `${anio}-10-01` }, { estado: 'sin_facturar' }] },
   { id: -3, marca: 'arkevo', cliente: 'Muestra Architects Ltd', web: 'muestra-architects.co.uk', plan: 'Signature', precio: 8500, pais: 'EXT',
     pagos: [{ estado: 'sin_facturar' }, { estado: 'sin_facturar' }] },
+  { id: -5, marca: 'custom', cliente: 'Productora Ejemplo SL', web: 'productoraejemplo.com', plan: 'Custom', precio: 2400, pais: 'ES',
+    pagos: [{ estado: 'cobrada', numero: `F-${anio}-40`, fecha: `${anio}-10-01` }, { estado: 'sin_facturar' }] },
+  { id: -6, marca: 'custom', cliente: 'Estudio Antiguo SL', web: 'estudioantiguo.film', plan: '', precio: 750, pais: 'ES',
+    pagos: [{ estado: 'sin_facturar' }, { estado: 'sin_facturar' }], unica: { estado: 'cobrada', numero: `F-${anio}-27`, fecha: `${anio}-05-05`, importe: 750 } },
   { id: -4, marca: 'clinic', cliente: 'Clínica Dental Ejemplo SL', web: 'clinicaejemplo.es', plan: 'Studio', precio: 2500, pais: 'ES',
     pagos: [{ estado: 'sin_facturar' }, { estado: 'sin_facturar' }] },
 ]
@@ -67,8 +78,10 @@ export const DEMO_FACTURAS = [
   { id: -1, cliente: 'Estudio Ejemplo SL', importe: 1950, fecha: hoy, estado: 'cobrada', tipo_factura: 'dentro_ue', marca: 'arkevo' },
   { id: -2, cliente: 'Estudio Ejemplo SL', importe: 1950, fecha: hoy, estado: 'pendiente', tipo_factura: 'dentro_ue', marca: 'arkevo' },
   { id: -3, cliente: 'Construcciones Muestra SA', importe: 495, fecha: hoy, estado: 'pendiente', tipo_factura: 'dentro_ue', marca: 'arkevo' },
-  { id: -4, cliente: 'Hans Emanuel', importe: 2400, fecha: hoy, estado: 'cobrada', tipo_factura: 'fuera_ue', marca: 'joel' },
-  { id: -5, cliente: 'Tays Perez', importe: 1800, fecha: hoy, estado: 'pendiente', tipo_factura: 'fuera_ue', marca: 'joel' },
+  { id: -4, cliente: 'Hans Emanuel', importe: 1600, fecha: hoy, estado: 'pendiente', tipo_factura: 'fuera_ue', marca: 'pitchlab' },
+  { id: -5, cliente: 'Tays Perez', importe: 350, fecha: hoy, estado: 'pendiente', tipo_factura: 'fuera_ue', marca: 'pitchlab' },
+  { id: -8, cliente: 'Cpworks Barcelona', importe: 2310, fecha: hoy, estado: 'cobrada', tipo_factura: 'dentro_ue', marca: 'custom' },
+  { id: -9, cliente: 'Hans Emanuel Productions', importe: 1200, fecha: hoy, estado: 'cobrada', tipo_factura: 'fuera_ue', marca: 'custom' },
   { id: -6, cliente: 'Ambushed', importe: 5320, fecha: hoy, estado: 'cobrada', tipo_factura: 'fuera_ue', marca: 'ab' },
   { id: -7, cliente: 'BoldMove', importe: 1260, fecha: hoy, estado: 'pendiente', tipo_factura: 'fuera_ue', marca: 'ab' },
 ]

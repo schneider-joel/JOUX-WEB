@@ -18,7 +18,8 @@ const COLOR = { cobrada: 'var(--green)', pendiente: 'var(--amber)', sin_facturar
 
 // Lo que paga el cliente por una base (con IVA y retención si es de España).
 const total = (base: number, pais: PaisFiscal | null) => desglose(base, pais === 'ES')?.total ?? base
-export const conceptoPago = (marca: Marca, p: ProyectoAgencia, i: 0 | 1) => `${marca.nombre} · Web ${p.plan} (${p.web}) · ${ETIQUETA_PAGO[i]}`
+// Igual que crear_factura_pago() en la base de datos.
+export const conceptoPago = (marca: Marca, p: ProyectoAgencia, i: 0 | 1) => [marca.nombre, ['Web', p.plan, p.web && `(${p.web})`].filter(Boolean).join(' '), ETIQUETA_PAGO[i]].join(' · ')
 // Por qué no se puede facturar todavía (la base de datos lo rechazaría igual).
 const bloqueoFiscal = (p: ProyectoAgencia) => !p.pais ? `Faltan los datos fiscales de ${p.cliente}: añádelos en Facturación › Clientes.`
   : p.pais === 'UE' ? 'Cliente de la UE: sin alta en el ROI, consúltalo con el gestor antes de facturar.' : null
@@ -53,6 +54,11 @@ export default function MarcaTab({ marca, proyectos: iniciales, numerosExistente
   const avisar = (t: string) => { setAviso(t); setTimeout(() => setAviso(''), 3500) }
 
   const tot = useMemo(() => proyectos.reduce((t, p) => {
+    if (p.unica) {
+      const x = total(p.unica.importe, p.pais)
+      if (p.unica.estado === 'cobrada') t.cobrado += x; else t.pendiente += x
+      return t
+    }
     for (const pago of p.pagos) {
       const x = total(p.precio / 2, p.pais)
       if (pago.estado === 'cobrada') t.cobrado += x; else if (pago.estado === 'pendiente') t.pendiente += x; else t.porFacturar += x
@@ -134,7 +140,13 @@ export default function MarcaTab({ marca, proyectos: iniciales, numerosExistente
               <a className="agencia-web" href={`https://${p.web}`} target="_blank" rel="noopener noreferrer">{p.web}</a>
             </div>
             <div className="mono agencia-precio">{eurCorto(p.precio)}</div>
-            {([0, 1] as const).map(i => {
+            {p.unica ? (
+              <a className="agencia-pago agencia-pago-unica" href={p.unica.facturaId ? `/invoice/${p.unica.facturaId}` : undefined} target="_blank" rel="noopener noreferrer">
+                <span className="agencia-pago-etq">Factura única</span>
+                <span className="mono agencia-pago-num"><i style={{ background: COLOR[p.unica.estado] }} />{eurCorto(total(p.unica.importe, p.pais))}</span>
+                <span className="agencia-pago-sub">{p.unica.numero} · <span style={{ color: COLOR[p.unica.estado] }}>{p.unica.estado}</span> · factura única</span>
+              </a>
+            ) : ([0, 1] as const).map(i => {
               const pago = p.pagos[i]
               const bloqueado = i === 1 && p.pagos[0].estado === 'sin_facturar'
               const facturada = pago.estado !== 'sin_facturar'
@@ -276,7 +288,7 @@ function ModalNuevoCliente({ marca, clientes, demo, onAdd, onClose }: { marca: M
   const [error, setError] = useState('')
   const [cliente, setCliente] = useState('')
   const [web, setWeb] = useState('')
-  const [plan, setPlan] = useState('Essential')
+  const [plan, setPlan] = useState(marca.key === 'arkevo' ? 'Essential' : '')
   const [precio, setPrecio] = useState('')
   const fiscal = clientes.find(c => c.cliente === cliente)
   const [paisManual, setPaisManual] = useState<PaisFiscal | ''>('')
@@ -301,7 +313,8 @@ function ModalNuevoCliente({ marca, clientes, demo, onAdd, onClose }: { marca: M
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
         <div><label style={label}>Plan</label>
-          <select value={plan} onChange={e => setPlan(e.target.value)} style={input}>{['Essential', 'Studio', 'Signature'].map(x => <option key={x}>{x}</option>)}</select></div>
+          <input list={`planes-${marca.key}`} value={plan} onChange={e => setPlan(e.target.value)} placeholder="Opcional" style={input} />
+          {marca.key === 'arkevo' && <datalist id={`planes-${marca.key}`}>{['Essential', 'Studio', 'Signature'].map(x => <option key={x} value={x} />)}</datalist>}</div>
         <div><label style={label}>Precio (base, sin IVA)</label>
           <input type="number" inputMode="decimal" value={precio} onChange={e => setPrecio(e.target.value)} placeholder="990" style={input} /></div>
       </div>
