@@ -693,3 +693,9 @@ BEGIN
   RETURN f;
 END $$;
 REVOKE EXECUTE ON FUNCTION crear_factura_pago(INT, SMALLINT) FROM PUBLIC, anon, authenticated;
+
+-- DATOS: marca de lo que ya existía (2026-10-12, aplicado por Joel en el SQL Editor). Framer queda sin marca.
+UPDATE facturas SET marca = 'ab' WHERE marca IS NULL AND cliente IN ('Ambushed', 'BoldMove');
+UPDATE facturas SET marca = 'joel' WHERE marca IS NULL AND cliente IN ('Hans Emanuel', 'Hans Emanuel Productions', 'Tays Perez', 'Cpworks Barcelona', 'Jaleo Creative Makers');
+UPDATE proyectos SET marca = 'ab' WHERE marca IS NULL AND cliente IN ('Ambushed', 'BoldMove');
+UPDATE proyectos SET marca = 'joel' WHERE marca IS NULL AND cliente IN ('Hans Emanuel', 'Tays Perez', 'Cpworks Barcelona');

@@ -6,18 +6,29 @@ import { ETIQUETA_PAGO, siguienteNumero, type Marca, type PaisFiscal, type Proye
 
 // Pestaña de una agencia (marca de precio cerrado): una fila por cliente con su web, el precio
 // y los dos pagos. Cada «Facturar pago N» crea su propia factura (número correlativo, IVA y
-// retención según el país). En demo todo pasa en memoria: no se escribe nada (solo se leen los números de factura).
+// retención según el país) con crear_factura_pago() en la base de datos. En demo todo pasa en memoria.
 const eur = (n: number) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', useGrouping: 'always' } as Intl.NumberFormatOptions).format(n)
 // Sin céntimos cuando no hay (990 €, no 990,00 €): la tabla respira más.
 const eurCorto = (n: number) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', useGrouping: 'always', minimumFractionDigits: Number.isInteger(n) ? 0 : 2 } as Intl.NumberFormatOptions).format(n)
 const PAIS_TXT: Record<PaisFiscal, string> = { ES: 'España · IVA 21 % − retención 15 %', UE: 'UE · sin IVA', EXT: 'Fuera de la UE · sin IVA' }
+const paisTxt = (p: PaisFiscal | null) => p ? PAIS_TXT[p] : 'Sin datos fiscales'
 const hoy = () => new Date().toISOString().slice(0, 10)
 const fmtFecha = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })
 const COLOR = { cobrada: 'var(--green)', pendiente: 'var(--amber)', sin_facturar: 'var(--text3)' }
 
 // Lo que paga el cliente por una base (con IVA y retención si es de España).
-const total = (base: number, pais: PaisFiscal) => desglose(base, pais === 'ES')?.total ?? base
+const total = (base: number, pais: PaisFiscal | null) => desglose(base, pais === 'ES')?.total ?? base
 export const conceptoPago = (marca: Marca, p: ProyectoAgencia, i: 0 | 1) => `${marca.nombre} · Web ${p.plan} (${p.web}) · ${ETIQUETA_PAGO[i]}`
+// Por qué no se puede facturar todavía (la base de datos lo rechazaría igual).
+const bloqueoFiscal = (p: ProyectoAgencia) => !p.pais ? `Faltan los datos fiscales de ${p.cliente}: añádelos en Facturación › Clientes.`
+  : p.pais === 'UE' ? 'Cliente de la UE: sin alta en el ROI, consúltalo con el gestor antes de facturar.' : null
+
+// Escrituras reales; sin ellas (demo) todo cambia solo en pantalla. Devuelven un error o null.
+export type AccionesAgencia = {
+  facturar: (proyectoId: number, pago: 1 | 2) => Promise<string | null>
+  cobrar: (facturaId: number) => Promise<string | null>
+  nuevo: (p: Omit<ProyectoAgencia, 'id' | 'pais' | 'pagos'>) => Promise<string | null>
+}
 
 type Props = {
   marca: Marca
@@ -25,11 +36,14 @@ type Props = {
   numerosExistentes: (string | undefined)[]     // para previsualizar el siguiente número
   clientes: { cliente: string; pais?: PaisFiscal | null }[]
   demo: boolean
+  acciones?: AccionesAgencia
 }
 type Sel = { p: ProyectoAgencia; i: 0 | 1 }
 
-export default function MarcaTab({ marca, proyectos: iniciales, numerosExistentes, clientes, demo }: Props) {
-  const [proyectos, setProyectos] = useState(iniciales.filter(p => p.marca === marca.key))
+export default function MarcaTab({ marca, proyectos: iniciales, numerosExistentes, clientes, demo, acciones }: Props) {
+  // Demo: copia local que los botones modifican. Real: siempre lo que llega de la base de datos.
+  const [local, setProyectos] = useState(iniciales.filter(p => p.marca === marca.key))
+  const proyectos = acciones ? iniciales.filter(p => p.marca === marca.key) : local
   const [facturando, setFacturando] = useState<Sel | null>(null)
   const [viendo, setViendo] = useState<Sel | null>(null)
   const [nuevo, setNuevo] = useState(false)
@@ -49,17 +63,41 @@ export default function MarcaTab({ marca, proyectos: iniciales, numerosExistente
   const cambiarPago = (id: number, i: 0 | 1, patch: ProyectoAgencia['pagos'][number]) =>
     setProyectos(ps => ps.map(p => p.id !== id ? p : { ...p, pagos: (i === 0 ? [patch, p.pagos[1]] : [p.pagos[0], patch]) as ProyectoAgencia['pagos'] }))
 
-  const confirmarFactura = (numero: string) => {
-    if (!facturando) return
-    cambiarPago(facturando.p.id, facturando.i, { estado: 'pendiente', numero, fecha: hoy() })
-    if (demo) avisar(`${numero} creada solo en pantalla`)
+  const confirmarFactura = async (numero: string) => {
+    if (!facturando) return null
+    if (acciones) {
+      const error = await acciones.facturar(facturando.p.id, (facturando.i + 1) as 1 | 2)
+      if (error) return error
+    } else {
+      cambiarPago(facturando.p.id, facturando.i, { estado: 'pendiente', numero, fecha: hoy() })
+      avisar(`Demo · ${numero} creada solo en pantalla`)
+    }
     setFacturando(null)
+    return null
   }
-  const marcarCobrada = () => {
-    if (!viendo) return
-    cambiarPago(viendo.p.id, viendo.i, { ...viendo.p.pagos[viendo.i], estado: 'cobrada' })
-    if (demo) avisar('Marcada como cobrada solo en pantalla')
+  const marcarCobrada = async () => {
+    if (!viendo) return null
+    const pago = viendo.p.pagos[viendo.i]
+    if (acciones) {
+      const error = pago.facturaId ? await acciones.cobrar(pago.facturaId) : 'Factura no encontrada'
+      if (error) return error
+    } else {
+      cambiarPago(viendo.p.id, viendo.i, { ...pago, estado: 'cobrada' })
+      avisar('Demo · marcada como cobrada solo en pantalla')
+    }
     setViendo(null)
+    return null
+  }
+  const anadir = async (p: Omit<ProyectoAgencia, 'id'>) => {
+    if (acciones) {
+      const error = await acciones.nuevo({ marca: p.marca, cliente: p.cliente, web: p.web, plan: p.plan, precio: p.precio })
+      if (error) return error
+    } else {
+      setProyectos(ps => [...ps, { ...p, id: -Date.now() }])
+      avisar(`Demo · ${p.cliente} añadido solo en pantalla`)
+    }
+    setNuevo(false)
+    return null
   }
 
   const ordenados = [...proyectos].sort((a, b) => a.cliente.localeCompare(b.cliente))
@@ -83,7 +121,7 @@ export default function MarcaTab({ marca, proyectos: iniciales, numerosExistente
             <button className="btn" onClick={() => setNuevo(true)} style={{ whiteSpace: 'nowrap' }}>+ Cliente</button>
           </div>
         </div>
-        {aviso && <div style={{ fontSize: 12, color: 'var(--text3)', margin: '-6px 0 10px' }}>Demo · {aviso}</div>}
+        {aviso && <div style={{ fontSize: 12, color: 'var(--text3)', margin: '-6px 0 10px' }}>{aviso}</div>}
 
         <div className="agencia-fila agencia-cabecera">
           <div>Cliente</div><div style={{ textAlign: 'right' }}>Precio</div><div>Al empezar</div><div>Al publicar</div>
@@ -135,8 +173,7 @@ export default function MarcaTab({ marca, proyectos: iniciales, numerosExistente
       {nuevo && (
         <div className="modal-bg" onClick={() => setNuevo(false)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
-            <ModalNuevoCliente marca={marca} clientes={clientes} demo={demo} onClose={() => setNuevo(false)}
-              onAdd={p => { setProyectos(ps => [...ps, { ...p, id: -Date.now() }]); setNuevo(false); if (demo) avisar(`${p.cliente} añadido solo en pantalla`) }} />
+            <ModalNuevoCliente marca={marca} clientes={clientes} demo={demo} onClose={() => setNuevo(false)} onAdd={anadir} />
           </div>
         </div>
       )}
@@ -145,14 +182,16 @@ export default function MarcaTab({ marca, proyectos: iniciales, numerosExistente
 }
 
 // Un pago ya facturado: sus datos, y marcarlo como cobrado.
-function ModalPago({ marca, p, i, demo, onCobrada, onClose }: Sel & { marca: Marca; demo: boolean; onCobrada: () => void; onClose: () => void }) {
+function ModalPago({ marca, p, i, demo, onCobrada, onClose }: Sel & { marca: Marca; demo: boolean; onCobrada: () => Promise<string | null>; onClose: () => void }) {
   const pago = p.pagos[i]
+  const [ocupado, setOcupado] = useState(false)
+  const [error, setError] = useState('')
   const d = desglose(p.precio / 2, p.pais === 'ES')
   const filas: [string, string][] = [
     ['Cliente', p.cliente],
     ['Concepto', conceptoPago(marca, p, i)],
     ['Emitida', pago.fecha ? fmtFecha(pago.fecha) : '—'],
-    ['Fiscal', PAIS_TXT[p.pais]],
+    ['Fiscal', paisTxt(p.pais)],
   ]
   return (
     <>
@@ -172,24 +211,33 @@ function ModalPago({ marca, p, i, demo, onCobrada, onClose }: Sel & { marca: Mar
         <span>A cobrar</span><span>{eur(d?.total ?? p.precio / 2)}</span>
       </div>
       {demo && <div style={{ fontSize: 11.5, color: 'var(--amber)', marginTop: 14 }}>Demo: no se escribe nada.</div>}
+      {error && <div style={{ fontSize: 12, color: 'var(--red)', marginTop: 14 }}>{error}</div>}
       <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
-        <button className="btn" disabled={demo} title={demo ? 'En real abre /invoice/<id>' : undefined} style={{ opacity: demo ? 0.5 : 1 }}>Ver factura</button>
-        {pago.estado === 'pendiente' && <button className="btn btn-primary" style={{ flex: 1, justifyContent: 'center' }} onClick={onCobrada}>Marcar como cobrada</button>}
+        {pago.facturaId
+          ? <a className="btn" href={`/invoice/${pago.facturaId}`} target="_blank" rel="noopener noreferrer">Ver factura</a>
+          : <button className="btn" disabled title="En la demo no hay factura real" style={{ opacity: 0.5 }}>Ver factura</button>}
+        {pago.estado === 'pendiente' && <button className="btn btn-primary" disabled={ocupado} style={{ flex: 1, justifyContent: 'center' }}
+          onClick={async () => { setOcupado(true); const e = await onCobrada(); setOcupado(false); if (e) setError(e) }}>{ocupado ? 'Guardando…' : 'Marcar como cobrada'}</button>}
       </div>
     </>
   )
 }
 
 // Vista previa exacta de la factura que se va a crear, antes de confirmar.
-function ModalFacturarPago({ marca, p, i, numero, demo, onConfirmar, onClose }: { marca: Marca; p: ProyectoAgencia; i: 0 | 1; numero: string; demo: boolean; onConfirmar: (n: string) => void; onClose: () => void }) {
-  const base = p.precio / 2
+function ModalFacturarPago({ marca, p, i, numero, demo, onConfirmar, onClose }: { marca: Marca; p: ProyectoAgencia; i: 0 | 1; numero: string; demo: boolean; onConfirmar: (n: string) => Promise<string | null>; onClose: () => void }) {
+  // Igual que en la base de datos: el segundo pago se lleva el céntimo sobrante.
+  const mitad = Math.round(p.precio * 50) / 100
+  const base = i === 0 ? mitad : Math.round((p.precio - mitad) * 100) / 100
+  const bloqueo = bloqueoFiscal(p)
+  const [ocupado, setOcupado] = useState(false)
+  const [error, setError] = useState('')
   const d = desglose(base, p.pais === 'ES')
   const filas: [string, string][] = [
-    ['Número', numero],
+    ['Número', demo ? numero : `${numero} (previsto)`],
     ['Cliente', p.cliente],
     ['Concepto', conceptoPago(marca, p, i)],
     ['Fecha', `${fmtFecha(hoy())} · vence a 30 días`],
-    ['Tipo', p.pais === 'ES' ? 'España (dentro_ue): IVA 21 % y retención 15 %' : 'Sin IVA ni retención (fuera_ue)'],
+    ['Fiscal', paisTxt(p.pais)],
     ['Marca', marca.key],
   ]
   return (
@@ -208,16 +256,24 @@ function ModalFacturarPago({ marca, p, i, numero, demo, onConfirmar, onClose }: 
         ))}
         <div className="mono" style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, fontWeight: 500, padding: '6px 0 0' }}><span>A cobrar</span><span>{eur(d?.total ?? base)}</span></div>
       </div>
-      {demo && <div style={{ fontSize: 11.5, color: 'var(--amber)', marginTop: 14 }}>Demo: al confirmar no se escribe nada. En real, el número lo asigna la base de datos.</div>}
+      {demo && <div style={{ fontSize: 11.5, color: 'var(--amber)', marginTop: 14 }}>Demo: al confirmar no se escribe nada.</div>}
+      {!demo && !bloqueo && <div style={{ fontSize: 11.5, color: 'var(--text3)', marginTop: 14 }}>Se crea de verdad como factura pendiente. El número definitivo lo asigna la base de datos.</div>}
+      {bloqueo && <div style={{ fontSize: 12, color: 'var(--amber)', marginTop: 14 }}>{bloqueo}</div>}
+      {error && <div style={{ fontSize: 12, color: 'var(--red)', marginTop: 14 }}>{error}</div>}
       <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
         <button className="btn" onClick={onClose}>Cancelar</button>
-        <button className="btn btn-primary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => onConfirmar(numero)}>Crear factura {numero}</button>
+        <button className="btn btn-primary" disabled={!!bloqueo || ocupado} style={{ flex: 1, justifyContent: 'center', opacity: bloqueo ? 0.5 : 1 }}
+          onClick={async () => { setOcupado(true); const e = await onConfirmar(numero); setOcupado(false); if (e) setError(e) }}>
+          {ocupado ? 'Creando…' : `Crear factura${demo ? ` ${numero}` : ''}`}
+        </button>
       </div>
     </>
   )
 }
 
-function ModalNuevoCliente({ marca, clientes, demo, onAdd, onClose }: { marca: Marca; clientes: Props['clientes']; demo: boolean; onAdd: (p: Omit<ProyectoAgencia, 'id'>) => void; onClose: () => void }) {
+function ModalNuevoCliente({ marca, clientes, demo, onAdd, onClose }: { marca: Marca; clientes: Props['clientes']; demo: boolean; onAdd: (p: Omit<ProyectoAgencia, 'id'>) => Promise<string | null>; onClose: () => void }) {
+  const [ocupado, setOcupado] = useState(false)
+  const [error, setError] = useState('')
   const [cliente, setCliente] = useState('')
   const [web, setWeb] = useState('')
   const [plan, setPlan] = useState('Essential')
@@ -237,7 +293,7 @@ function ModalNuevoCliente({ marca, clientes, demo, onAdd, onClose }: { marca: M
         <label style={label}>Cliente fiscal</label>
         <input list="clientes-fiscales-agencia" value={cliente} onChange={e => setCliente(e.target.value)} placeholder="Nombre fiscal (de Clientes)" style={input} />
         <datalist id="clientes-fiscales-agencia">{clientes.map(c => <option key={c.cliente} value={c.cliente} />)}</datalist>
-        {cliente && !fiscal && <div style={{ fontSize: 10.5, color: 'var(--text3)', marginTop: 4 }}>No está en Clientes: habrá que guardar sus datos fiscales antes de facturar.</div>}
+        {cliente && !fiscal && <div style={{ fontSize: 10.5, color: 'var(--amber)', marginTop: 4 }}>No está en Clientes: guarda sus datos fiscales antes de facturar (Facturación › Clientes).</div>}
       </div>
       <div style={{ marginBottom: 14 }}>
         <label style={label}>Web</label>
@@ -249,20 +305,27 @@ function ModalNuevoCliente({ marca, clientes, demo, onAdd, onClose }: { marca: M
         <div><label style={label}>Precio (base, sin IVA)</label>
           <input type="number" inputMode="decimal" value={precio} onChange={e => setPrecio(e.target.value)} placeholder="990" style={input} /></div>
       </div>
-      <div style={{ marginBottom: 14 }}>
+      {demo && <div style={{ marginBottom: 14 }}>
         <label style={label}>País fiscal</label>
         <select value={paisManual || pais} onChange={e => setPaisManual(e.target.value as PaisFiscal)} style={input}>
           <option value="ES">España · IVA 21 % − retención 15 %</option><option value="UE">UE · sin IVA</option><option value="EXT">Fuera de la UE · sin IVA</option>
         </select>
         {fiscal?.pais && !paisManual && <div style={{ fontSize: 10.5, color: 'var(--text3)', marginTop: 4 }}>Tomado de su ficha en Clientes.</div>}
-      </div>
+      </div>}
+      {!demo && fiscal?.pais && <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 10 }}>{PAIS_TXT[fiscal.pais]} (de su ficha en Clientes)</div>}
       {Number(precio) > 0 && <div className="mono" style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 10 }}>Dos pagos de {eur(Number(precio) / 2)} base · {eur(total(Number(precio) / 2, pais))} a cobrar cada uno</div>}
       {demo && <div style={{ fontSize: 11.5, color: 'var(--amber)', marginBottom: 6 }}>Demo: se añade solo en pantalla.</div>}
+      {error && <div style={{ fontSize: 12, color: 'var(--red)', marginBottom: 6 }}>{error}</div>}
       <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
         <button className="btn" onClick={onClose}>Cancelar</button>
-        <button className="btn btn-primary" disabled={!listo} style={{ flex: 1, justifyContent: 'center', opacity: listo ? 1 : 0.5 }}
-          onClick={() => listo && onAdd({ marca: marca.key, cliente: cliente.trim(), web: web.trim(), plan, precio: Number(precio), pais, pagos: [{ estado: 'sin_facturar' }, { estado: 'sin_facturar' }] })}>
-          Añadir cliente
+        <button className="btn btn-primary" disabled={!listo || ocupado} style={{ flex: 1, justifyContent: 'center', opacity: listo ? 1 : 0.5 }}
+          onClick={async () => {
+            if (!listo) return
+            setOcupado(true)
+            const e = await onAdd({ marca: marca.key, cliente: cliente.trim(), web: web.trim(), plan, precio: Number(precio), pais, pagos: [{ estado: 'sin_facturar' }, { estado: 'sin_facturar' }] })
+            setOcupado(false); if (e) setError(e)
+          }}>
+          {ocupado ? 'Guardando…' : 'Añadir cliente'}
         </button>
       </div>
     </>

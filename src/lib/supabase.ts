@@ -128,6 +128,8 @@ export type Factura = {
   origen: string
   notion_proyecto?: string
   proyecto_id?: number
+  marca?: string | null
+  pago?: 1 | 2 | null                  // agencias: 1 = al empezar, 2 = al publicar
   numero_referencia?: string
   idioma?: 'es' | 'en'
   tipo_factura?: 'fuera_ue' | 'dentro_ue'
@@ -178,7 +180,10 @@ export type Proyecto = {
   status: StatusProyecto
   numero_proyecto?: string
   modo_rate?: 'hora' | 'dia'
-  marca?: string | null                // tras la migración de marcas
+  marca?: string | null                // marcas.key (ab, joel, arkevo…)
+  web?: string | null                  // agencias: web, plan y precio cerrado (base sin IVA)
+  plan?: string | null
+  precio_cerrado?: number | null
   created_at: string
 }
 

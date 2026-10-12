@@ -3,13 +3,13 @@
 // - modo 'cerrado' = agencia de nicho (Arkevo…): precio cerrado, 50 % al empezar y 50 % al publicar.
 //   Sus clientes no van a Timesheets sino a la sección «Agencias», una pestaña por marca.
 // - 'dia' / 'hora' = trabajo con timesheet (a mi nombre, Ambushed/BoldMove).
-// Hasta la migración, todo esto solo se ve con ?demo=marcas y no lee ni escribe nada.
+// Con ?demo=marcas se ven datos de ejemplo y no se escribe nada.
 export type ModoMarca = 'cerrado' | 'dia' | 'hora'
 export type Marca = { key: string; nombre: string; modo: ModoMarca; dominio: string | null }
 export type PaisFiscal = 'ES' | 'UE' | 'EXT'
 
 // Un pago del proyecto = una factura propia (numeración correlativa) cuando se factura.
-export type Pago = { estado: 'sin_facturar' | 'pendiente' | 'cobrada'; numero?: string; fecha?: string }
+export type Pago = { estado: 'sin_facturar' | 'pendiente' | 'cobrada'; numero?: string; fecha?: string; facturaId?: number }
 
 // Un cliente de agencia = un proyecto de precio cerrado con dos pagos (no dos proyectos).
 export type ProyectoAgencia = {
@@ -17,8 +17,24 @@ export type ProyectoAgencia = {
   web: string                          // dominio de la web que se le hace
   plan: string
   precio: number                       // base, sin impuestos
-  pais: PaisFiscal
+  pais: PaisFiscal | null              // null = el cliente aún no tiene datos fiscales
   pagos: [Pago, Pago]
+}
+
+// Proyecto real (columnas de la migración de marcas) → fila de agencia, con sus dos facturas por `pago`.
+type ProyectoBD = { id: number; cliente: string; nombre: string; marca?: string | null; web?: string | null; plan?: string | null; precio_cerrado?: number | string | null }
+type FacturaBD = { id: number; proyecto_id?: number | null; pago?: number | null; numero?: string | null; fecha: string; estado: string }
+export const aProyectoAgencia = (p: ProyectoBD, facturas: FacturaBD[], clientes: { cliente: string; pais?: string | null }[]): ProyectoAgencia => {
+  const pago = (n: 1 | 2): Pago => {
+    const f = facturas.find(x => x.proyecto_id === p.id && x.pago === n)
+    return f ? { estado: f.estado === 'cobrada' ? 'cobrada' : 'pendiente', numero: f.numero || undefined, fecha: f.fecha, facturaId: f.id } : { estado: 'sin_facturar' }
+  }
+  return {
+    id: p.id, marca: p.marca || '', cliente: p.cliente, web: p.web || p.nombre, plan: p.plan || '',
+    precio: Number(p.precio_cerrado || 0),
+    pais: (clientes.find(c => c.cliente === p.cliente)?.pais as PaisFiscal | undefined) || null,
+    pagos: [pago(1), pago(2)],
+  }
 }
 
 export const esAgencia = (m: Pick<Marca, 'modo'>) => m.modo === 'cerrado'

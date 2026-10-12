@@ -6,13 +6,15 @@ import type { Marca } from '@/lib/marcas'
 
 // Ingresos por marca: cobrado y pendiente de cobro del año, con el importe real que paga el
 // cliente (IVA y retención incluidos si es de España). La marca sale solo de la columna
-// `marca` de facturas; las que no la tienen van a «Sin marca» hasta que se asignen.
+// `marca` de facturas o, si no la tiene (las que crea el trigger desde un timesheet), de la de su
+// proyecto. Las que no tienen ninguna van a «Sin marca».
 type F = { id: number; cliente: string; importe: number; fecha: string; estado: string; tipo_factura?: string | null; marca?: string | null; fiscal?: boolean | null }
 
 const eur = (n: number) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', useGrouping: 'always' } as Intl.NumberFormatOptions).format(n)
 const MODO_TXT = { cerrado: 'agencia · precio cerrado', dia: 'por día', hora: 'por hora' }
 
-export default function MarcaCard({ facturas, marcas, demo }: { facturas: F[]; marcas: Marca[]; demo: boolean }) {
+type F2 = F & { proyecto_id?: number | null }
+export default function MarcaCard({ facturas, proyectos, marcas, demo }: { facturas: F2[]; proyectos: { id: number; marca?: string | null }[]; marcas: Marca[]; demo: boolean }) {
   const anio = new Date().getFullYear()
 
   const filas = useMemo(() => {
@@ -20,7 +22,7 @@ export default function MarcaCard({ facturas, marcas, demo }: { facturas: F[]; m
     for (const f of facturas) {
       if (f.fiscal === false) continue                       // registros internos (timesheet), no son facturas declaradas
       if (!f.fecha || new Date(f.fecha + 'T00:00:00').getFullYear() !== anio) continue
-      const k = f.marca || ''
+      const k = f.marca || proyectos.find(p => p.id === f.proyecto_id)?.marca || ''
       if (!acc.has(k)) acc.set(k, { cobrado: 0, pendiente: 0, n: 0 })
       const fila = acc.get(k)!
       const total = totalACobrar(f)
@@ -28,7 +30,7 @@ export default function MarcaCard({ facturas, marcas, demo }: { facturas: F[]; m
       fila.n += 1
     }
     return Array.from(acc.entries())
-  }, [facturas, marcas, anio])
+  }, [facturas, proyectos, marcas, anio])
 
   const max = Math.max(1, ...filas.map(([, v]) => v.cobrado + v.pendiente))
 

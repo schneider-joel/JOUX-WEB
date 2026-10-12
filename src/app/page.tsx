@@ -9,8 +9,8 @@ import ImpuestosTab, { proximoPago, claveReal, type Reales } from './impuestos-t
 import CuentasCard from './cuentas-card'
 import MarcaCard from './marca-card'
 import { totalACobrar, desglose, desgloseFactura } from '@/lib/importes'
-import MarcaTab from './marca-tab'
-import { DEMO_FACTURAS, DEMO_MARCAS, DEMO_PROYECTOS, demoMarcasActivo, esAgencia } from '@/lib/marcas'
+import MarcaTab, { type AccionesAgencia } from './marca-tab'
+import { DEMO_FACTURAS, DEMO_MARCAS, DEMO_PROYECTOS, aProyectoAgencia, demoMarcasActivo, esAgencia, type Marca } from '@/lib/marcas'
 import BancosTab from './bancos-tab'
 import CompartidosVista from './compartidos-vista'
 import PresupuestoCards, { gastadoPorPartida } from './presupuesto-card'
@@ -219,6 +219,7 @@ export default function Home() {
   const [dias, setDias] = useState<DiaTrabajado[]>([])
   const [clientesFiscales, setClientesFiscales] = useState<ClienteFiscal[]>([])
   const [compras, setCompras] = useState<Compra[]>([])
+  const [marcas, setMarcas] = useState<Marca[]>([])
   const [cuotaAutonomo, setCuotaAutonomo] = useState(0)
   const [impuestosReales, setImpuestosReales] = useState<Reales>({})
   const [snapshots, setSnapshots] = useState<PatrimonioSnapshot[]>([])
@@ -230,7 +231,7 @@ export default function Home() {
   const [lastUpdated, setLastUpdated] = useState<string>('')
 
   const loadData = useCallback(async () => {
-    const [c, cr, f, fi, v, cfg, pr, di, sn, cf, co, mv, bk] = await batchQuery([
+    const [c, cr, f, fi, v, cfg, pr, di, sn, cf, co, mv, bk, mk] = await batchQuery([
       supabase.from('cuentas').select('*').order('orden'),
       supabase.from('crypto').select('*'),
       supabase.from('facturas').select('*').order('fecha'),
@@ -244,6 +245,7 @@ export default function Home() {
       supabase.from('compras').select('*').order('fecha'),
       supabase.from('movimientos').select('fecha,importe,categoria,clase,trabajo').order('fecha', { ascending: false }).limit(800),
       supabase.from('bancos_cuentas').select('cuenta_id'),
+      supabase.from('marcas').select('*').order('created_at'),
     ])
     if (c.data) setCuentas(c.data)
     if (cr.data) setCrypto(cr.data)
@@ -256,6 +258,7 @@ export default function Home() {
     if (cf.data) setClientesFiscales(cf.data)
     if (co.data) setCompras(co.data)
     if (mv.data) setMovsBanco(mv.data)
+    if (mk.data) setMarcas(mk.data)
     fetch('/api/compartidos').then(r => r.ok ? r.json() : null).then(j => setCompartidos(j?.gastos || null)).catch(() => {})
     if (bk.data) setCuentasBanco(bk.data.map((b: { cuenta_id: number | null }) => b.cuenta_id).filter(Boolean))
     if (cfg.data) {
@@ -375,7 +378,9 @@ export default function Home() {
 
   // El proyecto va al timesheet de su cliente (o al del grupo al que pertenece).
   const addProyecto = async (data: NuevoProyecto) => {
-    await supabase.from('proyectos').insert([{ ...data, tipo: tipoLegacy(data.cliente), status: 'activo' }])
+    // Los proyectos con timesheet son de Ambushed/BoldMove o a mi nombre; los de agencia se crean desde su pestaña.
+    const marca = grupoDeCliente(data.cliente).key === 'ab' ? 'ab' : 'joel'
+    await supabase.from('proyectos').insert([{ ...data, tipo: tipoLegacy(data.cliente), status: 'activo', marca }])
     setModal(null)
     await loadData()
     setTab(`ts:${grupoDeCliente(data.cliente).key}`)
@@ -427,18 +432,38 @@ export default function Home() {
   // Pocas secciones (caben en la barra inferior del móvil); las que agrupan
   // varias pestañas las muestran como subpestañas bajo el título.
   // Agencias (marcas de precio cerrado): una pestaña por marca; sus clientes no van a Timesheets.
-  // Hasta la migración solo existen en la demo (?demo=marcas); después saldrán de la tabla `marcas`.
+  // Con ?demo=marcas se ven datos de ejemplo y nada se escribe.
   const demoMarcas = demoMarcasActivo()
-  const marcasLista = demoMarcas ? DEMO_MARCAS : []
+  const marcasLista = demoMarcas ? DEMO_MARCAS : marcas
   const agencias = marcasLista.filter(esAgencia)
   const deAgencia = (p: Proyecto) => agencias.some(m => m.key === p.marca)
+  const proyectosAgencia = demoMarcas ? DEMO_PROYECTOS : proyectos.filter(deAgencia).map(p => aProyectoAgencia(p, facturas, clientesFiscales))
+  const accionesAgencia: AccionesAgencia = {
+    facturar: async (proyecto_id, pago) => {
+      const r = await fetch('/api/agencias/facturar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ proyecto_id, pago }) })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok) return j.error || 'No se pudo crear la factura'
+      await loadData(); return null
+    },
+    cobrar: async id => {
+      const f = facturas.find(x => x.id === id)
+      if (!f) return 'Factura no encontrada'
+      await marcarCobrada(f); return null
+    },
+    // Proyecto de precio cerrado: nunca pasa a «facturado» (lo impide la base de datos), se factura por pagos.
+    nuevo: async p => {
+      const { error } = await supabase.from('proyectos').insert([{ nombre: `Web ${p.web}`, cliente: p.cliente, tipo: tipoLegacy(p.cliente), status: 'activo', modo_rate: 'dia', marca: p.marca, web: p.web, plan: p.plan, precio_cerrado: p.precio }])
+      if (error) return error.message
+      await loadData(); return null
+    },
+  }
   const proyectosTs = proyectos.filter(p => !deAgencia(p))
   const timesheets = gruposTimesheet(proyectosTs).map(g => ({
     id: `ts:${g.key}` as Tab, label: g.label,
     badge: proyectosTs.filter(p => g.clientes.includes(p.cliente) && p.status === 'activo').length,
   }))
   // Badge = pagos pendientes de cobro de la agencia.
-  const marcasTabs = agencias.map(m => ({ id: `mk:${m.key}` as Tab, label: m.nombre, badge: DEMO_PROYECTOS.filter(p => p.marca === m.key).flatMap(p => p.pagos).filter(x => x.estado === 'pendiente').length }))
+  const marcasTabs = agencias.map(m => ({ id: `mk:${m.key}` as Tab, label: m.nombre, badge: proyectosAgencia.filter(p => p.marca === m.key).flatMap(p => p.pagos).filter(x => x.estado === 'pendiente').length }))
   const secciones: Seccion[] = [
     { id: 'overview', label: 'Overview', icon: Icon.home, tabs: [{ id: 'dashboard', label: 'Overview' }] },
     { id: 'timesheets', label: 'Timesheets', icon: Icon.clock, tabs: timesheets },
@@ -568,8 +593,7 @@ export default function Home() {
               porCobrar={totalPendiente} onEdit={() => setModal({ type: 'editCuentas' })}
               fijosPendientes={movsBanco.length ? (() => { const g = gastadoPorPartida(movsBanco, undefined, undefined, compartidos); return fijos.reduce((t, i) => t + Math.max(0, Number(i.limite) - (g[i.nombre] || 0)), 0) })() : null} />
 
-            {/* Se ve en la demo o cuando la columna `marca` ya existe en facturas. */}
-            {(demoMarcas || facturas.some(f => 'marca' in f)) && <MarcaCard facturas={demoMarcas ? DEMO_FACTURAS : facturas} marcas={marcasLista} demo={demoMarcas} />}
+            {marcasLista.length > 0 && <MarcaCard facturas={demoMarcas ? DEMO_FACTURAS : facturas} proyectos={demoMarcas ? [] : proyectos} marcas={marcasLista} demo={demoMarcas} />}
 
             <div className="dash-grid-3">
               <PresupuestoCards fijos={fijos} variables={variables} movimientos={movsBanco} compartidos={compartidos} />
@@ -838,8 +862,8 @@ export default function Home() {
         {tab === 'bancos' && <BancosTab cuentas={cuentas} mensaje={mensajeBanco} reload={loadData} />}
 
         {/* Timesheet del grupo de clientes activo */}
-        {marcaActiva && <MarcaTab key={marcaActiva.key} marca={marcaActiva} proyectos={DEMO_PROYECTOS} demo={demoMarcas}
-          numerosExistentes={facturas.map(f => f.numero)} clientes={clientesFiscales} />}
+        {marcaActiva && <MarcaTab key={marcaActiva.key} marca={marcaActiva} proyectos={proyectosAgencia} demo={demoMarcas}
+          numerosExistentes={facturas.map(f => f.numero)} clientes={clientesFiscales} acciones={demoMarcas ? undefined : accionesAgencia} />}
         {grupoActivo && (
           <TimesheetTab key={grupoActivo.key} grupo={grupoActivo} proyectos={proyectos} dias={dias} facturas={facturas} clientesFiscales={clientesFiscales} reload={loadData} />
         )}

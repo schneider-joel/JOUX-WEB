@@ -30,7 +30,7 @@ Panel financiero personal de Joel, autónomo en España: facturación, timesheet
   - `tipo_factura`: `dentro_ue` = cliente de España → **IVA 21 % y retención IRPF 15 %**; `fuera_ue` = UE o fuera de la UE → sin IVA ni retención. El país sale de `clientes_fiscales.pais` (`ES` / `UE` / `EXT`).
   - Lo que cobras de verdad: `totalACobrar()` / `desglose()` en `src/lib/importes.ts` (usable en el navegador). Las gráficas de ingresos e impuestos van sobre la **base**.
 - **Trimestres por fecha de emisión**, nunca por fecha de cobro. El ZIP del trimestre (`/api/trimestre/zip`) incluye ventas, compras con su PDF y `Resumen.csv`.
-- Las facturas se crean desde proyectos (trigger `crear_factura_desde_proyecto` al pasar a "facturado"). No hay botón de factura manual.
+- Las facturas se crean desde proyectos (trigger `crear_factura_desde_proyecto` al pasar a "facturado") o, en las agencias, por pagos con `crear_factura_pago()`. No hay botón de factura manual suelta.
 - `impuestos-tab.tsx`: estimación de modelo 130 (acumulado) y 303. Los importes reales del gestor se guardan en `configuracion` (`impuesto_real_<año>_<q>`) y sustituyen a la estimación. La cuota de autónomo está en `cuota_autonomo_mensual`.
 - **Compras** (`compras`): base, `iva_pct`, `deducible_pct`, PDF en el bucket privado `compras` (`AAAA/<timestamp>-<nombre>.pdf`). Proveedores de EE. UU. van con IVA 0. Una factura del proveedor = una compra.
 
@@ -48,11 +48,12 @@ Panel financiero personal de Joel, autónomo en España: facturación, timesheet
 
 - **Compartidos** (`gastos_compartidos`, `src/lib/compartidos*.ts`): cuenta con Sofía (link privado `/c/<token>`, PWA "Casona"). Se añaden solos el alquiler, el agua y Mercadona pagado con Revolut, a medias. El presupuesto cuenta solo la parte de Joel.
 - **Timesheets**: un grupo por clientes (`src/lib/timesheets.ts`), con links públicos de solo lectura. Desde el link de Ambushed/BoldMove la factura se descarga como `JOEL SCHNEIDER - CLIENTE - REF` (`?ref=1`).
-- **Marcas y agencias**: `src/lib/marcas.ts`, `marca-tab.tsx` (pestaña de agencia), `marca-card.tsx` («Ingresos por marca»). **Fase 1 (oct 2026): solo interfaz con `?demo=marcas`, sin escrituras.** Fase 2 pendiente del OK de Joel al diseño: migración aditiva.
-  - Valores de `marca`: `arkevo` (y futuras agencias; precio cerrado) · `joel` (a mi nombre: Custom Websites, Hans, Tays) · `ab` (Ambushed/BoldMove, por hora). Tabla `marcas (key, nombre, modo, dominio)` con `modo` `cerrado|dia|hora`: una agencia nueva = una fila.
-  - Agencia = 50 % al empezar y 50 % al publicar en **un proyecto con dos pagos**; «Facturar pago N» crea su propia factura (número correlativo, IVA/retención según país). Nunca dos proyectos.
-  - Los clientes de agencias no salen en Timesheets: sección «Agencias», una pestaña por marca, una fila por cliente (web, precio, pago 1 / pago 2).
-  - «Ingresos por marca» lee solo la columna `facturas.marca` (sin deducirla de la descripción); se oculta mientras la columna no exista.
+- **Marcas y agencias**: tabla `marcas (key, nombre, modo, dominio)`; `src/lib/marcas.ts`, `marca-tab.tsx` (pestaña de agencia), `marca-card.tsx` («Ingresos por marca»). Migración aplicada el 2026-10-12 (ver final de `schema.sql`). `?demo=marcas` muestra datos de ejemplo sin escribir nada.
+  - Valores: `arkevo` (y futuras agencias, `modo = 'cerrado'`) · `joel` (a mi nombre: Custom Websites, Hans, Tays, Cpworks, Jaleo) · `ab` (Ambushed/BoldMove, por hora). Una agencia nueva = una fila en `marcas`, sin código. Framer quedó sin marca (ya no se usa).
+  - Agencia = un proyecto con `precio_cerrado` (base), `web` y `plan`, y dos pagos (50 % al empezar, 50 % al publicar). «Facturar pago N» llama a `/api/agencias/facturar` → `crear_factura_pago(proyecto, 1|2)`, que crea la factura con `marca` y `pago`, número correlativo e IVA/retención según `clientes_fiscales.pais`. Rechaza clientes sin datos fiscales y de la UE (ROI pendiente). Nunca dos proyectos.
+  - Un proyecto de precio cerrado no puede pasar a «facturado» (constraint `proyectos_cerrado_sin_facturado`): si saliera de ese estado, el trigger borraría sus facturas pendientes.
+  - Los clientes de agencias no salen en Timesheets: sección «Agencias», una pestaña por marca.
+  - «Ingresos por marca» usa `facturas.marca` o, si está vacía (facturas que crea el trigger), la marca de su proyecto. Los proyectos nuevos de Timesheets se crean con `ab` o `joel`.
   - No tocar el trigger `crear_factura_desde_proyecto` ni los treatments.
 - **Modo privado** (`modo-privado.tsx`): tapa los importes del texto ya pintado. No depende de los formateadores.
 
@@ -60,6 +61,6 @@ Panel financiero personal de Joel, autónomo en España: facturación, timesheet
 
 - Nombres, comentarios y textos de la interfaz en español; comentarios cortos que expliquen el porqué.
 - Formato numérico `es-ES` con `useGrouping: 'always'` (si no, "2005" sale sin punto de miles).
-- Estilo: bordes semitransparentes, poco brillo, transiciones con `var(--ease-out)`. Los `:hover` van dentro de `@media (hover: hover) and (pointer: fine)`. El layout es mobile-first con barra inferior de 5 secciones (Overview, Timesheets, Facturación, Bancos, Compartidos).
+- Estilo: bordes semitransparentes, poco brillo, transiciones con `var(--ease-out)`. Los `:hover` van dentro de `@media (hover: hover) and (pointer: fine)`. El layout es mobile-first con barra inferior de 6 secciones (Overview, Timesheets, Agencias, Facturación, Bancos, Compartidos).
 - Antes de dar algo por hecho: `npx tsc --noEmit -p .` y comprobarlo en el navegador (local en el puerto 3000; la contraseña de pruebas está en `.env.local`).
 - Commits con mensaje en inglés, en imperativo y descriptivo.
