@@ -699,3 +699,53 @@ UPDATE facturas SET marca = 'ab' WHERE marca IS NULL AND cliente IN ('Ambushed',
 UPDATE facturas SET marca = 'joel' WHERE marca IS NULL AND cliente IN ('Hans Emanuel', 'Hans Emanuel Productions', 'Tays Perez', 'Cpworks Barcelona', 'Jaleo Creative Makers');
 UPDATE proyectos SET marca = 'ab' WHERE marca IS NULL AND cliente IN ('Ambushed', 'BoldMove');
 UPDATE proyectos SET marca = 'joel' WHERE marca IS NULL AND cliente IN ('Hans Emanuel', 'Tays Perez', 'Cpworks Barcelona');
+
+-- MIGRACIÓN + DATOS: marcas definitivas (2026-10-12, aplicado por Joel en el SQL Editor).
+-- Treatments: ab (Ambushed/BoldMove, a mi nombre) y pitchlab (The Pitch Lab: Hans, Tays y nuevos).
+-- Webs de precio cerrado 50/50: custom (Custom Websites, joelschneider.io) y arkevo (y futuras agencias).
+-- 'joel' desaparece. Todas las facturas se emiten como Joel Schneider Mena · joel@joelschneider.io.
+ALTER TABLE marcas ADD COLUMN IF NOT EXISTS orden INT;
+INSERT INTO marcas (key, nombre, modo, dominio, orden) VALUES
+  ('pitchlab', 'The Pitch Lab', 'dia', 'thepitchlab.xyz', 2),
+  ('custom', 'Custom Websites', 'cerrado', 'joelschneider.io', 3)
+ON CONFLICT (key) DO NOTHING;
+UPDATE marcas SET orden = 1 WHERE key = 'ab';
+UPDATE marcas SET orden = 4 WHERE key = 'arkevo';
+UPDATE facturas  SET marca = 'pitchlab' WHERE marca = 'joel' AND cliente IN ('Hans Emanuel', 'Tays Perez');
+UPDATE facturas  SET marca = 'custom'   WHERE marca = 'joel';
+UPDATE proyectos SET marca = 'pitchlab' WHERE marca = 'joel' AND cliente IN ('Hans Emanuel', 'Tays Perez');
+UPDATE proyectos SET marca = 'custom'   WHERE marca = 'joel';
+DELETE FROM marcas WHERE key = 'joel';
+UPDATE configuracion SET valor = 'Joel Schneider Mena'   WHERE clave = 'emisor_nombre';
+UPDATE configuracion SET valor = 'joel@joelschneider.io' WHERE clave = 'emisor_email';
+
+-- crear_factura_pago: concepto sin espacios dobles cuando la web no tiene plan (versión vigente).
+CREATE OR REPLACE FUNCTION crear_factura_pago(p_proyecto INT, p_pago SMALLINT)
+RETURNS facturas LANGUAGE plpgsql AS $$
+DECLARE pr proyectos; m marcas; v_pais TEXT; v_base NUMERIC(10,2); f facturas;
+BEGIN
+  IF p_pago NOT IN (1, 2) THEN RAISE EXCEPTION 'El pago tiene que ser 1 o 2'; END IF;
+  SELECT * INTO pr FROM proyectos WHERE id = p_proyecto FOR UPDATE;
+  IF pr.id IS NULL OR pr.precio_cerrado IS NULL THEN RAISE EXCEPTION 'El proyecto % no es de precio cerrado', p_proyecto; END IF;
+  SELECT * INTO m FROM marcas WHERE key = pr.marca;
+  IF m.modo IS DISTINCT FROM 'cerrado' THEN RAISE EXCEPTION 'La marca % no es de precio cerrado', pr.marca; END IF;
+  IF p_pago = 2 AND NOT EXISTS (SELECT 1 FROM facturas WHERE proyecto_id = pr.id AND pago = 1) THEN
+    RAISE EXCEPTION 'Primero hay que facturar el pago 1'; END IF;
+  SELECT pais INTO v_pais FROM clientes_fiscales WHERE cliente = pr.cliente;
+  IF NOT FOUND OR v_pais IS NULL THEN RAISE EXCEPTION 'Faltan los datos fiscales de %', pr.cliente; END IF;
+  IF v_pais = 'UE' THEN RAISE EXCEPTION 'Cliente de la UE: sin alta en el ROI, consúltalo con el gestor antes de facturar'; END IF;
+  v_base := CASE WHEN p_pago = 1 THEN round(pr.precio_cerrado / 2, 2) ELSE pr.precio_cerrado - round(pr.precio_cerrado / 2, 2) END;
+  INSERT INTO facturas (cliente, descripcion, importe, fecha, fecha_vencimiento, estado, origen, proyecto_id,
+                        numero, tipo_factura, idioma, marca, pago)
+  VALUES (pr.cliente,
+          concat_ws(' · ', m.nombre, concat_ws(' ', 'Web', nullif(pr.plan, ''), '(' || pr.web || ')'),
+                    CASE p_pago WHEN 1 THEN '50 % al empezar' ELSE '50 % al publicar' END),
+          v_base, CURRENT_DATE, CURRENT_DATE + 30, 'pendiente', 'manual', pr.id,
+          siguiente_numero_factura(),
+          CASE WHEN v_pais = 'ES' THEN 'dentro_ue' ELSE 'fuera_ue' END,
+          CASE WHEN v_pais = 'ES' THEN 'es' ELSE 'en' END,
+          m.key, p_pago)
+  RETURNING * INTO f;
+  RETURN f;
+END $$;
+REVOKE EXECUTE ON FUNCTION crear_factura_pago(INT, SMALLINT) FROM PUBLIC, anon, authenticated;

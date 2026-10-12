@@ -47,20 +47,19 @@ Panel financiero personal de Joel, autónomo en España: facturación, timesheet
 ## Otras piezas
 
 - **Compartidos** (`gastos_compartidos`, `src/lib/compartidos*.ts`): cuenta con Sofía (link privado `/c/<token>`, PWA "Casona"). Se añaden solos el alquiler, el agua y Mercadona pagado con Revolut, a medias. El presupuesto cuenta solo la parte de Joel.
-- **Timesheets**: un grupo por clientes (`src/lib/timesheets.ts`), con links públicos de solo lectura. Desde el link de Ambushed/BoldMove la factura se descarga como `JOEL SCHNEIDER - CLIENTE - REF` (`?ref=1`).
-- **Marcas y agencias**: tabla `marcas (key, nombre, modo, dominio)`; `src/lib/marcas.ts`, `marca-tab.tsx` (pestaña de agencia), `marca-card.tsx` («Ingresos por marca»). Migración aplicada el 2026-10-12 (ver final de `schema.sql`). `?demo=marcas` muestra datos de ejemplo sin escribir nada.
-  - Valores: `arkevo` (y futuras agencias, `modo = 'cerrado'`) · `joel` (a mi nombre: Custom Websites, Hans, Tays, Cpworks, Jaleo) · `ab` (Ambushed/BoldMove, por hora). Una agencia nueva = una fila en `marcas`, sin código. Framer quedó sin marca (ya no se usa).
-  - Agencia = un proyecto con `precio_cerrado` (base), `web` y `plan`, y dos pagos (50 % al empezar, 50 % al publicar). «Facturar pago N» llama a `/api/agencias/facturar` → `crear_factura_pago(proyecto, 1|2)`, que crea la factura con `marca` y `pago`, número correlativo e IVA/retención según `clientes_fiscales.pais`. Rechaza clientes sin datos fiscales y de la UE (ROI pendiente). Nunca dos proyectos.
-  - Un proyecto de precio cerrado no puede pasar a «facturado» (constraint `proyectos_cerrado_sin_facturado`): si saliera de ese estado, el trigger borraría sus facturas pendientes.
-  - Los clientes de agencias no salen en Timesheets: sección «Agencias», una pestaña por marca.
-  - «Ingresos por marca» usa `facturas.marca` o, si está vacía (facturas que crea el trigger), la marca de su proyecto. Los proyectos nuevos de Timesheets se crean con `ab` o `joel`.
-  - No tocar el trigger `crear_factura_desde_proyecto` ni los treatments.
+- **Timesheets**: grupos de clientes (`src/lib/timesheets.ts`) dentro de cada pestaña de Treatments, con links públicos de solo lectura. Desde el link de Ambushed/BoldMove la factura se descarga como `JOEL SCHNEIDER - CLIENTE - REF` (`?ref=1`).
+- **Marcas** (tabla `marcas (key, nombre, modo, dominio, orden)`; `src/lib/marcas.ts`, `marca-tab.tsx`, `marca-card.tsx`). Una marca nueva = una fila, sin código. `?demo=marcas` muestra datos de ejemplo sin escribir nada.
+  - **Treatments** (`modo` `hora`/`dia`, con timesheet): `ab` (Ambushed/BoldMove, a mi nombre) y `pitchlab` (The Pitch Lab: Hans, Tays y cualquier cliente nuevo de treatments). Sección «Treatments», una pestaña por marca; dentro, un bloque por cliente o grupo con su propio link público (Tays/Hans comparten `/th`; los nuevos, `/t/<token>`). Un cliente nuevo no crea pestaña.
+  - **Webs** (`modo = 'cerrado'`, 50 % al empezar y 50 % al publicar): `custom` (Custom Websites, joelschneider.io) y `arkevo` (y futuras agencias de nicho). Sección «Webs», una pestaña por marca, una fila por cliente. Un proyecto con `precio_cerrado`, `web`, `plan` y dos pagos; «Facturar pago N» → `/api/agencias/facturar` → `crear_factura_pago(proyecto, 1|2)` (número correlativo, IVA/retención según `clientes_fiscales.pais`, `marca` y `pago`). Rechaza clientes sin datos fiscales y de la UE (ROI pendiente). Las webs antiguas sin `precio_cerrado` (Cpworks) muestran su factura única.
+  - Un proyecto de precio cerrado no puede pasar a «facturado» (constraint `proyectos_cerrado_sin_facturado`): al salir de ese estado, el trigger borraría sus facturas pendientes. No tocar el trigger `crear_factura_desde_proyecto` ni los treatments.
+  - «Ingresos por marca» (Overview, por `orden`) usa `facturas.marca` o, si está vacía (las que crea el trigger), la de su proyecto. «Nuevo proyecto» (timesheet) etiqueta `ab` para Ambushed/BoldMove y `pitchlab` para el resto. Framer quedó sin marca (ya no se usa).
+  - **Todas las facturas** se emiten como Joel Schneider Mena · joel@joelschneider.io (`configuracion.emisor_*`, se lee al abrir la factura, también las antiguas).
 - **Modo privado** (`modo-privado.tsx`): tapa los importes del texto ya pintado. No depende de los formateadores.
 
 ## Convenciones
 
 - Nombres, comentarios y textos de la interfaz en español; comentarios cortos que expliquen el porqué.
 - Formato numérico `es-ES` con `useGrouping: 'always'` (si no, "2005" sale sin punto de miles).
-- Estilo: bordes semitransparentes, poco brillo, transiciones con `var(--ease-out)`. Los `:hover` van dentro de `@media (hover: hover) and (pointer: fine)`. El layout es mobile-first con barra inferior de 6 secciones (Overview, Timesheets, Agencias, Facturación, Bancos, Compartidos).
+- Estilo: bordes semitransparentes, poco brillo, transiciones con `var(--ease-out)`. Los `:hover` van dentro de `@media (hover: hover) and (pointer: fine)`. El layout es mobile-first con barra inferior de 6 secciones (Overview, Treatments, Webs, Facturación, Bancos, Compartidos).
 - Antes de dar algo por hecho: `npx tsc --noEmit -p .` y comprobarlo en el navegador (local en el puerto 3000; la contraseña de pruebas está en `.env.local`).
 - Commits con mensaje en inglés, en imperativo y descriptivo.
