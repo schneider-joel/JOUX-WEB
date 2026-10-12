@@ -48,6 +48,8 @@ export async function PaginaTimesheet({ ruta, token }: { ruta: RutaPublica; toke
 
   const { data: proyectos } = await supabase.from('proyectos').select('*').in('cliente', grupo.clientes)
   const ids = (proyectos || []).map(p => p.id)
+  // Clientes de España: su total lleva IVA y retención.
+  const { data: fiscales } = await supabase.from('clientes_fiscales').select('cliente, pais').in('cliente', grupo.clientes)
   const [diasRes, facturasRes] = ids.length
     ? await Promise.all([
         supabase.from('dias_trabajados').select('*').in('proyecto_id', ids),
@@ -62,6 +64,7 @@ export async function PaginaTimesheet({ ruta, token }: { ruta: RutaPublica; toke
       proyectos={proyectos || []}
       dias={diasRes.data || []}
       facturas={facturasRes.data || []}
+      clientesEspana={(fiscales || []).filter(c => c.pais === 'ES').map(c => c.cliente)}
     />
   )
 }

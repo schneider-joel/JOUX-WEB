@@ -7,6 +7,10 @@ import ModoPrivado from './modo-privado'
 import { GLIFO_JO, VIEWBOX_JO } from './marca-jo'
 import ImpuestosTab, { proximoPago, claveReal, type Reales } from './impuestos-tab'
 import CuentasCard from './cuentas-card'
+import MarcaCard from './marca-card'
+import { totalACobrar, desglose, desgloseFactura } from '@/lib/importes'
+import MarcaTab from './marca-tab'
+import { DEMO_MARCAS, DEMO_PROYECTOS, demoMarcasActivo } from '@/lib/marcas'
 import BancosTab from './bancos-tab'
 import CompartidosVista from './compartidos-vista'
 import PresupuestoCards, { gastadoPorPartida } from './presupuesto-card'
@@ -17,6 +21,11 @@ import { supabase, batchQuery, Compra, Cuenta, Crypto, Factura, PresupuestoItem,
 
 const fmt = (n: number) => new Intl.NumberFormat('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(Math.round(n))
 const fmt2 = (n: number) => new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
+// Clientes de España: " · base €350,00 + IVA €73,50 − ret. €52,50" (al resto, nada).
+const lineaImpuestos = (f: { importe: number; tipo_factura?: string | null }) => {
+  const d = desgloseFactura(f)
+  return d ? ` · base €${fmt2(d.base)} + IVA €${fmt2(d.iva)} − ret. €${fmt2(d.ret)}` : ''
+}
 const fmtDate = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })
 const fmtMes = (ym: string) => new Date(ym + '-01T00:00:00').toLocaleDateString('es-ES', { month: 'short' }).replace('.', '')
 const barColor = (pct: number) => pct >= 90 ? '#f87171' : pct >= 70 ? '#fbbf24' : '#4ade80'
@@ -36,7 +45,7 @@ const ultimosMeses = (n: number) => {
 }
 
 // Los timesheets son dinámicos: una pestaña "ts:<key>" por grupo de clientes (ver lib/timesheets).
-type Tab = 'dashboard' | 'facturas' | 'compras' | 'impuestos' | 'presupuesto' | 'clientes' | 'bancos' | 'compartidos' | `ts:${string}`
+type Tab = 'dashboard' | 'facturas' | 'compras' | 'impuestos' | 'presupuesto' | 'clientes' | 'bancos' | 'compartidos' | `ts:${string}` | `mk:${string}`
 type Seccion = { id: string; label: string; icon: () => JSX.Element; tabs: { id: Tab; label: string; badge?: number }[] }
 type NuevoProyecto = { nombre: string; cliente: string; numero_proyecto: string; modo_rate: 'hora' | 'dia' }
 type Modal = { type: string; data?: any } | null
@@ -312,7 +321,8 @@ export default function Home() {
   const facturasVisibles = facturas.filter(facturaVisible)
   const facturasPendientes = facturasVisibles.filter(f => f.estado === 'pendiente')
   const facturasCobradas = facturasVisibles.filter(f => f.estado === 'cobrada')
-  const totalPendiente = facturasPendientes.reduce((s, f) => s + f.importe, 0)
+  // Lo que cobrarás de verdad (IVA y retención incluidos si el cliente es de España), no la base.
+  const totalPendiente = facturasPendientes.reduce((s, f) => s + totalACobrar(f), 0)
 
   // Filtro de período de la pestaña Facturas (el trimestre sale de la fecha).
   const [filtroAnio, setFiltroAnio] = useState(new Date().getFullYear())
@@ -420,9 +430,13 @@ export default function Home() {
     id: `ts:${g.key}` as Tab, label: g.label,
     badge: proyectos.filter(p => g.clientes.includes(p.cliente) && p.status === 'activo').length,
   }))
+  const demoMarcas = demoMarcasActivo()
+  const marcasLista = demoMarcas ? DEMO_MARCAS : []   // las marcas reales saldrán de los proyectos con `marca` tras la migración
+  const marcasTabs = marcasLista.map(m => ({ id: `mk:${m.key}` as Tab, label: m.nombre, badge: DEMO_PROYECTOS.filter(p => p.marca === m.key && p.estado === 'activo').length }))
   const secciones: Seccion[] = [
     { id: 'overview', label: 'Overview', icon: Icon.home, tabs: [{ id: 'dashboard', label: 'Overview' }] },
     { id: 'timesheets', label: 'Timesheets', icon: Icon.clock, tabs: timesheets },
+    ...(marcasTabs.length ? [{ id: 'marcas', label: 'Marcas', icon: Icon.coin, tabs: marcasTabs }] : []),
     {
       id: 'facturacion', label: 'Facturación', icon: Icon.invoice, tabs: [
         { id: 'facturas', label: 'Facturas', badge: facturasPendientes.length },
@@ -450,7 +464,8 @@ export default function Home() {
     bancos: ['Bancos', 'Saldos y movimientos de tus cuentas, en automático'],
     compartidos: ['Gastos compartidos', 'La cuenta con tu pareja: quién pagó qué y quién debe a quién'],
   }
-  const [titulo, subtitulo] = grupoActivo ? [`Timesheet · ${grupoActivo.label}`, 'Proyectos, días y facturación'] : titulos[tab]
+  const marcaActiva = tab.startsWith('mk:') ? marcasLista.find(m => `mk:${m.key}` === tab) || null : null
+  const [titulo, subtitulo] = grupoActivo ? [`Timesheet · ${grupoActivo.label}`, 'Proyectos, días y facturación'] : marcaActiva ? [`Marca · ${marcaActiva.nombre}`, 'Clientes y proyectos de precio cerrado (50 % / 50 %)'] : titulos[tab]
 
   return (
     <div className="app">
@@ -547,6 +562,8 @@ export default function Home() {
               porCobrar={totalPendiente} onEdit={() => setModal({ type: 'editCuentas' })}
               fijosPendientes={movsBanco.length ? (() => { const g = gastadoPorPartida(movsBanco, undefined, undefined, compartidos); return fijos.reduce((t, i) => t + Math.max(0, Number(i.limite) - (g[i.nombre] || 0)), 0) })() : null} />
 
+            <MarcaCard />
+
             <div className="dash-grid-3">
               <PresupuestoCards fijos={fijos} variables={variables} movimientos={movsBanco} compartidos={compartidos} />
               <div className="card">
@@ -623,10 +640,10 @@ export default function Home() {
                   <div key={f.id} className="row">
                     <div className="row-main">
                       <div className="row-title" title={`${f.cliente}${f.descripcion ? ` · ${f.descripcion}` : ''}`}>{f.cliente}{f.descripcion ? ` · ${f.descripcion}` : ''}</div>
-                      <div className="row-sub">Vence {fmtDate(f.fecha_vencimiento || f.fecha)}{f.numero ? ` · ${f.numero}` : ''}</div>
+                      <div className="row-sub">Vence {fmtDate(f.fecha_vencimiento || f.fecha)}{f.numero ? ` · ${f.numero}` : ''}{lineaImpuestos(f)}</div>
                     </div>
                     <div className="row-side">
-                      <span className="row-amount" style={{ color: 'var(--green)' }}>+€{fmt(f.importe)}</span>
+                      <span className="row-amount" style={{ color: 'var(--green)' }}>+€{fmt(totalACobrar(f))}</span>
                       <button className="icon-btn ok" onClick={() => marcarCobrada(f)} title="Marcar como cobrada"><Icon.check /></button>
                     </div>
                   </div>
@@ -662,10 +679,10 @@ export default function Home() {
                 <div key={f.id} className="row">
                   <div className="row-main">
                     <div className="row-title">{f.cliente}{f.descripcion ? <span style={{ color: 'var(--text3)' }}> · {f.descripcion}</span> : null}</div>
-                    <div className="row-sub">{f.numero ? `${f.numero} · ` : ''}T{trimDe(f.fecha)} {f.fecha.slice(0, 4)} · Vence {fmtDate(f.fecha_vencimiento || f.fecha)}</div>
+                    <div className="row-sub">{f.numero ? `${f.numero} · ` : ''}T{trimDe(f.fecha)} {f.fecha.slice(0, 4)} · Vence {fmtDate(f.fecha_vencimiento || f.fecha)}{lineaImpuestos(f)}</div>
                   </div>
                   <div className="row-side">
-                    <span className="row-amount" style={{ color: 'var(--green)' }}>+€{fmt(f.importe)}</span>
+                    <span className="row-amount" style={{ color: 'var(--green)' }}>+€{fmt(totalACobrar(f))}</span>
                     {marcas(f)}
                     <span className="pill pill-amber">pendiente</span>
                     <a className="icon-btn accent" href={verHref(f)} target="_blank" rel="noopener noreferrer" title="Ver factura"><Icon.invoice /></a>
@@ -681,7 +698,7 @@ export default function Home() {
                   {aniosFacturas.map(a => <button key={a} style={a === filtroAnio ? chipOn : chip} onClick={() => setFiltroAnio(a)}>{a}</button>)}
                   <span style={{ width: 8 }} />
                   {[0, 1, 2, 3, 4].map(q => <button key={q} style={q === filtroTrim ? chipOn : chip} onClick={() => setFiltroTrim(q)}>{q ? `T${q}` : 'Todo'}</button>)}
-                  <span className="row-amount" style={{ color: 'var(--text2)', marginLeft: 8 }}>€{fmt(cobradas.reduce((s, f) => s + Number(f.importe), 0))}</span>
+                  <span className="row-amount" style={{ color: 'var(--text2)', marginLeft: 8 }} title="Lo cobrado (con IVA y retención en los clientes de España)">€{fmt(cobradas.reduce((s, f) => s + totalACobrar(f), 0))}</span>
                 </div>
               </div>
               {cobradas.length === 0 && <div className="chart-empty">No hay facturas cobradas en este período.</div>}
@@ -689,10 +706,10 @@ export default function Home() {
                 <div key={f.id} className="row muted">
                   <div className="row-main">
                     <div className="row-title">{f.cliente}{f.descripcion ? <span style={{ color: 'var(--text3)' }}> · {f.descripcion}</span> : null}</div>
-                    <div className="row-sub">{f.numero ? `${f.numero} · ` : ''}T{trimDe(f.fecha)} {f.fecha.slice(0, 4)} · Emitida {fmtDate(f.fecha)}{f.fecha_cobro ? ` · Cobrada ${fmtDate(f.fecha_cobro)}` : ''}</div>
+                    <div className="row-sub">{f.numero ? `${f.numero} · ` : ''}T{trimDe(f.fecha)} {f.fecha.slice(0, 4)} · Emitida {fmtDate(f.fecha)}{f.fecha_cobro ? ` · Cobrada ${fmtDate(f.fecha_cobro)}` : ''}{lineaImpuestos(f)}</div>
                   </div>
                   <div className="row-side">
-                    <span className="row-amount">€{fmt(f.importe)}</span>
+                    <span className="row-amount">€{fmt(totalACobrar(f))}</span>
                     {marcas(f)}
                     <a className="icon-btn accent" href={verHref(f)} target="_blank" rel="noopener noreferrer" title="Ver factura"><Icon.invoice /></a>
                     <button className="icon-btn danger" onClick={() => deleteFactura(f.id)} title="Borrar"><Icon.x /></button>
@@ -814,6 +831,7 @@ export default function Home() {
         {tab === 'bancos' && <BancosTab cuentas={cuentas} mensaje={mensajeBanco} reload={loadData} />}
 
         {/* Timesheet del grupo de clientes activo */}
+        {marcaActiva && <MarcaTab key={marcaActiva.key} marca={marcaActiva} proyectos={DEMO_PROYECTOS} demo={demoMarcas} />}
         {grupoActivo && (
           <TimesheetTab key={grupoActivo.key} grupo={grupoActivo} proyectos={proyectos} dias={dias} facturas={facturas} clientesFiscales={clientesFiscales} reload={loadData} />
         )}
@@ -1127,6 +1145,8 @@ function TimesheetTab({ grupo, proyectos, dias, facturas, clientesFiscales, relo
       {proyectosFiltrados.map(p => {
         const total = totalProyecto(p.id)
         const horas = p.modo_rate === 'hora' ? horasProyecto(p.id) : null
+        // Clientes de España: el total lleva IVA 21 % y retención 15 % encima de la base.
+        const imp = desglose(total, clientesFiscales.find(c => c.cliente === p.cliente)?.pais === 'ES')
         const isOpen = expandido === p.id
         return (
           <div key={p.id} className="proj-card">
@@ -1156,7 +1176,10 @@ function TimesheetTab({ grupo, proyectos, dias, facturas, clientesFiscales, relo
                 {horas && horas.hrs + horas.sb > 0 && (
                   <div style={{ fontSize: 11.5, color: 'var(--text3)', fontFamily: 'JetBrains Mono, monospace' }}>{fmtHoras(horas.hrs)}{horas.sb > 0 ? ` · SB ${fmtHoras(horas.sb)}` : ''}</div>
                 )}
-                <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 14, fontWeight: 500 }}>€{fmt(total)}</div>
+                <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 14, fontWeight: 500, textAlign: 'right' }}>
+                  €{imp ? fmt2(imp.total) : fmt(total)}
+                  {imp && <div style={{ fontSize: 10.5, fontWeight: 400, color: 'var(--text3)' }} title={`Base €${fmt2(imp.base)} + IVA 21 % €${fmt2(imp.iva)} − retención 15 % €${fmt2(imp.ret)}`}>base €{fmt2(imp.base)} · IVA + ret.</div>}
+                </div>
                 {(() => {
                   if (p.status !== 'facturado') return null
                   const factura = facturas.find(f => f.proyecto_id === p.id)
@@ -1199,6 +1222,15 @@ function TimesheetTab({ grupo, proyectos, dias, facturas, clientesFiscales, relo
                     <div style={{ color: 'var(--text2)', flex: 1 }}>{horas ? `${fmtHoras(horas.hrs)}${horas.sb > 0 ? ` · SB ${fmtHoras(horas.sb)}` : ''}` : `${diasDe(p.id).length} días`}</div>
                     <div style={{ fontFamily: 'JetBrains Mono, monospace', width: 70, textAlign: 'right' }}>€{fmt2(total)}</div>
                     <span style={{ width: 112 }} />
+                  </div>
+                )}
+                {imp && diasDe(p.id).length > 0 && (
+                  <div style={{ padding: '4px 0 2px', fontSize: 12, color: 'var(--text2)' }}>
+                    {([['IVA 21 %', `+€${fmt2(imp.iva)}`], ['Retención IRPF 15 %', `−€${fmt2(imp.ret)}`], ['Total a cobrar', `€${fmt2(imp.total)}`]] as [string, string][]).map(([l, v], k) => (
+                      <div key={l} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', fontWeight: k === 2 ? 500 : 400, color: k === 2 ? 'var(--text)' : undefined }}>
+                        <span>{l}</span><span style={{ fontFamily: 'JetBrains Mono, monospace', marginRight: 112 }}>{v}</span>
+                      </div>
+                    ))}
                   </div>
                 )}
                 <button className="btn btn-dashed" style={{ marginTop: 10 }} onClick={() => setModal({ type: 'addDia', data: { proyectoId: p.id, porHora: p.modo_rate === 'hora' } })}><Icon.plus />Nuevo día</button>

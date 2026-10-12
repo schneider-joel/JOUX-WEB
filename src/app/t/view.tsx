@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { desglose } from '@/lib/importes'
 
 type Proyecto = {
   id: number
@@ -34,12 +35,14 @@ export default function PublicTimesheetView({
   proyectos,
   dias,
   facturas,
+  clientesEspana = [],
 }: {
   titulo: string
   clientes: string[]
   proyectos: Proyecto[]
   dias: Dia[]
   facturas: { id: number; proyecto_id: number }[]
+  clientesEspana?: string[]
 }) {
   const [query, setQuery] = useState('')
   const [cliente, setCliente] = useState('todos')
@@ -94,6 +97,8 @@ export default function PublicTimesheetView({
         {filtrados.map(p => {
           const factura = facturaDe(p.id)
           const porHora = p.modo_rate === 'hora'
+          // Clientes de España: IVA 21 % y retención IRPF 15 % sobre el subtotal.
+          const imp = desglose(totalProyecto(p.id), clientesEspana.includes(p.cliente))
           return (
             <div key={p.id} style={{ background: '#fff', border: '1px solid #e5e5e5', borderRadius: 10, padding: 24, marginBottom: 16 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
@@ -113,7 +118,10 @@ export default function PublicTimesheetView({
                       Invoice ↓
                     </a>
                   )}
-                  <div style={{ fontFamily: 'monospace', fontSize: 15, fontWeight: 600 }}>€{fmt(totalProyecto(p.id))}</div>
+                  <div style={{ fontFamily: 'monospace', fontSize: 15, fontWeight: 600, textAlign: 'right' }}>
+                    €{fmt(imp ? imp.total : totalProyecto(p.id))}
+                    {imp && <div style={{ fontSize: 10.5, fontWeight: 400, color: '#888' }}>incl. IVA − IRPF</div>}
+                  </div>
                 </div>
               </div>
 
@@ -141,19 +149,25 @@ export default function PublicTimesheetView({
                     <tr><td colSpan={porHora ? 5 : 3} style={{ padding: '12px 0', color: '#888' }}>No days logged yet.</td></tr>
                   )}
                 </tbody>
-                {diasDe(p.id).length > 1 && (() => {
+                {(diasDe(p.id).length > 1 || imp) && (() => {
                   const hrs = diasDe(p.id).reduce((t, d) => t + Number(d.hrs || 0), 0)
                   const sb = diasDe(p.id).reduce((t, d) => t + Number(d.standby_hrs || 0), 0)
                   const h = (n: number) => `${Number(n.toFixed(2))}h`
                   return (
                     <tfoot>
                       <tr style={{ borderTop: '1px solid #e5e5e5', fontWeight: 600 }}>
-                        <td style={{ padding: '8px 0' }}>Total</td>
-                        <td style={{ padding: '8px 0' }}>{porHora ? '' : `${diasDe(p.id).length} days`}</td>
+                        <td style={{ padding: '8px 0' }}>{imp ? 'Subtotal' : 'Total'}</td>
+                        <td style={{ padding: '8px 0' }}>{porHora ? '' : `${diasDe(p.id).length} day${diasDe(p.id).length === 1 ? '' : 's'}`}</td>
                         {porHora && <td style={{ padding: '8px 0' }}>{h(hrs)}</td>}
                         {porHora && <td style={{ padding: '8px 0' }}>{sb > 0 ? h(sb) : '—'}</td>}
                         <td style={{ padding: '8px 0', textAlign: 'right', fontFamily: 'monospace' }}>€{fmt(totalProyecto(p.id))}</td>
                       </tr>
+                      {imp && ([['IVA 21%', `+€${fmt(imp.iva)}`], ['IRPF −15%', `−€${fmt(imp.ret)}`], ['Total', `€${fmt(imp.total)}`]] as [string, string][]).map(([l, v], k) => (
+                        <tr key={l} style={{ fontWeight: k === 2 ? 600 : 400, color: k === 2 ? undefined : '#555', borderTop: k === 2 ? '1px solid #e5e5e5' : undefined }}>
+                          <td colSpan={porHora ? 4 : 2} style={{ padding: '6px 0' }}>{l}</td>
+                          <td style={{ padding: '6px 0', textAlign: 'right', fontFamily: 'monospace' }}>{v}</td>
+                        </tr>
+                      ))}
                     </tfoot>
                   )
                 })()}
