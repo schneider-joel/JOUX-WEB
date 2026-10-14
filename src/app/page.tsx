@@ -115,8 +115,8 @@ function PatrimonioChart({ snapshots, actual }: { snapshots: PatrimonioSnapshot[
       <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H}>
         <defs>
           <linearGradient id="pgrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#f97316" stopOpacity="0.45" />
-            <stop offset="100%" stopColor="#f97316" stopOpacity="0" />
+            <stop offset="0%" stopColor="var(--text)" stopOpacity="0.14" />
+            <stop offset="100%" stopColor="var(--text)" stopOpacity="0" />
           </linearGradient>
         </defs>
         {ticks.map((t, k) => (
@@ -129,14 +129,14 @@ function PatrimonioChart({ snapshots, actual }: { snapshots: PatrimonioSnapshot[
           <text key={m} x={x(i)} y={H - 8} fontSize="9" fill={m === mesActual ? 'var(--text2)' : 'var(--text3)'} textAnchor="middle" fontFamily="Inter, sans-serif">{fmtMes(m)}</text>
         ))}
         {area && <path d={area} fill="url(#pgrad)" />}
-        {puntos.length > 1 && <path d={path} fill="none" stroke="#fb923c" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />}
+        {puntos.length > 1 && <path d={path} fill="none" stroke="var(--text)" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />}
         {puntos.map(p => (
-          <circle key={p.m} cx={x(p.i)} cy={y(p.v)} r={p === last ? 4 : 2.5} fill={p === last ? '#fb923c' : '#0a0908'} stroke="#fb923c" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+          <circle key={p.m} cx={x(p.i)} cy={y(p.v)} r={p === last ? 4 : 2.5} fill={p === last ? 'var(--text)' : 'var(--bg)'} stroke="var(--text)" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
         ))}
         {last && (
           <g>
-            <line x1={x(last.i)} x2={x(last.i)} y1={y(last.v)} y2={H - padB} stroke="#fb923c" strokeOpacity="0.35" strokeDasharray="2 3" />
-            <rect x={Math.min(x(last.i) - 34, W - padR - 68)} y={y(last.v) - 26} width="68" height="18" rx="5" fill="#1b1917" stroke="var(--border2)" />
+            <line x1={x(last.i)} x2={x(last.i)} y1={y(last.v)} y2={H - padB} stroke="var(--text)" strokeOpacity="0.3" strokeDasharray="2 3" />
+            <rect x={Math.min(x(last.i) - 34, W - padR - 68)} y={y(last.v) - 26} width="68" height="18" rx="5" fill="var(--bg)" stroke="var(--border2)" />
             <text x={Math.min(x(last.i), W - padR - 34)} y={y(last.v) - 14} fontSize="10" fill="var(--text)" textAnchor="middle" fontFamily="JetBrains Mono, monospace">€{fmt(last.v)}</text>
           </g>
         )}
@@ -172,8 +172,8 @@ function IngresosChart({ facturas }: { facturas: Factura[] }) {
           const hc = h(d.cobrado), hp = h(d.pendiente)
           return (
             <g key={d.m}>
-              {hc > 0 && <rect x={cx - w / 2} y={H - padB - hc} width={w} height={hc} rx="3" fill="#f97316" />}
-              {hp > 0 && <rect x={cx - w / 2} y={H - padB - hc - hp} width={w} height={hp} rx="3" fill="#fbbf24" fillOpacity="0.55" />}
+              {hc > 0 && <rect x={cx - w / 2} y={H - padB - hc} width={w} height={hc} rx="2" fill="var(--text)" />}
+              {hp > 0 && <rect x={cx - w / 2} y={H - padB - hc - hp} width={w} height={hp} rx="2" fill="var(--dim)" fillOpacity="0.55" />}
               {d.cobrado + d.pendiente > 0 && (
                 <text x={cx} y={H - padB - hc - hp - 5} fontSize="9" fill="var(--text2)" textAnchor="middle" fontFamily="JetBrains Mono, monospace">{((d.cobrado + d.pendiente) / 1000).toFixed(1)}k</text>
               )}
@@ -635,8 +635,8 @@ export default function Home() {
                     <div className="card-kicker" style={{ marginTop: 2 }}>Por mes de emisión</div>
                   </div>
                   <div className="chart-legend">
-                    <span><i style={{ background: '#f97316' }} />Cobrado</span>
-                    <span><i style={{ background: '#fbbf24', opacity: 0.6 }} />Pendiente</span>
+                    <span><i style={{ background: 'var(--text)' }} />Cobrado</span>
+                    <span><i style={{ background: 'var(--dim)', opacity: 0.6 }} />Pendiente</span>
                   </div>
                 </div>
                 <IngresosChart facturas={facturasFiscales} />
