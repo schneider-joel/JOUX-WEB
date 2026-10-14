@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import ComprasTab from './compras-tab'
 import NotificacionesBoton from './notificaciones-boton'
 import ModoPrivado from './modo-privado'
-import { GLIFO_JO, VIEWBOX_JO } from './marca-jo'
+import { EstadoBancos, Menu, Reloj, TemaBoton } from './marco'
 import ImpuestosTab, { proximoPago, claveReal, type Reales } from './impuestos-tab'
 import CuentasCard from './cuentas-card'
 import MarcaCard from './marca-card'
@@ -229,6 +229,8 @@ export default function Home() {
   const [presupuestoTotal, setPresupuestoTotal] = useState(1800)
   const [loading, setLoading] = useState(true)
   const [lastUpdated, setLastUpdated] = useState<string>('')
+  // Lectura más antigua de los bancos, para la esquina de arriba (null = sin bancos conectados o aún cargando).
+  const [bancosSync, setBancosSync] = useState<number | null>(null)
 
   const loadData = useCallback(async () => {
     const [c, cr, f, fi, v, cfg, pr, di, sn, cf, co, mv, bk, mk] = await batchQuery([
@@ -287,9 +289,10 @@ export default function Home() {
     supabase.from('bancos_sesiones').select('ultimo_sync').then(async ({ data }) => {
       if (!data?.length) return
       const masViejo = Math.min(...data.map((s: { ultimo_sync: string | null }) => s.ultimo_sync ? new Date(s.ultimo_sync).getTime() : 0))
+      setBancosSync(masViejo)
       if (Date.now() - masViejo < 3 * 3600e3) return
       const r = await fetch('/api/bancos/sincronizar', { method: 'POST' }).catch(() => null)
-      if (r?.ok) loadData()
+      if (r?.ok) { setBancosSync(Date.now()); loadData() }
     })
   }, [loadData])
 
@@ -515,53 +518,35 @@ export default function Home() {
 
   return (
     <div className="app">
-      <aside className="sidebar">
-        <div className="brand">
-          <svg className="brand-mark" viewBox={VIEWBOX_JO} role="img" aria-label="JOUX Hub">
-            <rect x="-704" y="-1369" width="3700" height="3700" rx="830" fill="#0a0908" />
-            <g fill="#fff" dangerouslySetInnerHTML={{ __html: GLIFO_JO }} />
-          </svg>
-          <div>
-            <div className="brand-name">JOUX Hub</div>
-            <div className="brand-sub">Finanzas</div>
-          </div>
-        </div>
-        <div className="nav-scroll">
-          <div className="nav-group">
-            {secciones.map(s => {
-              const badge = s.tabs.reduce((t, x) => t + (x.badge || 0), 0)
-              return (
-                <button key={s.id} className={`nav-btn${seccionActiva.id === s.id ? ' active' : ''}`} onClick={() => abrirSeccion(s)}>
-                  <s.icon /><span>{s.label}</span>
-                  {!!badge && <span className="nav-badge">{badge}</span>}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-        <div className="nav-foot">{lastUpdated && `sync ${lastUpdated}`}</div>
-      </aside>
+      {/* Esquinas y menú, como joelschneider.io */}
+      <header className="frame frame--top caps">
+        <span className="mark">JOUX HUB</span>
+        <span className="frame__r">
+          <EstadoBancos sync={bancosSync} />
+          <NotificacionesBoton onIr={t => setTab(t as Tab)} />
+        </span>
+      </header>
+
+      <Menu items={secciones.map(s => ({ id: s.id, label: s.label, badge: s.tabs.reduce((t, x) => t + (x.badge || 0), 0), tranquilo: s.id === 'treatments' }))}
+        activa={seccionActiva.id} onAbrir={id => { const s = secciones.find(x => x.id === id); if (s) abrirSeccion(s) }} />
 
       <main className="main">
         <header className="page-header">
-          <div>
+          <div className="page-header__txt">
             <h1 className="page-title">{titulo}</h1>
-            <div className="page-sub">{subtitulo}</div>
+            {subtitulo && <p className="tags caps">{subtitulo}</p>}
           </div>
           <div className="header-actions">
-            <ModoPrivado />
-            <NotificacionesBoton onIr={t => setTab(t as Tab)} />
-            <button className="btn" onClick={() => loadData()}><Icon.refresh />Actualizar</button>
-            {!marcaActiva && <button className={`btn${tab === 'clientes' ? '' : ' btn-primary'}`} onClick={() => setModal({ type: 'addProyecto' })}><Icon.plus />Nuevo proyecto</button>}
-            {tab === 'clientes' && <button className="btn btn-primary" onClick={() => setModal({ type: 'editCliente' })}><Icon.plus />Nuevo cliente</button>}
+            {!marcaActiva && <button className={tab === 'clientes' ? 'ghost' : 'pill'} onClick={() => setModal({ type: 'addProyecto' })}><Icon.plus />Nuevo proyecto</button>}
+            {tab === 'clientes' && <button className="pill" onClick={() => setModal({ type: 'editCliente' })}><Icon.plus />Nuevo cliente</button>}
           </div>
         </header>
 
         {seccionActiva.tabs.length > 1 && (
-          <nav className="subnav">
+          <nav className="subnav chips__row" aria-label={seccionActiva.label}>
             {seccionActiva.tabs.map(t => (
-              <button key={t.id} className={`subnav-btn${tab === t.id ? ' active' : ''}`} onClick={() => setTab(t.id)}>
-                {t.label}{!!t.badge && <span className="subnav-badge">{t.badge}</span>}
+              <button key={t.id} type="button" className="chip" aria-pressed={tab === t.id} onClick={() => setTab(t.id)}>
+                <span>{t.label}{!!t.badge && <b className={seccionActiva.id === 'treatments' ? 'dim' : undefined}>{t.badge}</b>}</span>
               </button>
             ))}
           </nav>
@@ -912,6 +897,15 @@ export default function Home() {
           </div>
         )}
       </main>
+
+      <footer className="frame frame--bottom caps">
+        <span>Valencia <Reloj />{lastUpdated && <><span className="sep">/</span>Datos {lastUpdated}</>}</span>
+        <span className="frame__r">
+          <button type="button" className="tgl hit" onClick={() => loadData()} title="Volver a cargar los datos"><Icon.refresh />Actualizar</button>
+          <ModoPrivado />
+          <TemaBoton />
+        </span>
+      </footer>
     </div>
   )
 }

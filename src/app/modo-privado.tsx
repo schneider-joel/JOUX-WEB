@@ -68,16 +68,11 @@ export default function ModoPrivado() {
     setActivo(true)
   }
 
+  // En la esquina de abajo, como en la web: el ojo se vacía en modo privado.
   const titulo = activo ? 'Mostrar importes' : 'Ocultar importes (modo privado)'
   return (
-    <button className={`icon-btn${activo ? ' accent' : ''}`} onClick={alternar} title={titulo} aria-label={titulo} aria-pressed={activo}>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
-        {activo ? (
-          <><path d="M3 3l18 18" /><path d="M10.6 5.1A9.8 9.8 0 0 1 12 5c5.5 0 9 7 9 7a16.6 16.6 0 0 1-2.4 3.3M6.6 6.6C4.2 8.2 3 12 3 12s3.5 7 9 7a9.5 9.5 0 0 0 4.4-1.1" /><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" /></>
-        ) : (
-          <><path d="M3 12s3.5-7 9-7 9 7 9 7-3.5 7-9 7-9-7-9-7z" /><circle cx="12" cy="12" r="3" /></>
-        )}
-      </svg>
+    <button type="button" className="tgl hit" onClick={alternar} title={titulo} aria-pressed={activo}>
+      <span className="eye" aria-hidden="true" />{activo ? 'Privado' : 'Visible'}
     </button>
   )
 }
