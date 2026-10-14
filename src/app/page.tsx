@@ -19,8 +19,10 @@ import { PAISES, PaisFiscal, detectarPais, tipoFacturaDePais } from '@/lib/clien
 import { GrupoTimesheet, grupoDeCliente, gruposTimesheet, linkPublico, tipoLegacy } from '@/lib/timesheets'
 import { supabase, batchQuery, Compra, Cuenta, Crypto, Factura, PresupuestoItem, Proyecto, DiaTrabajado, PatrimonioSnapshot, ClienteFiscal } from '@/lib/supabase'
 
-const fmt = (n: number) => new Intl.NumberFormat('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(Math.round(n))
-const fmt2 = (n: number) => new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
+// 'always': en es-ES los números de 4 cifras no llevan separador por defecto (7570 → 7.570).
+const agrupar = { useGrouping: 'always' } as unknown as Intl.NumberFormatOptions
+const fmt = (n: number) => new Intl.NumberFormat('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 0, ...agrupar }).format(Math.round(n))
+const fmt2 = (n: number) => new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, ...agrupar }).format(n)
 // Clientes de España: " · base €350,00 + IVA €73,50 − ret. €52,50" (al resto, nada).
 const lineaImpuestos = (f: { importe: number; tipo_factura?: string | null }) => {
   const d = desgloseFactura(f)
