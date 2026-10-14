@@ -1,32 +1,72 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+/* Tipografías de joelschneider.io: Geist y Geist Mono. Inter se sigue cargando porque las páginas
+   públicas (factura y timesheet, también el PDF del ZIP del trimestre) la piden en sus estilos en línea. */
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&family=Inter:wght@300;400;500;600&display=swap');
 
+/* Tokens de la web (maqueta: prueba-ui/assets/hub.css). Monocromo: verde = hecho o cobrado,
+   ámbar = pendiente o atención, rojo solo para error o negativo. */
 :root {
-  --bg: #0a0908;
-  --surface: #131211;
-  --surface2: #1b1917;
-  --surface3: #24211e;
-  /* Bordes semitransparentes: se funden con cualquier superficie. */
-  --border: rgba(255, 245, 235, 0.07);
-  --border2: rgba(255, 245, 235, 0.12);
-  --text: #f3efe9;
-  --text2: #8f8a83;
-  --text3: #5c5853;
-  --green: #4ade80;
-  --green-dim: rgba(74, 222, 128, 0.12);
-  --red: #f87171;
-  --red-dim: rgba(248, 113, 113, 0.12);
-  --amber: #fbbf24;
-  --amber-dim: rgba(251, 191, 36, 0.12);
-  --blue: #60a5fa;
-  --blue-dim: rgba(96, 165, 250, 0.12);
-  --purple: #a78bfa;
-  --purple-dim: rgba(167, 139, 250, 0.12);
-  --accent: #f97316;
-  --accent-bright: #fb923c;
-  --accent-deep: #c2410c;
-  --accent-dim: rgba(249, 115, 22, 0.14);
-  --accent-glow: rgba(249, 115, 22, 0.35);
+  --bg: #0B0B0B;
+  --text: #EDEDEC;
+  --muted: #A3A3A0;
+  --dim: #7A7A78;
+  --line: rgba(237, 237, 236, .08);
+  --hover: rgba(237, 237, 236, .035);
+  --shadow: 0 1px 2px rgba(0, 0, 0, .5), 0 24px 48px -16px rgba(0, 0, 0, .8);
+  --scrim: rgba(0, 0, 0, .6);
+  --green: #3DD68C;
+  --amber: #E8B04B;
+  --red: #E5484D;
+  --sans: 'Geist', system-ui, -apple-system, sans-serif;
+  --mono: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --ease: cubic-bezier(.22, .8, .24, 1);
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+
+  /* Tokens antiguos: las pantallas aún sin migrar los usan, así que apuntan a la paleta nueva. */
+  --surface: #111111;
+  --surface2: #171717;
+  --surface3: #1F1F1F;
+  --border: var(--line);
+  --border2: rgba(237, 237, 236, .14);
+  --text2: var(--muted);
+  --text3: var(--dim);
+  --green-dim: rgba(61, 214, 140, .12);
+  --red-dim: rgba(229, 72, 77, .12);
+  --amber-dim: rgba(232, 176, 75, .12);
+  --blue: var(--muted);
+  --blue-dim: var(--hover);
+  --purple: var(--text);
+  --purple-dim: var(--hover);
+  /* El acento naranja pasa a monocromo. Los botones con estilos en línea lo usan de fondo con texto
+     negro, por eso es claro en los dos temas. */
+  --accent: #EDEDEC;
+  --accent-bright: var(--text);
+  --accent-deep: var(--muted);
+  --accent-dim: rgba(237, 237, 236, .08);
+  --accent-glow: rgba(237, 237, 236, .25);
+}
+[data-theme="light"] {
+  --bg: #FAFAF9;
+  --text: #121212;
+  --muted: #575754;
+  --dim: #73736F;
+  --line: rgba(18, 18, 18, .09);
+  --hover: rgba(18, 18, 18, .035);
+  --shadow: 0 1px 2px rgba(0, 0, 0, .08), 0 24px 48px -18px rgba(0, 0, 0, .28);
+  --scrim: rgba(18, 18, 18, .28);
+  --green: #12A150;
+  --amber: #C98A12;
+  --red: #C93B40;
+
+  --surface: #FFFFFF;
+  --surface2: #F2F2F0;
+  --surface3: #E8E8E5;
+  --border2: rgba(18, 18, 18, .16);
+  --green-dim: rgba(18, 161, 80, .1);
+  --red-dim: rgba(201, 59, 64, .1);
+  --amber-dim: rgba(201, 138, 18, .12);
+  --accent: #DCDCD8;
+  --accent-dim: rgba(18, 18, 18, .06);
+  --accent-glow: rgba(18, 18, 18, .15);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -36,6 +76,7 @@ html {
   -webkit-tap-highlight-color: transparent; /* sin destello gris al tocar */
   -webkit-text-size-adjust: 100%;
   overscroll-behavior: none;
+  transition: background-color .4s var(--ease);
 }
 body {
   font-family: 'Inter', sans-serif;
@@ -48,7 +89,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-.mono { font-family: 'JetBrains Mono', monospace; }
+.mono { font-family: var(--mono); }
 
 button { font-family: 'Inter', sans-serif; }
 /* Controles: respuesta inmediata al tocar, sin seleccionar su texto. */
@@ -60,11 +101,22 @@ button:not(:disabled):active { transform: scale(0.97); }
 input, select, textarea { font-family: 'Inter', sans-serif; }
 /* iOS hace zoom en campos de menos de 16px. */
 @media (pointer: coarse) { input, select, textarea { font-size: 16px !important; } }
-input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent) !important; box-shadow: 0 0 0 3px var(--accent-dim); }
-/* Solo el dashboard (fondo oscuro) usa selects con esquema dark; las páginas
-   de fondo claro (invoice, timesheet público, login) se quedan con el
-   esquema por defecto para que el texto de las <option> no salga invisible. */
-.app select { color-scheme: dark; }
+/* Gris neutro: sirve igual en los campos blancos de las páginas públicas que en el hub. */
+input:focus, select:focus, textarea:focus { outline: none; border-color: #8A8A87 !important; box-shadow: 0 0 0 3px rgba(138, 138, 135, .18); }
+
+/* ---- Hub ----
+   El hub (.app) va con Geist y con el esquema de color del tema. Las páginas de fondo claro
+   (factura, timesheet público, login) se quedan con el esquema por defecto para que el texto
+   de las <option> no salga invisible. */
+.app { font-family: var(--sans); color-scheme: dark; }
+[data-theme="light"] .app { color-scheme: light; }
+.app button, .app input, .app select, .app textarea { font-family: inherit; }
+.app input:focus, .app select:focus, .app textarea:focus { border-color: var(--dim) !important; box-shadow: 0 0 0 3px var(--hover); }
+.app ::selection { background: var(--text); color: var(--bg); }
+/* Pantallas aún sin migrar: sus estilos en línea piden Inter o JetBrains Mono; dentro del hub manda Geist.
+   Se puede borrar cuando ninguna pantalla los pida. */
+.app [style*="Inter"], .app [font-family*="Inter"] { font-family: var(--sans) !important; }
+.app [style*="JetBrains"], .app [font-family*="JetBrains"] { font-family: var(--mono) !important; }
 
 /* ---- App shell ---- */
 .app {
@@ -106,7 +158,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .nav-badge {
   margin-left: auto; flex-shrink: 0; min-width: 17px; height: 17px; padding: 0 5px; border-radius: 20px;
   background: var(--accent-dim); color: var(--accent-bright); font-size: 10px; font-weight: 600;
-  display: flex; align-items: center; justify-content: center; font-family: 'JetBrains Mono', monospace;
+  display: flex; align-items: center; justify-content: center; font-family: var(--mono);
 }
 .nav-btn:not(.active) .nav-badge { background: var(--surface3); color: var(--text2); }
 /* Subpestañas de una sección (Timesheets, Facturación) bajo el título. */
@@ -120,10 +172,10 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .subnav-btn.active { background: var(--accent-dim); border-color: transparent; color: var(--accent-bright); }
 .subnav-badge {
   min-width: 16px; height: 16px; padding: 0 5px; border-radius: 10px; background: var(--surface3); color: var(--text2);
-  font-size: 10px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; font-family: 'JetBrains Mono', monospace;
+  font-size: 10px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; font-family: var(--mono);
 }
-.subnav-btn.active .subnav-badge { background: var(--accent); color: #000; }
-.nav-foot { padding: 8px 10px; font-size: 11px; color: var(--text3); font-family: 'JetBrains Mono', monospace; }
+.subnav-btn.active .subnav-badge { background: var(--text); color: var(--bg); }
+.nav-foot { padding: 8px 10px; font-size: 11px; color: var(--text3); font-family: var(--mono); }
 
 .main { padding: 28px 32px 48px; min-width: 0; }
 .page-header { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
@@ -138,7 +190,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
   border: 1px solid var(--border); background: var(--surface2); color: var(--text2);
 }
 .btn svg { width: 14px; height: 14px; flex-shrink: 0; }
-.btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn-primary { background: var(--text); border-color: var(--text); color: var(--bg); }
 .btn-ghost { background: none; border-color: transparent; color: var(--text3); }
 .btn-dashed { width: 100%; justify-content: center; background: none; border-style: dashed; color: var(--text3); }
 
@@ -160,12 +212,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 
 .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 14px; }
 .stat-card { position: relative; overflow: hidden; }
-.stat-card-primary {
-  background:
-    radial-gradient(120% 90% at 100% 0%, rgba(251, 146, 60, 0.16) 0%, transparent 60%),
-    var(--surface);
-  border-color: rgba(249, 115, 22, 0.22);
-}
+.stat-card-primary { background: var(--surface); }
 .stat-icon {
   width: 32px; height: 32px; border-radius: 9px; display: flex; align-items: center; justify-content: center;
   margin-bottom: 14px; background: var(--surface2); color: var(--text2);
@@ -173,9 +220,9 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .stat-icon svg { width: 15px; height: 15px; }
 .stat-card-primary .stat-icon { background: var(--accent-dim); color: var(--accent-bright); }
 .stat-label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
-.stat-value { font-size: 24px; font-weight: 500; font-family: 'JetBrains Mono', monospace; letter-spacing: -0.03em; line-height: 1.15; }
+.stat-value { font-size: 24px; font-weight: 500; font-family: var(--mono); letter-spacing: -0.03em; line-height: 1.15; }
 .stat-card-primary .stat-value { font-size: 32px; }
-.stat-delta { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; margin-top: 8px; font-family: 'JetBrains Mono', monospace; }
+.stat-delta { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; margin-top: 8px; font-family: var(--mono); }
 .stat-delta.up { color: var(--green); }
 .stat-delta.down { color: var(--red); }
 .stat-delta.flat { color: var(--text3); }
@@ -193,7 +240,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .row-title { font-size: 13px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .row-sub { font-size: 11px; color: var(--text3); margin-top: 1px; }
 .row-side { display: flex; align-items: center; gap: 8px; flex-shrink: 0; white-space: nowrap; }
-.row-amount { font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 500; }
+.row-amount { font-family: var(--mono); font-size: 13px; font-weight: 500; }
 .row.muted { opacity: 0.55; }
 
 .pill { font-size: 10px; padding: 3px 8px; border-radius: 20px; font-weight: 500; white-space: nowrap; }
@@ -227,8 +274,8 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .field { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px; color: var(--text); font-size: 13px; }
 
 /* ---- Modal ---- */
-.modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.75); display: flex; align-items: center; justify-content: center; z-index: 100; backdrop-filter: blur(6px); padding: 16px; }
-.modal { background: var(--surface); border: 1px solid var(--border2); border-radius: 16px; padding: 26px; width: 420px; max-width: 100%; max-height: 92vh; overflow-y: auto; box-shadow: 0 24px 64px rgba(0,0,0,0.5); }
+.modal-bg { position: fixed; inset: 0; background: var(--scrim); display: flex; align-items: center; justify-content: center; z-index: 100; backdrop-filter: blur(6px); padding: 16px; }
+.modal { background: var(--surface); border: 1px solid var(--border2); border-radius: 16px; padding: 26px; width: 420px; max-width: 100%; max-height: 92vh; overflow-y: auto; box-shadow: var(--shadow); }
 
 /* ---- Responsive ---- */
 @media (max-width: 1080px) {
@@ -246,7 +293,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
     position: fixed; top: auto; bottom: 0; left: 0; right: 0; height: auto; z-index: 50;
     flex-direction: row; gap: 0;
     border-right: none; border-top: 1px solid var(--border);
-    background: rgba(10, 9, 8, 0.78); backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%);
+    background: color-mix(in srgb, var(--bg) 78%, transparent); backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%);
     padding: 8px 6px calc(8px + env(safe-area-inset-bottom));
   }
   .brand { display: none; }
@@ -283,7 +330,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .acct-app-icon-vacio { display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 600; }
 .acct-tile-cuerpo { flex: 1; min-width: 0; }
 .acct-tile-titulo { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.08em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.acct-tile-monto { font-family: 'JetBrains Mono', monospace; font-size: 20px; font-weight: 500; letter-spacing: -0.4px; line-height: 1.2; margin-top: 2px; white-space: nowrap; }
+.acct-tile-monto { font-family: var(--mono); font-size: 20px; font-weight: 500; letter-spacing: -0.4px; line-height: 1.2; margin-top: 2px; white-space: nowrap; }
 .acct-tile-estado { font-size: 11px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .presu-card { display: flex; flex-direction: column; }
 .presu-cabecera { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
@@ -347,13 +394,13 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
   .subnav-btn:hover { color: var(--text); background: var(--surface2); }
   .nav-btn.active:hover, .subnav-btn.active:hover { background: var(--accent-dim); color: var(--accent-bright); }
   .btn:hover { background: var(--surface3); color: var(--text); border-color: var(--border2); }
-  .btn-primary:hover { background: var(--accent-bright); border-color: var(--accent-bright); color: #fff; }
+  .btn-primary:hover { background: var(--text); border-color: var(--text); color: var(--bg); opacity: .88; }
   .btn-ghost:hover { background: var(--surface2); color: var(--text); border-color: transparent; }
   .btn-dashed:hover { border-color: var(--accent); color: var(--accent-bright); background: var(--accent-dim); }
   .icon-btn:hover { background: var(--surface3); color: var(--text); border-color: var(--border2); }
-  .icon-btn.ok:hover { background: var(--green-dim); color: var(--green); border-color: rgba(74, 222, 128, 0.4); }
-  .icon-btn.danger:hover { background: var(--red-dim); color: var(--red); border-color: rgba(248, 113, 113, 0.4); }
-  .icon-btn.accent:hover { background: var(--accent-dim); color: var(--accent-bright); border-color: rgba(249, 115, 22, 0.4); }
+  .icon-btn.ok:hover { background: var(--green-dim); color: var(--green); border-color: color-mix(in srgb, var(--green) 40%, transparent); }
+  .icon-btn.danger:hover { background: var(--red-dim); color: var(--red); border-color: color-mix(in srgb, var(--red) 40%, transparent); }
+  .icon-btn.accent:hover { background: var(--accent-dim); color: var(--text); border-color: var(--dim); }
   .row:hover { background: var(--surface2); }
   .row.muted:hover { opacity: 1; }
   .proj-card:hover { border-color: var(--border2); }
