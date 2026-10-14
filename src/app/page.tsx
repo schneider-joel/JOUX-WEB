@@ -99,50 +99,52 @@ function PatrimonioChart({ snapshots, actual }: { snapshots: PatrimonioSnapshot[
   porMes.set(mesActual, actual)
   const puntos = meses.map((m, i) => ({ m, i, v: porMes.get(m) })).filter(p => p.v !== undefined) as { m: string, i: number, v: number }[]
 
-  const padL = 44, padR = 12, padT = 14, padB = 26
+  // Línea fina sin ejes, como la web: el valor de cada mes sale al pasar por encima.
+  const [cursor, setCursor] = useState<number | null>(null)
+  const padX = 6, padT = 12, padB = 12
   const vals = puntos.map(p => p.v)
   const min = Math.min(...vals), max = Math.max(...vals)
   const span = max - min || Math.max(max * 0.1, 1)
   const lo = min - span * 0.25, hi = max + span * 0.25
-  const x = (i: number) => padL + (i / (meses.length - 1)) * (W - padL - padR)
+  const x = (i: number) => padX + (i / (meses.length - 1)) * (W - padX * 2)
   const y = (v: number) => padT + (1 - (v - lo) / (hi - lo)) * (H - padT - padB)
   const path = puntos.map((p, k) => `${k === 0 ? 'M' : 'L'}${x(p.i)},${y(p.v)}`).join(' ')
-  const area = puntos.length > 1 ? `${path} L${x(puntos[puntos.length - 1].i)},${H - padB} L${x(puntos[0].i)},${H - padB} Z` : ''
-  const ticks = [lo + (hi - lo) * 0.2, lo + (hi - lo) * 0.5, lo + (hi - lo) * 0.8]
-  const tickLabel = (t: number) => (hi - lo) < 6000 ? `${(t / 1000).toFixed(1)}k` : `${fmt(t / 1000)}k`
+  const area = puntos.length > 1 ? `${path} L${x(puntos[puntos.length - 1].i)},${H} L${x(puntos[0].i)},${H} Z` : ''
   const last = puntos[puntos.length - 1]
+  const sel = cursor !== null ? puntos[cursor] : null
+  const alPasar = (clientX: number) => {
+    const r = ref.current?.getBoundingClientRect()
+    if (!r || !puntos.length) return
+    const px = clientX - r.left
+    let k = 0
+    puntos.forEach((p, j) => { if (Math.abs(x(p.i) - px) < Math.abs(x(puntos[k].i) - px)) k = j })
+    setCursor(k)
+  }
+  const etiquetaMes = (m: string) => `${fmtMes(m)}${m.slice(0, 4) !== mesActual.slice(0, 4) ? ` ${m.slice(2, 4)}` : ''}`
 
   return (
-    <div className="chart-wrap chart-compacto" ref={ref}>
-      <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H}>
-        <defs>
-          <linearGradient id="pgrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--text)" stopOpacity="0.14" />
-            <stop offset="100%" stopColor="var(--text)" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        {ticks.map((t, k) => (
-          <g key={k}>
-            <line x1={padL} x2={W - padR} y1={y(t)} y2={y(t)} stroke="var(--border)" strokeDasharray="3 4" />
-            <text x={padL - 8} y={y(t) + 3} fontSize="9" fill="var(--text3)" textAnchor="end" fontFamily="JetBrains Mono, monospace">{tickLabel(t)}</text>
-          </g>
-        ))}
-        {meses.map((m, i) => (
-          <text key={m} x={x(i)} y={H - 8} fontSize="9" fill={m === mesActual ? 'var(--text2)' : 'var(--text3)'} textAnchor="middle" fontFamily="Inter, sans-serif">{fmtMes(m)}</text>
-        ))}
-        {area && <path d={area} fill="url(#pgrad)" />}
-        {puntos.length > 1 && <path d={path} fill="none" stroke="var(--text)" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />}
-        {puntos.map(p => (
-          <circle key={p.m} cx={x(p.i)} cy={y(p.v)} r={p === last ? 4 : 2.5} fill={p === last ? 'var(--text)' : 'var(--bg)'} stroke="var(--text)" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
-        ))}
-        {last && (
-          <g>
-            <line x1={x(last.i)} x2={x(last.i)} y1={y(last.v)} y2={H - padB} stroke="var(--text)" strokeOpacity="0.3" strokeDasharray="2 3" />
-            <rect x={Math.min(x(last.i) - 34, W - padR - 68)} y={y(last.v) - 26} width="68" height="18" rx="5" fill="var(--bg)" stroke="var(--border2)" />
-            <text x={Math.min(x(last.i), W - padR - 34)} y={y(last.v) - 14} fontSize="10" fill="var(--text)" textAnchor="middle" fontFamily="JetBrains Mono, monospace">€{fmt(last.v)}</text>
-          </g>
+    <div className="spark-wrap">
+      <div className={`spark${sel ? ' is-hover' : ''}`} ref={ref} onPointerMove={e => alPasar(e.clientX)} onPointerDown={e => alPasar(e.clientX)} onPointerLeave={() => setCursor(null)}>
+        <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} aria-hidden="true">
+          <defs>
+            <linearGradient id="pgrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="currentColor" stopOpacity="0.08" />
+              <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          {area && <path d={area} fill="url(#pgrad)" />}
+          {puntos.length > 1 && <path className="spark__line" d={path} />}
+          {sel && <line className="spark__cur" x1={x(sel.i)} x2={x(sel.i)} y1={0} y2={H} />}
+          {sel && <circle className="spark__pt" cx={x(sel.i)} cy={y(sel.v)} r={4} />}
+        </svg>
+        {last && <i className="dot dot--green spark__end" style={{ left: x(last.i), top: y(last.v) }} aria-hidden="true" />}
+        {sel && (
+          <span className="tip caps spark__tip" style={{ left: x(sel.i), transform: `translateX(${x(sel.i) < W * 0.12 ? '0' : x(sel.i) > W * 0.88 ? '-100%' : '-50%'})` }}>
+            {etiquetaMes(sel.m)} · €{fmt(sel.v)}
+          </span>
         )}
-      </svg>
+      </div>
+      <div className="spark__meses caps" aria-hidden="true"><span>{etiquetaMes(meses[0])}</span><span>{etiquetaMes(mesActual)}</span></div>
     </div>
   )
 }
@@ -155,31 +157,30 @@ function IngresosChart({ facturas }: { facturas: Factura[] }) {
     return { m, cobrado: fs.filter(f => f.estado === 'cobrada').reduce((s, f) => s + f.importe, 0), pendiente: fs.filter(f => f.estado === 'pendiente').reduce((s, f) => s + f.importe, 0) }
   })
   const max = Math.max(...datos.map(d => d.cobrado + d.pendiente), 1)
-  const padL = 36, padR = 6, padT = 14, padB = 26
-  const bw = (W - padL - padR) / meses.length
+  // Barras finas: lo cobrado, sólido; lo pendiente, rayado. Encima, el total del mes.
+  const padT = 20, padB = 26
+  const bw = W / meses.length
   const h = (v: number) => (v / max) * (H - padT - padB)
-  const ticks = [0.25, 0.5, 0.75, 1].map(t => t * max)
   return (
-    <div className="chart-wrap" ref={ref}>
-      <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H}>
-        {ticks.map((t, k) => (
-          <g key={k}>
-            <line x1={padL} x2={W - padR} y1={H - padB - h(t)} y2={H - padB - h(t)} stroke="var(--border)" strokeDasharray="3 4" />
-            <text x={padL - 8} y={H - padB - h(t) + 3} fontSize="9" fill="var(--text3)" textAnchor="end" fontFamily="JetBrains Mono, monospace">{fmt(t / 1000)}k</text>
-          </g>
-        ))}
+    <div className="bars" ref={ref}>
+      <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} role="img" aria-label="Ingresos facturados por mes de emisión">
+        <defs>
+          <pattern id="rayas" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+            <line x1="0" y1="0" x2="0" y2="4" stroke="var(--dim)" strokeWidth="1.2" />
+          </pattern>
+        </defs>
         {datos.map((d, i) => {
-          const cx = padL + bw * i + bw / 2
-          const w = Math.min(bw * 0.5, 28)
+          const cx = bw * i + bw / 2
+          const w = Math.min(bw * 0.5, 14)
           const hc = h(d.cobrado), hp = h(d.pendiente)
+          const total = d.cobrado + d.pendiente
           return (
             <g key={d.m}>
-              {hc > 0 && <rect x={cx - w / 2} y={H - padB - hc} width={w} height={hc} rx="2" fill="var(--text)" />}
-              {hp > 0 && <rect x={cx - w / 2} y={H - padB - hc - hp} width={w} height={hp} rx="2" fill="var(--dim)" fillOpacity="0.55" />}
-              {d.cobrado + d.pendiente > 0 && (
-                <text x={cx} y={H - padB - hc - hp - 5} fontSize="9" fill="var(--text2)" textAnchor="middle" fontFamily="JetBrains Mono, monospace">{((d.cobrado + d.pendiente) / 1000).toFixed(1)}k</text>
-              )}
-              <text x={cx} y={H - 8} fontSize="9" fill="var(--text3)" textAnchor="middle" fontFamily="Inter, sans-serif">{fmtMes(d.m)}</text>
+              {hc > 0 && <rect className="bars__c" x={cx - w / 2} y={H - padB - hc} width={w} height={hc} rx="2" />}
+              {hp > 0 && <rect className="bars__p" x={cx - w / 2 + 0.5} y={H - padB - hc - hp + 0.5} width={w - 1} height={Math.max(0, hp - 1)} rx="2" fill="url(#rayas)" />}
+              {!total && <rect x={cx - w / 2} y={H - padB - 2} width={w} height={2} rx="1" fill="var(--line)" />}
+              {total > 0 && <text className="bars__v" x={cx} y={H - padB - hc - hp - 7} textAnchor="middle">{(total / 1000).toFixed(1)}k</text>}
+              <text className={`bars__m${i === meses.length - 1 ? ' is-now' : ''}`} x={cx} y={H - 6} textAnchor="middle">{fmtMes(d.m)}</text>
             </g>
           )
         })}
@@ -532,7 +533,8 @@ export default function Home() {
       <Menu items={secciones.map(s => ({ id: s.id, label: s.label, badge: s.tabs.reduce((t, x) => t + (x.badge || 0), 0), tranquilo: s.id === 'treatments' }))}
         activa={seccionActiva.id} onAbrir={id => { const s = secciones.find(x => x.id === id); if (s) abrirSeccion(s) }} />
 
-      <main className="main">
+      {/* Las pantallas ya migradas van en la columna de la maqueta (724 px) */}
+      <main className={`main${tab === 'dashboard' ? ' main--col' : ''}`}>
         <header className="page-header">
           <div className="page-header__txt">
             <h1 className="page-title">{titulo}</h1>
@@ -554,137 +556,81 @@ export default function Home() {
           </nav>
         )}
 
-        {/* Dashboard Tab */}
-        {tab === 'dashboard' && (
-          <>
-            <div className="stat-grid">
-              <div className="card stat-card stat-card-primary">
-                <div className="stat-icon"><Icon.spark /></div>
-                <div className="stat-label">Patrimonio total</div>
-                <div className="stat-value">€{fmt(totalPatrimonio)}</div>
+        {/* Overview: lo justo de cada sección, como la web; el detalle está en su pantalla */}
+        {tab === 'dashboard' && (() => {
+          const pago = proximoPago(facturasFiscales, compras, cuotaAutonomo, impuestosReales)
+          const flecha = <svg className="arr" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8h9M9 4.5 12.5 8 9 11.5" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          return (
+          <div className="col">
+            <section className="block" aria-label="Patrimonio">
+              <p className="label caps"><span>Patrimonio</span><i className="rule" /></p>
+              <div className="hero">
+                <p className="big">€{fmt(totalPatrimonio)}</p>
                 {deltaMes !== null ? (
-                  <div className={`stat-delta ${deltaMes > 0 ? 'up' : deltaMes < 0 ? 'down' : 'flat'}`}>
-                    {deltaMes > 0 ? '▲' : deltaMes < 0 ? '▼' : '•'} {deltaMes >= 0 ? '+' : '−'}€{fmt(Math.abs(deltaMes))}{deltaPct !== null ? ` (${deltaPct >= 0 ? '+' : ''}${deltaPct.toFixed(1)}%)` : ''} vs mes anterior
-                  </div>
+                  <p className="delta caps">
+                    <span className={deltaMes > 0 ? 'up' : deltaMes < 0 ? 'down' : undefined}>{deltaMes > 0 ? '▲' : deltaMes < 0 ? '▼' : '•'} {deltaMes >= 0 ? '+' : '−'}€{fmt(Math.abs(deltaMes))}{deltaPct !== null ? ` (${deltaPct >= 0 ? '+' : ''}${deltaPct.toFixed(1)}%)` : ''}</span>
+                    <span>vs mes anterior</span>
+                  </p>
                 ) : (
-                  <div className="stat-delta flat">• registrando historial</div>
+                  <p className="delta caps"><span>• registrando historial</span></p>
                 )}
               </div>
-              <div className="card stat-card">
-                <div className="stat-icon"><Icon.wallet /></div>
-                <div className="stat-label">Liquidez</div>
-                <div className="stat-value" style={{ color: 'var(--green)' }}>€{fmt(totalLiquidez)}</div>
-                <div className="stat-delta flat">{cuentas.filter(c => !c.padre_id).length} cuentas · {cuentas.filter(c => c.padre_id).length} apartados</div>
-              </div>
-              <div className="card stat-card">
-                <div className="stat-icon"><Icon.coin /></div>
-                <div className="stat-label">Crypto</div>
-                <div className="stat-value" style={{ color: 'var(--purple)' }}>€{fmt(totalCrypto)}</div>
-                <div className="stat-delta flat">ETH €{fmt(ethPrice)}</div>
-              </div>
-              <div className="card stat-card">
-                <div className="stat-icon"><Icon.invoice /></div>
-                <div className="stat-label">Por cobrar</div>
-                <div className="stat-value" style={{ color: 'var(--amber)' }}>€{fmt(totalPendiente)}</div>
-                <div className="stat-delta flat">{facturasPendientes.length} facturas</div>
-              </div>
-            </div>
+              <PatrimonioChart snapshots={snapshots} actual={totalPatrimonio} />
+              {snapshots.filter(s => s.fecha.slice(0, 7) !== mesActualKey).length < 2 && (
+                <p className="nota">Se guarda un punto cada día que abres el hub; el gráfico se completa mes a mes.</p>
+              )}
+              <dl className="split">
+                <div><dt className="caps">Liquidez</dt><dd><span className="num">€{fmt(totalLiquidez)}</span></dd></div>
+                <div><dt className="caps">Crypto</dt><dd><span className="num">€{fmt(totalCrypto)}</span></dd></div>
+                <div><dt className="caps">Por cobrar</dt><dd><span className="num">€{fmt(totalPendiente)}</span></dd></div>
+              </dl>
+            </section>
 
-            <CuentasCard cuentas={cuentas} aEuros={aEuros} fijosMes={fijos.reduce((t, i) => t + Number(i.limite), 0)}
-              variablesMes={variables.reduce((t, i) => t + Number(i.limite), 0)} pago={proximoPago(facturasFiscales, compras, cuotaAutonomo, impuestosReales)}
-              porCobrar={totalPendiente} onEdit={() => setModal({ type: 'editCuentas' })}
-              fijosPendientes={movsBanco.length ? (() => { const g = gastadoPorPartida(movsBanco, undefined, undefined, compartidos); return fijos.reduce((t, i) => t + Math.max(0, Number(i.limite) - (g[i.nombre] || 0)), 0) })() : null} />
+            {/* Próximo pago de impuestos: frase apagada + botón, sin caja */}
+            {pago && (
+              <button type="button" className="cta" onClick={() => setTab('impuestos')}>
+                <span className="cta__l"><i className="dot dot--amber" aria-hidden="true" />IVA e IRPF del T{pago.q}{pago.declarado ? ' (gestor)' : pago.cerrado ? '' : ' estimado'} · {fmtDate(pago.plazo)}</span>
+                <span className="cta__b">€{fmt2(pago.total)}{flecha}</span>
+              </button>
+            )}
 
-            {marcasLista.length > 0 && <MarcaCard facturas={demoMarcas ? DEMO_FACTURAS : facturas} proyectos={demoMarcas ? [] : proyectos} marcas={marcasLista} demo={demoMarcas} />}
-
-            <div className="dash-grid-3">
-              <PresupuestoCards fijos={fijos} variables={variables} movimientos={movsBanco} compartidos={compartidos} />
-              <div className="card">
-                <div className="card-head">
-                  <div>
-                    <div className="card-title">Patrimonio</div>
-                    <div className="card-kicker" style={{ marginTop: 2 }}>Evolución mensual</div>
-                  </div>
-                </div>
-                <div className="mono" style={{ fontSize: 22, letterSpacing: -0.5 }}>€{fmt(totalPatrimonio)}</div>
-                {deltaMes !== null && (
-                  <div className={`stat-delta ${deltaMes > 0 ? 'up' : deltaMes < 0 ? 'down' : 'flat'}`} style={{ marginTop: 2, marginBottom: 8 }}>
-                    {deltaMes > 0 ? '▲' : deltaMes < 0 ? '▼' : '•'} {deltaMes >= 0 ? '+' : '−'}€{fmt(Math.abs(deltaMes))} vs mes anterior
-                  </div>
-                )}
-                <PatrimonioChart snapshots={snapshots} actual={totalPatrimonio} />
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
-                  {([['Liquidez', totalLiquidez, 'var(--green)'], ['Crypto', totalCrypto, 'var(--purple)'], ['Por cobrar', totalPendiente, 'var(--amber)']] as [string, number, string][]).map(([n, v, c]) => (
-                    <div key={n} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
-                      <i style={{ width: 6, height: 6, borderRadius: 3, background: c }} />
-                      <span style={{ flex: 1, color: 'var(--text2)' }}>{n}</span>
-                      <span className="mono" style={{ color: 'var(--text)' }}>€{fmt(v)}</span>
-                      <span className="mono" style={{ width: 38, textAlign: 'right', color: 'var(--text3)', fontSize: 11 }}>{totalPatrimonio > 0 ? Math.round(v / (totalPatrimonio + totalPendiente) * 100) : 0}%</span>
-                    </div>
-                  ))}
-                </div>
-                {snapshots.filter(s => s.fecha.slice(0, 7) !== mesActualKey).length < 2 && (
-                  <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 8 }}>Se guarda un punto cada día que abres el hub; el gráfico se completa mes a mes.</div>
-                )}
-              </div>
-            </div>
-
-            <div className="dash-grid-2">
-              <div className="card">
-                <div className="card-head">
-                  <div>
-                    <div className="card-title">Ingresos facturados</div>
-                    <div className="card-kicker" style={{ marginTop: 2 }}>Por mes de emisión</div>
-                  </div>
-                  <div className="chart-legend">
-                    <span><i style={{ background: 'var(--text)' }} />Cobrado</span>
-                    <span><i style={{ background: 'var(--dim)', opacity: 0.6 }} />Pendiente</span>
-                  </div>
-                </div>
-                <IngresosChart facturas={facturasFiscales} />
-                <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border)' }}>
-                  <div className="card-kicker" style={{ marginBottom: 6 }}>Crypto</div>
-                  {crypto.map(c => {
-                    const val = c.symbol === 'ETH' ? c.cantidad * ethPrice : 0
-                    return (
-                      <div key={c.id} className="row">
-                        <div className="acct-avatar" style={{ background: 'var(--purple-dim)', color: 'var(--purple)', borderColor: 'rgba(167,139,250,0.35)' }}>{c.symbol}</div>
-                        <div className="row-main">
-                          <div className="row-title">{c.cantidad} {c.symbol}</div>
-                          <div className="row-sub mono">€{fmt2(ethPrice)} / {c.symbol} · precio en vivo</div>
-                        </div>
-                        <div className="row-side"><span className="row-amount" style={{ color: 'var(--purple)' }}>€{fmt(val)}</span></div>
+            <section className="block" aria-label="Por cobrar">
+              <p className="label caps"><span>Por cobrar</span><i className="rule" /><button type="button" className="label__m copy" onClick={() => setTab('facturas')}>Facturas →</button></p>
+              {facturasPendientes.length === 0 ? <p className="empty">No hay facturas pendientes.</p> : (
+                <ul className="list focus">
+                  {facturasPendientes.slice(0, 7).map(f => (
+                    <li key={f.id} className="fila">
+                      <div className="fila__main">
+                        <span className="fila__t" title={`${f.cliente}${f.descripcion ? ` · ${f.descripcion}` : ''}`}>{f.cliente}{f.descripcion ? <span> · {f.descripcion}</span> : null}</span>
+                        <span className="fila__s caps" title={`Vence ${fmtDate(f.fecha_vencimiento || f.fecha)}${f.numero ? ` · ${f.numero}` : ''}${lineaImpuestos(f)}`}>Vence {fmtDate(f.fecha_vencimiento || f.fecha)}{f.numero ? ` · ${f.numero}` : ''}{lineaImpuestos(f)}</span>
                       </div>
-                    )
-                  })}
-                </div>
-              </div>
+                      <span className="num">€{fmt(totalACobrar(f))}</span>
+                      <button type="button" className="tick" onClick={() => marcarCobrada(f)} title="Marcar como cobrada" aria-label={`Marcar como cobrada: ${f.cliente}`}><Icon.check /></button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
 
-              <div className="card">
-                <div className="card-head">
-                  <div>
-                    <div className="card-title">Próximas facturas</div>
-                    <div className="card-kicker" style={{ marginTop: 2 }}>€{fmt(totalPendiente)} por cobrar</div>
-                  </div>
-                  <button className="btn btn-ghost" onClick={() => setTab('facturas')}>Ver todas →</button>
-                </div>
-                {facturasPendientes.length === 0 && <div className="chart-empty">No hay facturas pendientes.</div>}
-                {facturasPendientes.slice(0, 7).map(f => (
-                  <div key={f.id} className="row">
-                    <div className="row-main">
-                      <div className="row-title" title={`${f.cliente}${f.descripcion ? ` · ${f.descripcion}` : ''}`}>{f.cliente}{f.descripcion ? ` · ${f.descripcion}` : ''}</div>
-                      <div className="row-sub">Vence {fmtDate(f.fecha_vencimiento || f.fecha)}{f.numero ? ` · ${f.numero}` : ''}{lineaImpuestos(f)}</div>
-                    </div>
-                    <div className="row-side">
-                      <span className="row-amount" style={{ color: 'var(--green)' }}>+€{fmt(totalACobrar(f))}</span>
-                      <button className="icon-btn ok" onClick={() => marcarCobrada(f)} title="Marcar como cobrada"><Icon.check /></button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+            <section className="block" aria-label="Ingresos facturados por mes de emisión">
+              <p className="label caps"><span>Ingresos facturados</span><i className="rule" /></p>
+              <IngresosChart facturas={facturasFiscales} />
+              <p className="legend caps"><span><i className="sw" />Cobrado</span><span><i className="sw sw--p" />Pendiente</span></p>
+            </section>
+
+            <div className="duo">
+              <CuentasCard cuentas={cuentas} aEuros={aEuros} fijosMes={fijos.reduce((t, i) => t + Number(i.limite), 0)}
+                variablesMes={variables.reduce((t, i) => t + Number(i.limite), 0)} pago={pago}
+                porCobrar={totalPendiente} onEdit={() => setModal({ type: 'editCuentas' })}
+                fijosPendientes={movsBanco.length ? (() => { const g = gastadoPorPartida(movsBanco, undefined, undefined, compartidos); return fijos.reduce((t, i) => t + Math.max(0, Number(i.limite) - (g[i.nombre] || 0)), 0) })() : null}
+                extra={crypto.map(c => ({ key: `crypto-${c.id}`, titulo: `${c.cantidad} ${c.symbol}`, linea: `€${fmt2(ethPrice)} / ${c.symbol} · precio en vivo`, monto: `€${fmt(c.symbol === 'ETH' ? c.cantidad * ethPrice : 0)}` }))} />
+              {marcasLista.length > 0 && <MarcaCard facturas={demoMarcas ? DEMO_FACTURAS : facturas} proyectos={demoMarcas ? [] : proyectos} marcas={marcasLista} demo={demoMarcas} />}
             </div>
-          </>
-        )}
+
+            <PresupuestoCards fijos={fijos} variables={variables} movimientos={movsBanco} compartidos={compartidos} />
+          </div>
+          )
+        })()}
 
         {/* Facturas Tab */}
         {tab === 'facturas' && (() => {
