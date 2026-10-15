@@ -9,13 +9,13 @@ export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
 export const metadata = { title: 'Proyectos · JOUX Hub' }
 
-// Seguimiento visual de cada proyecto por fase (proyectos.fase). Entran los activos y los que ya
+// Seguimiento visual de cada web por fase (proyectos.fase). Solo marcas de webs (modo «cerrado»:
+// Arkevo, Custom Websites…); los treatments no se siguen por etapas. Entran las activas y las que ya
 // tienen fase; la fase se cambia aquí a mano y queda en eventos (proyecto.fase).
 export default async function ProyectosPage() {
-  const [{ data: proyectos, error }, { data: marcas }] = await Promise.all([
-    sb.from('proyectos').select('id, nombre, cliente, marca, fase, lead_id, created_at').or('status.eq.activo,fase.not.is.null').order('created_at', { ascending: false }),
-    sb.from('marcas').select('key, nombre, orden').order('orden'),
-  ])
+  const { data: marcas } = await sb.from('marcas').select('key, nombre, orden').eq('modo', 'cerrado').order('orden')
+  const { data: proyectos, error } = await sb.from('proyectos').select('id, nombre, cliente, marca, fase, lead_id, created_at')
+    .or('status.eq.activo,fase.not.is.null').in('marca', (marcas || []).map(m => m.key)).order('created_at', { ascending: false })
   const ids = (proyectos || []).map(p => p.id)
   const { data: eventos } = ids.length
     ? await sb.from('eventos').select('proyecto_id, tipo, datos, created_at').in('proyecto_id', ids).in('tipo', ['proyecto.fase', 'lead.ganado']).order('created_at')
@@ -43,7 +43,7 @@ export default async function ProyectosPage() {
         <header className="page-header trk__ancho">
           <div className="page-header__txt">
             <h1 className="page-title">Proyectos</h1>
-            <p className="tags caps">Seguimiento por etapa</p>
+            <p className="tags caps">Webs · seguimiento por etapa</p>
           </div>
           <Link href="/pipeline" className="copy caps">Leads →</Link>
         </header>

@@ -70,7 +70,7 @@ export default function Seguimiento({ proyectos, marcas }: { proyectos: Proyecto
         <span>Ahora</span>
       </div>
 
-      {lista.length === 0 ? <p className="empty">{proyectos.length ? 'Ningún proyecto en esta etapa.' : 'No hay proyectos activos.'}</p> : (
+      {lista.length === 0 ? <p className="empty">{proyectos.length ? 'Ningún proyecto en esta etapa.' : 'No hay webs en marcha. Aparecen al marcar un lead como ganado o al crear una web en Webs.'}</p> : (
         <ul className="trk__lista">
           {lista.map(p => {
             const idx = p.fase ? FASES_PROYECTO.indexOf(p.fase) : -1

@@ -16,7 +16,7 @@ export default async function PipelinePage({ searchParams }: { searchParams: { m
   const [{ data: leads, error }, { data: marcas }, { data: proyectos }] = await Promise.all([
     sb.from('leads').select('id, marca, estado, nombre, email, empresa, recibido_en').order('recibido_en', { ascending: false }).limit(500),
     sb.from('marcas').select('key, nombre, orden').order('orden'),
-    sb.from('proyectos').select('id, nombre, cliente, marca, fase, lead_id').not('fase', 'is', null).order('created_at', { ascending: false }),
+    sb.from('proyectos').select('id, nombre, cliente, marca, fase, lead_id').not('fase', 'is', null).not('precio_cerrado', 'is', null).order('created_at', { ascending: false }),
   ])
   // Ambushed / BoldMove no tiene leads por estos sistemas.
   const conLeads = (marcas || []).filter(m => m.key !== 'ab')
@@ -76,7 +76,7 @@ export default async function PipelinePage({ searchParams }: { searchParams: { m
         <Link href="/proyectos" className="fila pipe__lead pipe__head" style={{ marginTop: 64, borderTop: '1px solid var(--line)', paddingTop: 20 }}>
           <span className="fila__main">
             <span className="fila__t">Proyectos</span>
-            <span className="fila__s caps">Seguimiento por etapa · {listaP.length}</span>
+            <span className="fila__s caps">Webs · seguimiento por etapa · {listaP.length}</span>
           </span>
           <span className="copy caps">Abrir →</span>
         </Link>

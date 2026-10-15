@@ -75,7 +75,8 @@ export function filasGanado(lead: LeadGanado, marca: MarcaGanado, f: FormGanado)
     web: web ? f.web.trim().replace(/^https?:\/\//, '') || null : null,
     plan: web ? f.plan.trim() || null : null,
     precio_cerrado: web ? Number(f.precio) : null,
-    fase: 'confirmado', lead_id: lead.id,
+    // Solo las webs se siguen por etapas (/proyectos); los treatments van por su timesheet.
+    fase: web ? 'confirmado' : null, lead_id: lead.id,
     contacto_email: lead.email, contacto_nombre: lead.nombre?.trim() || null, idioma: lead.idioma,
   }
   const evento = {

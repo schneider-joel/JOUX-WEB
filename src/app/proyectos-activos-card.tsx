@@ -21,7 +21,7 @@ export default function ProyectosActivosCard({ proyectos, onAbrir }: { proyectos
     <section className="block" aria-label="Proyectos activos">
       <p className="label caps">
         <span>Proyectos activos{proyectos.length ? ` · ${proyectos.length}` : ''}</span><i className="rule" />
-        <Link href="/proyectos" className="label__m copy">Seguimiento →</Link>
+        <Link href="/proyectos" className="label__m copy">Seguimiento webs →</Link>
       </p>
       {proyectos.length === 0 ? <p className="nota">No hay proyectos activos.</p> : (
         <ul className="list focus">
