@@ -8,18 +8,18 @@ const fmt2 = (n: number) => new Intl.NumberFormat('en-US', { minimumFractionDigi
 
 const textos = {
   es: {
-    titulo: 'FACTURA', numero: 'Número', referencia: 'Referencia', fecha: 'Fecha', vencimiento: 'Vencimiento', para: 'Para', de: 'De',
-    concepto: 'CONCEPTO', precio: 'PRECIO', unidades: 'UNIDADES', unidadesCorto: 'UDS.', subtotal: 'SUBTOTAL', iva: 'IVA', retencion: 'RETENCIÓN', total: 'TOTAL',
-    baseImponible: 'BASE IMPONIBLE', totalLabel: 'Total', imprimir: 'Imprimir / Guardar PDF', editar: 'Editar', vista: 'Vista previa',
+    titulo: 'Factura', numero: 'Número', referencia: 'Referencia', fecha: 'Fecha', vencimiento: 'Vencimiento', para: 'Para', de: 'De',
+    concepto: 'Concepto', precio: 'Precio', unidades: 'Unidades', unidadesCorto: 'Uds.', subtotal: 'Subtotal', iva: 'IVA', retencion: 'Retención', total: 'Total',
+    baseImponible: 'Base imponible', totalLabel: 'Total', imprimir: 'Imprimir / Guardar PDF', editar: 'Editar', vista: 'Vista previa',
     guardar: 'Guardar cambios', guardando: 'Guardando...',
     notaFueraUe: 'Operación no sujeta a IVA por el art. 69.Uno.1º LIVA',
     notaTransferencia: 'Pagar por transferencia bancaria al siguiente número de cuenta',
     horas: 'Horas trabajadas', standby: 'Standby',
   },
   en: {
-    titulo: 'INVOICE', numero: 'Number', referencia: 'Reference', fecha: 'Date', vencimiento: 'Due date', para: 'To', de: 'From',
-    concepto: 'DESCRIPTION', precio: 'PRICE', unidades: 'QTY', unidadesCorto: 'QTY', subtotal: 'SUBTOTAL', iva: 'VAT', retencion: 'WITHHOLDING', total: 'TOTAL',
-    baseImponible: 'NET AMOUNT', totalLabel: 'Total', imprimir: 'Print / Save PDF', editar: 'Edit', vista: 'Preview',
+    titulo: 'Invoice', numero: 'Number', referencia: 'Reference', fecha: 'Date', vencimiento: 'Due date', para: 'To', de: 'From',
+    concepto: 'Description', precio: 'Price', unidades: 'Qty', unidadesCorto: 'Qty', subtotal: 'Subtotal', iva: 'VAT', retencion: 'Withholding', total: 'Total',
+    baseImponible: 'Net amount', totalLabel: 'Total', imprimir: 'Print / Save PDF', editar: 'Edit', vista: 'Preview',
     guardar: 'Save changes', guardando: 'Saving...',
     notaFueraUe: 'Not subject to VAT under art. 69.One.1 of the Spanish VAT Law',
     notaTransferencia: 'Pay by bank transfer to the following account number',
@@ -29,9 +29,6 @@ const textos = {
 
 const IVA_PCT = 21
 const RETENCION_PCT = 15
-
-const inputStyle: React.CSSProperties = { width: '100%', background: '#fff', border: '1px solid #ddd', borderRadius: 6, padding: '7px 10px', color: '#111', fontSize: 13, fontFamily: 'Inter, sans-serif', outline: 'none' }
-const labelStyle: React.CSSProperties = { display: 'block', fontSize: 11, color: '#888', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }
 
 function siguienteNumero(ultimo: string): string {
   const m = ultimo.match(/^(.*?)(\d+)$/)
@@ -146,247 +143,204 @@ export default function InvoiceEditor({
     ? new Date(factura.fecha_vencimiento + 'T00:00:00').toLocaleDateString(idioma === 'es' ? 'es-ES' : 'en-GB')
     : ''
 
-  // Con IVA y retención son 7 columnas: las numéricas se ajustan a su contenido
-  // sin partirse y el concepto ocupa el resto. Sin IVA se reparten al 15%.
-  const celda = { textAlign: 'right' as const, whiteSpace: 'nowrap' as const, width: dentroUe ? '1%' : '15%' }
-  const th = { ...celda, padding: dentroUe ? '10px 7px' : '10px 8px', fontSize: 11 }
-  const td = { ...celda, padding: dentroUe ? '14px 7px' : '14px 8px', fontSize: 13 }
-
   const mostrarDetalleHoras = modoRate === 'hora' && dias.length > 0
   const totalHoras = dias.reduce((s, d) => s + (d.hrs ?? 0), 0)
   const totalStandby = dias.reduce((s, d) => s + (d.standby_hrs ?? 0), 0)
 
+  // Barra y edición con el aspecto del hub; debajo, la hoja que recibe el cliente (siempre en claro, es lo que se imprime).
+  // Mismo contenido, mismas cuentas y mismo guardado que antes.
   return (
-    <>
-      <style>{`
-        @media print {
-          @page { margin: 10mm; }
-          .no-print { display: none !important; }
-          html, body { background: #fff !important; height: auto !important; }
-          .invoice-table-wrap, .invoice-detail-wrap { overflow: visible !important; }
-          .invoice-card { box-shadow: none !important; max-width: none !important; margin: 0 !important; padding: 0 !important; }
-        }
-        body { background: #f5f5f5; }
-        .invoice-card { padding: 56px 64px; }
-        .invoice-table-wrap, .invoice-detail-wrap { overflow-x: auto; }
-        .invoice-table { table-layout: fixed; }
-        .invoice-table th, .invoice-table td { white-space: normal; overflow-wrap: break-word; }
-        .invoice-table .col-concepto { white-space: normal; }
-        @media (max-width: 640px) {
-          .invoice-card { padding: 28px 20px; }
-          .invoice-top { flex-direction: column; align-items: flex-start !important; gap: 16px; }
-          .invoice-top-right { text-align: left !important; }
-          .invoice-parties { flex-direction: column; align-items: flex-start !important; gap: 16px; }
-          .invoice-parties-right { text-align: left !important; }
-        }
-      `}</style>
+    <div className="app inv">
+      <div className="inv__col">
+        <div className="inv__bar no-print">
+          <span className="inv__l">
+            {editable && (
+              <span className="seg caps" role="group" aria-label="Modo">
+                <button type="button" aria-pressed={!editMode} onClick={() => setEditMode(false)}>{t.vista}</button>
+                <button type="button" aria-pressed={editMode} onClick={() => setEditMode(true)}>{t.editar}</button>
+              </span>
+            )}
+          </span>
+          <span className="inv__r">
+            <span className="seg caps" role="group" aria-label={idioma === 'es' ? 'Idioma' : 'Language'}>
+              <button type="button" aria-pressed={idioma === 'es'} onClick={() => set({ idioma: 'es' })}>Español</button>
+              <button type="button" aria-pressed={idioma === 'en'} onClick={() => set({ idioma: 'en' })}>English</button>
+            </span>
+            <button type="button" className="pill pill--sm" onClick={() => window.print()}><IconoImprimir />{t.imprimir}</button>
+          </span>
+        </div>
 
-      <div className="no-print" style={{ maxWidth: 680, margin: '24px auto 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontFamily: 'Inter, sans-serif' }}>
-        <div style={{ display: 'flex', gap: 8 }}>
-          {editable && (
-            <>
-              <button onClick={() => setEditMode(false)} style={{ padding: '8px 16px', borderRadius: 7, fontSize: 13, border: 'none', cursor: 'pointer', background: !editMode ? '#111' : '#e5e5e5', color: !editMode ? '#fff' : '#333' }}>{t.vista}</button>
-              <button onClick={() => setEditMode(true)} style={{ padding: '8px 16px', borderRadius: 7, fontSize: 13, border: 'none', cursor: 'pointer', background: editMode ? '#111' : '#e5e5e5', color: editMode ? '#fff' : '#333' }}>{t.editar}</button>
-            </>
+        {editable && editMode && (
+          <section className="block inv__edit no-print" aria-label="Editar factura">
+            <div className="inv__grid">
+              <div className="field">
+                <label className="caps" htmlFor="f-numero">Número · para Hacienda</label>
+                <span className="inv__num">
+                  <input id="f-numero" value={factura.numero || ''} onChange={e => set({ numero: e.target.value })} placeholder="F260018" />
+                  <button type="button" className="copy caps hit" onClick={usarSiguienteNumero} title={`Siguiente: ${siguienteNumero(ultimoNumero)}`}>Usar siguiente</button>
+                </span>
+              </div>
+              <div className="field">
+                <label className="caps" htmlFor="f-ref">Referencia · para el cliente</label>
+                <input id="f-ref" value={factura.numero_referencia || ''} onChange={e => set({ numero_referencia: e.target.value })} placeholder="268" />
+              </div>
+              <div className="field">
+                <label className="caps" htmlFor="f-cliente">Cliente</label>
+                <input id="f-cliente" value={factura.cliente} onChange={e => set({ cliente: e.target.value })} />
+              </div>
+              <div className="field">
+                <label className="caps" htmlFor="f-importe">Importe €</label>
+                <input id="f-importe" type="number" value={factura.importe} onChange={e => set({ importe: Number(e.target.value) })} />
+              </div>
+              <div className="field">
+                <label className="caps" htmlFor="f-fecha">Fecha</label>
+                <input id="f-fecha" type="date" value={factura.fecha} onChange={e => set({ fecha: e.target.value })} />
+              </div>
+              <div className="field">
+                <label className="caps" htmlFor="f-vence">Vencimiento</label>
+                <input id="f-vence" type="date" value={factura.fecha_vencimiento || ''} onChange={e => set({ fecha_vencimiento: e.target.value })} />
+              </div>
+              <div className="field inv__ancho">
+                <label className="caps" htmlFor="f-tipo">Tipo de factura</label>
+                <select id="f-tipo" value={factura.tipo_factura || 'fuera_ue'} onChange={e => set({ tipo_factura: e.target.value as 'fuera_ue' | 'dentro_ue' })}>
+                  <option value="fuera_ue">Fuera de España (sin IVA ni retención)</option>
+                  <option value="dentro_ue">España (IVA 21% y retención -15%)</option>
+                </select>
+                <Chevron />
+              </div>
+              <div className="field inv__ancho">
+                <label className="caps" htmlFor="f-concepto">Concepto · título</label>
+                <input id="f-concepto" value={factura.descripcion || ''} onChange={e => set({ descripcion: e.target.value })} placeholder="Tratamiento Digital Web" />
+              </div>
+              <div className="field inv__ancho">
+                <label className="caps" htmlFor="f-detalle">Concepto · detalle</label>
+                <input id="f-detalle" value={factura.concepto_detalle || ''} onChange={e => set({ concepto_detalle: e.target.value })} placeholder="Presentación / Tratamiento Digital" />
+              </div>
+            </div>
+
+            <p className="label caps"><span>Datos fiscales de {factura.cliente}</span><i className="rule" /></p>
+            <div className="inv__grid">
+              <div className="field inv__ancho">
+                <label className="caps" htmlFor="f-id">Identificador · CIF/VAT/nº registro</label>
+                <input id="f-id" value={clienteFiscal.identificador || ''} onChange={e => setClienteFiscal({ ...clienteFiscal, identificador: e.target.value })} placeholder="12810068 · VAT 12810068" />
+              </div>
+              <div className="field inv__ancho">
+                <label className="caps" htmlFor="f-dir">Dirección</label>
+                <textarea id="f-dir" value={clienteFiscal.direccion || ''} onChange={e => setClienteFiscal({ ...clienteFiscal, direccion: e.target.value })} rows={2} />
+              </div>
+            </div>
+
+            <div className="inv__foot">
+              {saveError && <p className="nota error">{saveError}</p>}
+              <button type="button" className="pill pill--sm" onClick={save} disabled={saving}>{saving ? t.guardando : t.guardar}</button>
+            </div>
+          </section>
+        )}
+
+        <article className="sheet" lang={idioma}>
+          <div className="sh__top">
+            <span className="sh__name">{emisor.nombre}</span>
+            <div className="sh__kind">
+              <h1 className="sh__k">{t.titulo}</h1>
+              <span className="sh__no">{factura.numero ? `#${factura.numero}` : <span className="sh__bad">({idioma === 'es' ? 'sin número asignado' : 'no number assigned'})</span>}</span>
+              {factura.numero_referencia && <span className="sh__k">{t.referencia}: {factura.numero_referencia}</span>}
+            </div>
+          </div>
+
+          <div className="sh__hero">
+            <dl className="sh__dates">
+              <div><dt className="sh__k">{t.fecha}</dt><dd>{fechaFmt}</dd></div>
+              {vencimientoFmt && <div><dt className="sh__k">{t.vencimiento}</dt><dd>{vencimientoFmt}</dd></div>}
+            </dl>
+            <div className="sh__total"><span className="sh__k">{t.totalLabel}</span><span className="sh__big">{fmt2(total)}€</span></div>
+          </div>
+
+          <div className="sh__parties">
+            <div>
+              <p className="sh__k sh__lab">{t.de}</p>
+              <p className="sh__party">
+                <b>{emisor.nombre}</b>
+                <span>{emisor.nif}</span>
+                {emisor.direccion.split('\n').map((l, i) => <span key={i}>{l}</span>)}
+                <span>{emisor.email}</span>
+                <span>{emisor.telefono}</span>
+              </p>
+            </div>
+            <div>
+              <p className="sh__k sh__lab">{t.para}</p>
+              <p className="sh__party">
+                <b>{factura.cliente}</b>
+                {clienteFiscal.identificador && <span>{clienteFiscal.identificador}</span>}
+                {clienteFiscal.direccion && clienteFiscal.direccion.split('\n').map((l, i) => <span key={i}>{l}</span>)}
+              </p>
+            </div>
+          </div>
+
+          <div className="sh__wrap">
+            <table className="sh__lines">
+              <thead>
+                <tr>
+                  <th scope="col">{t.concepto}</th>
+                  <th scope="col" className="sh__opt">{t.precio}</th>
+                  <th scope="col" className="sh__opt">{dentroUe ? t.unidadesCorto : t.unidades}</th>
+                  <th scope="col">{t.subtotal}</th>
+                  {dentroUe && <th scope="col" className="sh__opt">{t.iva}</th>}
+                  {dentroUe && <th scope="col" className="sh__opt">{t.retencion}</th>}
+                  <th scope="col">{t.total}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    <span className="sh__c">
+                      {factura.descripcion || factura.cliente}
+                      {factura.numero_referencia && <span className="sh__ref"> · #{factura.numero_referencia}</span>}
+                    </span>
+                    {factura.concepto_detalle && <span className="sh__d">{factura.concepto_detalle}</span>}
+                  </td>
+                  <td className="sh__opt">{fmt2(base)}€</td>
+                  <td className="sh__opt">1</td>
+                  <td>{fmt2(base)}€</td>
+                  {dentroUe && <td className="sh__opt">{IVA_PCT}%</td>}
+                  {dentroUe && <td className="sh__opt">-{RETENCION_PCT}%</td>}
+                  <td>{fmt2(total)}€</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          {mostrarDetalleHoras && (
+            <p className="sh__horas">
+              <span><b>{t.horas}:</b> {totalHoras}h</span>
+              <span><b>{t.standby}:</b> {totalStandby}h</span>
+            </p>
           )}
-        </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <select value={idioma} onChange={e => set({ idioma: e.target.value as 'es' | 'en' })}
-            style={{ padding: '8px 10px', borderRadius: 7, fontSize: 13, border: '1px solid #ddd', background: '#fff', color: '#111' }}>
-            <option value="es">Español</option>
-            <option value="en">English</option>
-          </select>
-          <button onClick={() => window.print()} style={{ padding: '8px 16px', borderRadius: 7, background: '#3b82f6', color: '#fff', border: 'none', fontSize: 13, fontWeight: 500, cursor: 'pointer' }}>
-            {t.imprimir}
-          </button>
-        </div>
+
+          <dl className="sh__sum">
+            <div><dt>{t.baseImponible}</dt><dd>{fmt2(base)}€</dd></div>
+            {dentroUe && (
+              <>
+                <div><dt>{t.iva} {IVA_PCT}%</dt><dd>{fmt2(ivaAmount)}€</dd></div>
+                <div><dt>{t.retencion} {RETENCION_PCT}%</dt><dd>-{fmt2(retencionAmount)}€</dd></div>
+              </>
+            )}
+            <div className="sh__tot"><dt>{t.total}</dt><dd>{fmt2(total)}€</dd></div>
+          </dl>
+
+          {!dentroUe && <p className="sh__note">{t.notaFueraUe}</p>}
+
+          {!dentroUe && emisor.iban && factura.origen !== 'regularizacion' && (
+            <div className="sh__pay">
+              <p className="sh__k">{t.notaTransferencia}</p>
+              <p className="sh__iban">{emisor.iban}</p>
+              {emisor.swift && <p>SWIFT/BIC: <b>{emisor.swift}</b></p>}
+            </div>
+          )}
+        </article>
       </div>
-
-      {editable && editMode && (
-        <div className="no-print" style={{ maxWidth: 680, margin: '16px auto', background: '#fff', border: '1px solid #e5e5e5', borderRadius: 10, padding: 24, fontFamily: 'Inter, sans-serif' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
-            <div>
-              <label style={labelStyle}>Número (para Hacienda)</label>
-              <div style={{ display: 'flex', gap: 6 }}>
-                <input value={factura.numero || ''} onChange={e => set({ numero: e.target.value })} placeholder="F260018" style={inputStyle} />
-                <button type="button" onClick={usarSiguienteNumero} title={`Siguiente: ${siguienteNumero(ultimoNumero)}`}
-                  style={{ flexShrink: 0, padding: '0 10px', borderRadius: 6, border: '1px solid #ddd', background: '#f5f5f5', color: '#333', fontSize: 11, cursor: 'pointer', fontFamily: 'Inter, sans-serif', whiteSpace: 'nowrap' }}>
-                  Usar siguiente
-                </button>
-              </div>
-            </div>
-            <div>
-              <label style={labelStyle}>Referencia (para el cliente)</label>
-              <input value={factura.numero_referencia || ''} onChange={e => set({ numero_referencia: e.target.value })} placeholder="268" style={inputStyle} />
-            </div>
-            <div>
-              <label style={labelStyle}>Cliente</label>
-              <input value={factura.cliente} onChange={e => set({ cliente: e.target.value })} style={inputStyle} />
-            </div>
-            <div>
-              <label style={labelStyle}>Fecha</label>
-              <input type="date" value={factura.fecha} onChange={e => set({ fecha: e.target.value })} style={inputStyle} />
-            </div>
-            <div>
-              <label style={labelStyle}>Vencimiento</label>
-              <input type="date" value={factura.fecha_vencimiento || ''} onChange={e => set({ fecha_vencimiento: e.target.value })} style={inputStyle} />
-            </div>
-          </div>
-
-          <div style={{ marginBottom: 14 }}>
-            <label style={labelStyle}>Tipo de factura</label>
-            <select value={factura.tipo_factura || 'fuera_ue'} onChange={e => set({ tipo_factura: e.target.value as 'fuera_ue' | 'dentro_ue' })} style={inputStyle}>
-              <option value="fuera_ue">Fuera de España (sin IVA ni retención)</option>
-              <option value="dentro_ue">España (IVA 21% y retención -15%)</option>
-            </select>
-          </div>
-
-          <div style={{ marginBottom: 14 }}>
-            <label style={labelStyle}>Concepto (título)</label>
-            <input value={factura.descripcion || ''} onChange={e => set({ descripcion: e.target.value })} placeholder="Tratamiento Digital Web" style={inputStyle} />
-          </div>
-          <div style={{ marginBottom: 14 }}>
-            <label style={labelStyle}>Concepto (detalle)</label>
-            <input value={factura.concepto_detalle || ''} onChange={e => set({ concepto_detalle: e.target.value })} placeholder="Presentación / Tratamiento Digital" style={inputStyle} />
-          </div>
-          <div style={{ marginBottom: 14 }}>
-            <label style={labelStyle}>Importe (€)</label>
-            <input type="number" value={factura.importe} onChange={e => set({ importe: Number(e.target.value) })} style={inputStyle} />
-          </div>
-
-          <div style={{ borderTop: '1px solid #eee', margin: '18px 0 14px', paddingTop: 14, fontSize: 12, color: '#888', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Datos fiscales de {factura.cliente}
-          </div>
-          <div style={{ marginBottom: 14 }}>
-            <label style={labelStyle}>Identificador (CIF/VAT/nº registro)</label>
-            <input value={clienteFiscal.identificador || ''} onChange={e => setClienteFiscal({ ...clienteFiscal, identificador: e.target.value })} placeholder="12810068 · VAT 12810068" style={inputStyle} />
-          </div>
-          <div style={{ marginBottom: 4 }}>
-            <label style={labelStyle}>Dirección</label>
-            <textarea value={clienteFiscal.direccion || ''} onChange={e => setClienteFiscal({ ...clienteFiscal, direccion: e.target.value })} rows={2} style={{ ...inputStyle, resize: 'vertical' as const }} />
-          </div>
-
-          {saveError && (
-            <div style={{ marginTop: 12, fontSize: 12, color: '#dc2626' }}>{saveError}</div>
-          )}
-          <button onClick={save} disabled={saving} style={{ marginTop: 18, width: '100%', padding: '10px 16px', borderRadius: 7, background: '#3b82f6', color: '#fff', border: 'none', fontSize: 13, fontWeight: 500, cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.6 : 1 }}>
-            {saving ? t.guardando : t.guardar}
-          </button>
-        </div>
-      )}
-
-      <div className="invoice-card" style={{
-        maxWidth: 680, margin: '24px auto 48px', background: '#fff',
-        fontFamily: 'Inter, sans-serif', color: '#111', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', borderRadius: 8,
-      }}>
-        <div style={{ textAlign: 'right', fontSize: 12.5, lineHeight: 1.6, marginBottom: 28 }}>
-          <div style={{ fontWeight: 600 }}>{emisor.nombre}</div>
-          <div>{emisor.nif}</div>
-          {emisor.direccion.split('\n').map((l, i) => <div key={i}>{l}</div>)}
-          <div>{emisor.email}</div>
-          <div>{emisor.telefono}</div>
-        </div>
-
-        <div className="invoice-top" style={{ borderTop: '1px solid #ddd', paddingTop: 20, display: 'flex', justifyContent: 'space-between', marginBottom: 24 }}>
-          <div>
-            <div style={{ fontSize: 15, fontWeight: 700 }}>
-              {t.titulo} {factura.numero ? `#${factura.numero}` : <span style={{ color: '#dc2626' }}>({idioma === 'es' ? 'sin número asignado' : 'no number assigned'})</span>}
-            </div>
-            {factura.numero_referencia && <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>{t.referencia}: {factura.numero_referencia}</div>}
-          </div>
-          <div className="invoice-top-right" style={{ textAlign: 'right', fontSize: 12 }}>
-            <div>{t.fecha}: {fechaFmt}</div>
-            {vencimientoFmt && <div>{t.vencimiento}: {vencimientoFmt}</div>}
-          </div>
-        </div>
-
-        <div className="invoice-parties" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
-          <div style={{ fontSize: 12.5, lineHeight: 1.6 }}>
-            <div style={{ fontWeight: 700 }}>{factura.cliente}</div>
-            {clienteFiscal.identificador && <div>{clienteFiscal.identificador}</div>}
-            {clienteFiscal.direccion && clienteFiscal.direccion.split('\n').map((l, i) => <div key={i}>{l}</div>)}
-          </div>
-          <div className="invoice-parties-right" style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: 28, fontWeight: 700 }}>{t.totalLabel} {fmt2(total)}€</div>
-          </div>
-        </div>
-
-        {!dentroUe && (
-          <div style={{ fontSize: 12, color: '#444', background: '#f7f7f7', borderRadius: 6, padding: '10px 14px', marginBottom: 20 }}>
-            {t.notaFueraUe}
-          </div>
-        )}
-
-        <div className="invoice-table-wrap">
-        <table className="invoice-table" style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 8, tableLayout: dentroUe ? 'auto' : undefined }}>
-          <thead>
-            <tr style={{ borderTop: '1px solid #ddd', borderBottom: '1px solid #ddd' }}>
-              <th style={{ width: dentroUe ? undefined : '40%', textAlign: 'left', padding: '10px 8px 10px 0', fontSize: 11 }}>{t.concepto}</th>
-              <th style={th}>{t.precio}</th>
-              <th style={th}>{dentroUe ? t.unidadesCorto : t.unidades}</th>
-              <th style={th}>{t.subtotal}</th>
-              {dentroUe && <th style={th}>{t.iva}</th>}
-              {dentroUe && <th style={th}>{t.retencion}</th>}
-              <th style={{ ...th, paddingRight: 0 }}>{t.total}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td style={{ padding: '14px 8px 14px 0', fontSize: 13 }}>
-                <div style={{ fontWeight: 600 }}>
-                  {factura.descripcion || factura.cliente}
-                  {factura.numero_referencia && <span style={{ fontWeight: 400, color: '#888' }}> · #{factura.numero_referencia}</span>}
-                </div>
-                {factura.concepto_detalle && <div style={{ color: '#888', fontSize: 12 }}>{factura.concepto_detalle}</div>}
-              </td>
-              <td style={td}>{fmt2(base)}€</td>
-              <td style={td}>1</td>
-              <td style={td}>{fmt2(base)}€</td>
-              {dentroUe && <td style={td}>{IVA_PCT}%</td>}
-              {dentroUe && <td style={td}>-{RETENCION_PCT}%</td>}
-              <td style={{ ...td, paddingRight: 0 }}>{fmt2(total)}€</td>
-            </tr>
-          </tbody>
-        </table>
-        </div>
-
-        {mostrarDetalleHoras && (
-          <div className="invoice-detail-wrap" style={{ marginTop: 4, marginBottom: 8, display: 'flex', gap: 20, fontSize: 12, color: '#444' }}>
-            <span><strong>{t.horas}:</strong> {totalHoras}h</span>
-            <span><strong>{t.standby}:</strong> {totalStandby}h</span>
-          </div>
-        )}
-
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, marginTop: 20 }}>
-          <div style={{ display: 'flex', gap: 24, fontSize: 12 }}>
-            <span style={{ fontWeight: 600 }}>{t.baseImponible}</span>
-            <span>{fmt2(base)}€</span>
-          </div>
-          {dentroUe && (
-            <>
-              <div style={{ display: 'flex', gap: 24, fontSize: 12 }}>
-                <span style={{ fontWeight: 600 }}>{t.iva} {IVA_PCT}%</span>
-                <span>{fmt2(ivaAmount)}€</span>
-              </div>
-              <div style={{ display: 'flex', gap: 24, fontSize: 12 }}>
-                <span style={{ fontWeight: 600 }}>{t.retencion} {RETENCION_PCT}%</span>
-                <span>-{fmt2(retencionAmount)}€</span>
-              </div>
-            </>
-          )}
-          <div style={{ display: 'flex', gap: 24, fontSize: 13, fontWeight: 700 }}>
-            <span>{t.total}</span>
-            <span>{fmt2(total)}€</span>
-          </div>
-        </div>
-
-        {!dentroUe && emisor.iban && factura.origen !== 'regularizacion' && (
-          <div style={{ fontSize: 11, color: '#888', marginTop: 32, textAlign: 'center' }}>
-            {t.notaTransferencia} <strong style={{ color: '#111' }}>{emisor.iban}</strong>
-            {emisor.swift && <> · SWIFT/BIC: <strong style={{ color: '#111' }}>{emisor.swift}</strong></>}
-          </div>
-        )}
-      </div>
-    </>
+    </div>
   )
 }
+
+const Chevron = () => <svg className="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6.2 8 10l4-3.8" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" /></svg>
+const IconoImprimir = () => <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.8v7.6M4.8 7.4 8 10.6l3.2-3.2M3.5 13.2h9" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>

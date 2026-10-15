@@ -13,15 +13,15 @@ type FacturaMin = { id: number; numero: string | null; cliente: string; importe:
 type CuentaBanco = { uid: string; aspsp: string; iban: string | null; nombre: string | null }
 type Filtro = 'todos' | 'sin_categoria' | 'ingresos' | 'trabajo'
 
-const eur = (n: number) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(n)
+// Con el € delante y punto de miles siempre, como el resto del hub (mismas cifras y decimales).
+const eur = (n: number) => (n < 0 ? '−' : '') + '€' + new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: 'always' } as unknown as Intl.NumberFormatOptions).format(Math.abs(n))
 const fechaCorta = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })
 const aCobrar = (f: FacturaMin) => Math.round(Number(f.importe) * (f.tipo_factura === 'dentro_ue' ? 1.06 : 1) * 100) / 100
 const ETIQUETA: Record<Clase, string> = { cobro: 'cobro', ingreso: 'ingreso', gasto: 'gasto', interno: 'traspaso', personal: 'personal', reembolso: 'reembolso' }
 // "NRC 1006489961626TY071L079" → "NRC": la parte estable del nombre para una regla.
 const patronDe = (texto: string) => texto.replace(/[\s*]*\S*\d{4,}\S*$/, '').trim() || texto
 
-const campo: React.CSSProperties = { width: '100%', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 7, padding: '8px 10px', color: 'var(--text)', fontSize: 13, fontFamily: 'Inter, sans-serif', outline: 'none' }
-const etiqueta: React.CSSProperties = { display: 'block', fontSize: 12, color: 'var(--text2)', marginBottom: 6 }
+const Chevron = () => <svg className="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6.2 8 10l4-3.8" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" /></svg>
 
 export default function MovimientosCard({ cuentasBanco, version, onCambio }: { cuentasBanco: CuentaBanco[]; version: number; onCambio: () => void }) {
   const [movs, setMovs] = useState<Movimiento[]>([])
@@ -69,62 +69,61 @@ export default function MovimientosCard({ cuentasBanco, version, onCambio }: { c
   }
 
   if (!movs.length) return null
+  // Como la web: el resumen del mes en columnas y una fila por movimiento (comercio, una línea pequeña e importe).
   return (
-    <div className="card">
-      <div className="card-head" style={{ flexWrap: 'wrap', gap: 10 }}>
-        <div>
-          <div className="card-title">Movimientos</div>
-          <div className="card-kicker" style={{ marginTop: 2 }}>Toca uno para clasificarlo o vincularlo con facturas</div>
-        </div>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+    <>
+      <section className="block" aria-label="Este mes">
+        <p className="label caps"><span>Este mes</span><i className="rule" /></p>
+        <dl className="split split--4">
+          {([['Cobros de clientes', resumen.cobros, 'up'], ['Otros ingresos', resumen.ingresos, ''], ['Gastos', resumen.gastos, ''], ['Te devolvieron', resumen.reembolsos, 'dim']] as [string, number, string][]).map(([l, v, cls]) => (
+            <div key={l}><dt className="caps">{l}</dt><dd><span className={`num${cls ? ` ${cls}` : ''}`}>{eur(v)}</span></dd></div>
+          ))}
+        </dl>
+      </section>
+
+      <section className="block" aria-label="Movimientos">
+        <p className="label caps"><span>Movimientos</span><i className="rule" /></p>
+        <div className="chips__row">
           {([['todos', 'Todos'], ['sin_categoria', 'Sin categoría'], ['ingresos', 'Ingresos'], ['trabajo', 'Trabajo sin factura']] as [Filtro, string][]).map(([f, l]) => (
-            <button key={f} className={`btn${filtro === f ? ' btn-primary' : ''}`} onClick={() => setFiltro(f)}>{l} · {conteo[f]}</button>
+            <button key={f} type="button" className="chip" aria-pressed={filtro === f} onClick={() => setFiltro(f)}><span>{l}<b className="dim">{conteo[f]}</b></span></button>
           ))}
         </div>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, marginBottom: 14 }}>
-        {[['Cobros de clientes', resumen.cobros, 'var(--green)'], ['Otros ingresos', resumen.ingresos, 'var(--text)'], ['Gastos', resumen.gastos, 'var(--text)'], ['Te devolvieron', resumen.reembolsos, 'var(--text2)']].map(([l, v, c]) => (
-          <div key={l as string} style={{ background: 'var(--surface2)', borderRadius: 9, padding: '10px 12px' }}>
-            <div style={{ fontSize: 10.5, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{l as string} · este mes</div>
-            <div className="mono" style={{ fontSize: 15, marginTop: 4, color: c as string }}>{eur(v as number)}</div>
-          </div>
-        ))}
-      </div>
-
-      {visibles.map(m => {
-        const fs = facturasDe(m.id)
-        return (
-          <div key={m.id} className="row" onClick={() => setEditando(m)} style={{ cursor: 'pointer' }}>
-            <div style={{ width: 54, fontSize: 11.5, color: 'var(--text3)', flexShrink: 0 }}>{fechaCorta(m.fecha)}</div>
-            <div className="row-main">
-              <div className="row-title">{comercio(m)}</div>
-              <div className="row-sub">
-                {nombreCuenta(m.cuenta_uid)}
-                {m.clase && ` · ${ETIQUETA[m.clase]}`}
-                {m.categoria && ` · ${m.categoria}`}
-                {fs.length > 0 && ` · ${fs.map(f => f.numero).join(', ')}`}
-              </div>
-            </div>
-            <div className="row-side">
-              {m.estado === 'PDNG' && <span className="pill pill-amber" title="Pago con tarjeta todavía sin contabilizar">pendiente</span>}
-              {m.trabajo && !m.compra_id && Number(m.importe) < 0 && <span className="pill pill-amber" title="Gasto de trabajo sin factura en Compras">sin factura</span>}
-              {m.compra_id && <span className="pill pill-green" title="Tiene su factura en Compras">factura ✓</span>}
-              <span className="row-amount" style={{ color: Number(m.importe) > 0 ? 'var(--green)' : m.clase === 'interno' ? 'var(--text3)' : 'var(--text2)' }}>
-                {Number(m.importe) > 0 ? '+' : ''}{eur(Number(m.importe))}
-              </span>
-            </div>
-          </div>
-        )
-      })}
-      {visibles.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--text3)', padding: '12px 0' }}>Nada por aquí.</div>}
+        <p className="nota">Toca uno para clasificarlo o vincularlo con facturas</p>
+        {visibles.length === 0 ? <p className="empty">Nada por aquí.</p> : (
+          <ul className="projs focus">
+            {visibles.map(m => {
+              const fs = facturasDe(m.id)
+              const entra = Number(m.importe) > 0
+              return (
+                <li key={m.id}>
+                  <button type="button" className="mv" onClick={() => setEditando(m)}>
+                    <span className="mv__main">
+                      <span className="mv__t">{comercio(m)}</span>
+                      <span className="p__s caps">
+                        {fechaCorta(m.fecha)} · {nombreCuenta(m.cuenta_uid)}
+                        {m.clase && ` · ${ETIQUETA[m.clase]}`}
+                        {m.categoria && ` · ${m.categoria}`}
+                        {fs.length > 0 && ` · ${fs.map(f => f.numero).join(', ')}`}
+                        {m.estado === 'PDNG' && <> · <span className="aviso" title="Pago con tarjeta todavía sin contabilizar">pendiente</span></>}
+                        {m.trabajo && !m.compra_id && Number(m.importe) < 0 && <> · <span className="aviso" title="Gasto de trabajo sin factura en Compras">sin factura</span></>}
+                        {m.compra_id && <> · <span className="up" title="Tiene su factura en Compras">factura ✓</span></>}
+                      </span>
+                    </span>
+                    <span className={`num mv__v${entra ? ' up' : m.clase === 'interno' ? ' dim' : ''}`}>{entra ? '+' : ''}{eur(Number(m.importe))}</span>
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </section>
 
       {editando && (
         <EditorMovimiento m={editando} partidas={partidas} facturas={facturas}
           onClose={() => setEditando(null)}
           onGuardado={async () => { setEditando(null); await cargar(); onCambio() }} />
       )}
-    </div>
+    </>
   )
 }
 
@@ -165,70 +164,75 @@ function EditorMovimiento({ m, partidas, facturas, onClose, onGuardado }: { m: M
     onGuardado()
   }
 
+  // Campos de una sola línea y botones de la web (mismo estado y mismas acciones que antes).
   return (
     <div className="modal-bg" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()} style={{ width: 460 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+        <div className="modal__head modal__head--mv">
           <div>
-            <div style={{ fontSize: 15, fontWeight: 500 }}>{comercio(m)}</div>
-            <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>{fechaCorta(m.fecha)} · <span className="mono">{eur(Number(m.importe))}</span></div>
-            {m.concepto && <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>{m.concepto}</div>}
+            <h2>{comercio(m)}</h2>
+            <p className="nota">{fechaCorta(m.fecha)} · <span className="mono">{eur(Number(m.importe))}</span></p>
+            {m.concepto && <p className="nota modal__concepto">{m.concepto}</p>}
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', fontSize: 20 }}>×</button>
+          <button type="button" className="modal__x" onClick={onClose} aria-label="Cerrar">×</button>
         </div>
 
-        <div style={{ marginBottom: 12 }}>
-          <label style={etiqueta}>Qué es</label>
-          <select value={elegidas.length ? 'cobro' : clase} disabled={elegidas.length > 0} onChange={e => setClase(e.target.value as Clase)} style={campo}>
-            {elegidas.length > 0 && <option value="cobro">Cobro de cliente</option>}
-            {CLASES.filter(c => c.value !== 'cobro' && (ingreso || (c.value !== 'ingreso' && c.value !== 'reembolso'))).map(c => <option key={c.value} value={c.value}>{ingreso && c.value === 'gasto' ? 'Devolución de una compra' : c.label}</option>)}
-          </select>
+        <div className="modal__campos">
+          <div className="field">
+            <label className="caps" htmlFor="mv-clase">Qué es</label>
+            <select id="mv-clase" value={elegidas.length ? 'cobro' : clase} disabled={elegidas.length > 0} onChange={e => setClase(e.target.value as Clase)}>
+              {elegidas.length > 0 && <option value="cobro">Cobro de cliente</option>}
+              {CLASES.filter(c => c.value !== 'cobro' && (ingreso || (c.value !== 'ingreso' && c.value !== 'reembolso'))).map(c => <option key={c.value} value={c.value}>{ingreso && c.value === 'gasto' ? 'Devolución de una compra' : c.label}</option>)}
+            </select>
+            <Chevron />
+          </div>
+
+          {clase === 'gasto' && !elegidas.length && (
+            <>
+              <div className="field">
+                <label className="caps" htmlFor="mv-partida">Partida del presupuesto</label>
+                <select id="mv-partida" value={categoria} onChange={e => setCategoria(e.target.value)}>
+                  <option value="">Sin categoría</option>
+                  {partidas.map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+                <Chevron />
+              </div>
+              <label className="check">
+                <input type="checkbox" checked={trabajo} onChange={e => setTrabajo(e.target.checked)} />
+                Es un gasto de trabajo (debería tener su factura en Compras)
+              </label>
+            </>
+          )}
+
+          {ingreso && candidatas.length > 0 && (
+            <div className="cands">
+              <p className="caps field__l">¿Qué facturas paga? {elegidas.length > 0 && <span className={Math.abs(suma - Number(m.importe)) < 0.02 ? 'up' : 'aviso'}>· suman {eur(suma)}</span>}</p>
+              <div className="cands__lista">
+                {candidatas.map(f => (
+                  <label key={f.id} className="check cands__f">
+                    <input type="checkbox" checked={elegidas.includes(f.id)} onChange={e => setElegidas(e.target.checked ? [...elegidas, f.id] : elegidas.filter(x => x !== f.id))} />
+                    <span className="cands__t">{f.numero} · {f.cliente} <span className="dim">· {fechaCorta(f.fecha)}{f.estado === 'cobrada' ? ' · cobrada' : ''}</span></span>
+                    <span className="num">{eur(aCobrar(f))}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {!elegidas.length && (
+            <div className="sum regla">
+              <label className="check">
+                <input type="checkbox" checked={recordar} onChange={e => setRecordar(e.target.checked)} />
+                Aplicar siempre a los movimientos que contengan:
+              </label>
+              {recordar && <div className="field"><input aria-label="Texto que buscar" value={patron} onChange={e => setPatron(e.target.value)} /></div>}
+            </div>
+          )}
         </div>
 
-        {clase === 'gasto' && !elegidas.length && (
-          <>
-            <div style={{ marginBottom: 12 }}>
-              <label style={etiqueta}>Partida del presupuesto</label>
-              <select value={categoria} onChange={e => setCategoria(e.target.value)} style={campo}>
-                <option value="">Sin categoría</option>
-                {partidas.map(p => <option key={p} value={p}>{p}</option>)}
-              </select>
-            </div>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--text2)', marginBottom: 12, cursor: 'pointer' }}>
-              <input type="checkbox" checked={trabajo} onChange={e => setTrabajo(e.target.checked)} />
-              Es un gasto de trabajo (debería tener su factura en Compras)
-            </label>
-          </>
-        )}
-
-        {ingreso && candidatas.length > 0 && (
-          <div style={{ marginBottom: 12 }}>
-            <label style={etiqueta}>¿Qué facturas paga? {elegidas.length > 0 && <span className="mono" style={{ color: Math.abs(suma - Number(m.importe)) < 0.02 ? 'var(--green)' : 'var(--amber)' }}>· suman {eur(suma)}</span>}</label>
-            <div style={{ maxHeight: 200, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 8, padding: 6 }}>
-              {candidatas.map(f => (
-                <label key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, padding: '4px 4px', cursor: 'pointer' }}>
-                  <input type="checkbox" checked={elegidas.includes(f.id)} onChange={e => setElegidas(e.target.checked ? [...elegidas, f.id] : elegidas.filter(x => x !== f.id))} />
-                  <span style={{ flex: 1 }}>{f.numero} · {f.cliente} <span style={{ color: 'var(--text3)' }}>· {fechaCorta(f.fecha)}{f.estado === 'cobrada' ? ' · cobrada' : ''}</span></span>
-                  <span className="mono">{eur(aCobrar(f))}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {!elegidas.length && (
-          <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12, marginTop: 4 }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--text2)', cursor: 'pointer' }}>
-              <input type="checkbox" checked={recordar} onChange={e => setRecordar(e.target.checked)} />
-              Aplicar siempre a los movimientos que contengan:
-            </label>
-            {recordar && <input value={patron} onChange={e => setPatron(e.target.value)} style={{ ...campo, marginTop: 8 }} />}
-          </div>
-        )}
-
-        <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
-          <button onClick={onClose} className="btn" style={{ padding: '9px 16px' }}>Cancelar</button>
-          <button onClick={guardar} disabled={guardando} className="btn btn-primary" style={{ flex: 1, justifyContent: 'center', padding: '9px 16px' }}>{guardando ? 'Guardando…' : 'Guardar'}</button>
+        <div className="modal__foot">
+          <button type="button" className="copy caps" onClick={onClose}>Cancelar</button>
+          <button type="button" className="pill pill--sm" onClick={guardar} disabled={guardando}>{guardando ? 'Guardando…' : 'Guardar'}</button>
         </div>
       </div>
     </div>

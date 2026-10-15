@@ -66,12 +66,13 @@ function describir(c: Cuenta, ctx: Ctx): Pick<Tile, 'linea' | 'chip' | 'progreso
 }
 
 const ETIQUETA: Record<string, string> = { operativa: 'Disponible', ahorro: 'Ahorros', irpf: 'IRPF', inversion: 'Inversión', variable: 'Variables' }
-// Icono de la app de cada banco (de su ficha en el App Store, en public/bancos).
-const LOGO: Record<string, string> = { bbva: '/bancos/bbva-app.png', revolut: '/bancos/revolut-app.png', wise: '/bancos/wise-app.png' }
 
 const COLOR_ESTADO: Record<Estado, string> = { ok: 'var(--green)', aviso: 'var(--amber)', neutro: 'var(--text3)' }
 
-export default function CuentasCard({ cuentas, aEuros, fijosMes, fijosPendientes = null, variablesMes, pago, porCobrar, onEdit }: {
+// Filas que no son cuentas pero van en la misma lista (crypto): ya vienen calculadas.
+export type FilaExtra = { key: string; titulo: string; linea: string; monto: string }
+
+export default function CuentasCard({ cuentas, aEuros, fijosMes, fijosPendientes = null, variablesMes, pago, porCobrar, onEdit, extra = [] }: {
   cuentas: Cuenta[]
   aEuros: (c: Cuenta) => number
   fijosMes: number
@@ -80,6 +81,7 @@ export default function CuentasCard({ cuentas, aEuros, fijosMes, fijosPendientes
   pago: PagoImpuestos | null
   porCobrar: number
   onEdit: () => void
+  extra?: FilaExtra[]
 }) {
   const ctx: Ctx = { fijosMes, fijosPendientes, variablesMes, pago, porCobrar }
   const moneda = (c: Cuenta) => (c.moneda === 'USD' ? `$${fmt(c.saldo)}` : `€${fmt2(c.saldo)}`)
@@ -98,41 +100,37 @@ export default function CuentasCard({ cuentas, aEuros, fijosMes, fijosPendientes
     const total = otros.reduce((s, c) => s + aEuros(c), 0)
     tiles.push({ key: 'otros', grupo: 'Efectivo', titulo: 'Efectivo y otros', color: '#94a3b8', monto: `€${fmt2(total)}`, linea: '', chip: { texto: `${otros.length} cuentas`, estado: 'neutro' }, extra: otros.map(c => ({ nombre: c.nombre.replace(/^Cash \((\w+)\)$/, (_, m) => (m === 'USD' ? 'Efectivo $' : 'Efectivo €')), monto: c.moneda === 'USD' ? `$${fmt(c.saldo)}` : `€${fmt(c.saldo)}` })) })
   }
-  const total = cuentas.reduce((s, c) => s + aEuros(c), 0)
-
+  // Una fila por bolsillo (como la web): nombre, una línea pequeña con el banco y su estado, y el saldo.
+  // Lo que cubre cada uno (la línea larga) sigue en el título, al pasar por encima.
   return (
-    <div className="card" style={{ marginBottom: 14 }}>
-      <div className="card-head">
-        <div>
-          <div className="card-title">Cuentas</div>
-          <div className="card-kicker" style={{ marginTop: 2 }}>€{fmt(total)} en total · por cobrar €{fmt(porCobrar)}</div>
-        </div>
-        <button className="icon-btn accent" onClick={onEdit} title="Editar saldos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17z" /><path d="M13.5 6.5l3 3" /></svg></button>
-      </div>
-      <div className="acct-grid">
+    <section className="block" aria-label="Cuentas">
+      <p className="label caps"><span>Cuentas</span><i className="rule" /><button type="button" className="label__m copy" onClick={onEdit} title="Editar saldos">Editar</button></p>
+      <ul className="list focus">
         {tiles.map(t => {
-          const logo = LOGO[t.grupo.toLowerCase()]
           const color = t.chip ? COLOR_ESTADO[t.chip.estado] : 'var(--text3)'
           return (
-            <div key={t.key} className="acct-tile" title={[`${t.grupo} · ${t.titulo}`, t.linea, ...(t.extra || []).map(e => `${e.nombre}: ${e.monto}`)].filter(Boolean).join('\n')}>
-              {logo
-                // eslint-disable-next-line @next/next/no-img-element
-                ? <img src={logo} alt={t.grupo} className="acct-app-icon" />
-                : <div className="acct-app-icon acct-app-icon-vacio" style={{ background: `${t.color}26`, color: t.color }}>{t.grupo.slice(0, 2).toUpperCase()}</div>}
-              <div className="acct-tile-cuerpo">
-                <div className="acct-tile-titulo">{t.titulo}</div>
-                <div className="acct-tile-monto">{t.monto}</div>
-                {t.chip && <div className="acct-tile-estado" style={{ color }}>{t.chip.texto}</div>}
-                {t.progreso !== undefined && (
-                  <div className="acct-bar-track" style={{ marginTop: 6 }}>
-                    <div className="acct-bar-fill" style={{ width: `${Math.min(100, Math.max(3, t.progreso * 100))}%`, background: color === 'var(--text3)' ? t.color : color }} />
-                  </div>
-                )}
+            <li key={t.key} className="fila" title={[`${t.grupo} · ${t.titulo}`, t.linea, ...(t.extra || []).map(e => `${e.nombre}: ${e.monto}`)].filter(Boolean).join('\n')}>
+              <div className="fila__main">
+                <span className="fila__t">{t.titulo}</span>
+                <span className="fila__s caps">{t.grupo}{t.chip && <> · <span style={{ color }}>{t.chip.texto}</span></>}</span>
               </div>
-            </div>
+              {t.progreso !== undefined && (
+                <span className="mini" aria-hidden="true"><i style={{ width: `${Math.min(100, Math.max(3, t.progreso * 100))}%`, background: color === 'var(--text3)' ? 'var(--text)' : color }} /></span>
+              )}
+              <span className="num">{t.monto}</span>
+            </li>
           )
         })}
-      </div>
-    </div>
+        {extra.map(x => (
+          <li key={x.key} className="fila">
+            <div className="fila__main">
+              <span className="fila__t">{x.titulo}</span>
+              <span className="fila__s caps">{x.linea}</span>
+            </div>
+            <span className="num">{x.monto}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
   )
 }

@@ -15,12 +15,19 @@ export const metadata = {
 
 // Link privado de la pareja: solo la cuenta compartida, sin acceso al hub.
 // El token lo valida /api/compartidos.
+// Con el aspecto del hub (.app), pero sin su marco: solo el título y la cuenta.
 export default function CompartidosPareja({ params }: { params: { token: string } }) {
   return (
-    <main style={{ maxWidth: 640, margin: '0 auto', padding: '28px 16px 60px' }}>
-      <h1 className="page-title" style={{ marginBottom: 4 }}>Gastos compartidos</h1>
-      <div className="page-sub" style={{ marginBottom: 18 }}>Quién pagó qué y quién debe a quién</div>
-      <CompartidosVista token={params.token} />
-    </main>
+    <div className="app">
+      <main className="casona">
+        <header className="page-header">
+          <div className="page-header__txt">
+            <h1 className="page-title">Gastos compartidos</h1>
+            <p className="tags caps">Quién pagó qué y quién debe a quién</p>
+          </div>
+        </header>
+        <CompartidosVista token={params.token} />
+      </main>
+    </div>
   )
 }

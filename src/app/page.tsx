@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import ComprasTab from './compras-tab'
 import NotificacionesBoton from './notificaciones-boton'
 import ModoPrivado from './modo-privado'
-import { GLIFO_JO, VIEWBOX_JO } from './marca-jo'
+import { EstadoBancos, Menu, Reloj, TemaBoton } from './marco'
 import ImpuestosTab, { proximoPago, claveReal, type Reales } from './impuestos-tab'
 import CuentasCard from './cuentas-card'
 import MarcaCard from './marca-card'
@@ -19,8 +19,10 @@ import { PAISES, PaisFiscal, detectarPais, tipoFacturaDePais } from '@/lib/clien
 import { GrupoTimesheet, grupoDeCliente, gruposTimesheet, linkPublico, tipoLegacy } from '@/lib/timesheets'
 import { supabase, batchQuery, Compra, Cuenta, Crypto, Factura, PresupuestoItem, Proyecto, DiaTrabajado, PatrimonioSnapshot, ClienteFiscal } from '@/lib/supabase'
 
-const fmt = (n: number) => new Intl.NumberFormat('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(Math.round(n))
-const fmt2 = (n: number) => new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
+// 'always': en es-ES los números de 4 cifras no llevan separador por defecto (7570 → 7.570).
+const agrupar = { useGrouping: 'always' } as unknown as Intl.NumberFormatOptions
+const fmt = (n: number) => new Intl.NumberFormat('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 0, ...agrupar }).format(Math.round(n))
+const fmt2 = (n: number) => new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, ...agrupar }).format(n)
 // Clientes de España: " · base €350,00 + IVA €73,50 − ret. €52,50" (al resto, nada).
 const lineaImpuestos = (f: { importe: number; tipo_factura?: string | null }) => {
   const d = desgloseFactura(f)
@@ -97,50 +99,52 @@ function PatrimonioChart({ snapshots, actual }: { snapshots: PatrimonioSnapshot[
   porMes.set(mesActual, actual)
   const puntos = meses.map((m, i) => ({ m, i, v: porMes.get(m) })).filter(p => p.v !== undefined) as { m: string, i: number, v: number }[]
 
-  const padL = 44, padR = 12, padT = 14, padB = 26
+  // Línea fina sin ejes, como la web: el valor de cada mes sale al pasar por encima.
+  const [cursor, setCursor] = useState<number | null>(null)
+  const padX = 6, padT = 12, padB = 12
   const vals = puntos.map(p => p.v)
   const min = Math.min(...vals), max = Math.max(...vals)
   const span = max - min || Math.max(max * 0.1, 1)
   const lo = min - span * 0.25, hi = max + span * 0.25
-  const x = (i: number) => padL + (i / (meses.length - 1)) * (W - padL - padR)
+  const x = (i: number) => padX + (i / (meses.length - 1)) * (W - padX * 2)
   const y = (v: number) => padT + (1 - (v - lo) / (hi - lo)) * (H - padT - padB)
   const path = puntos.map((p, k) => `${k === 0 ? 'M' : 'L'}${x(p.i)},${y(p.v)}`).join(' ')
-  const area = puntos.length > 1 ? `${path} L${x(puntos[puntos.length - 1].i)},${H - padB} L${x(puntos[0].i)},${H - padB} Z` : ''
-  const ticks = [lo + (hi - lo) * 0.2, lo + (hi - lo) * 0.5, lo + (hi - lo) * 0.8]
-  const tickLabel = (t: number) => (hi - lo) < 6000 ? `${(t / 1000).toFixed(1)}k` : `${fmt(t / 1000)}k`
+  const area = puntos.length > 1 ? `${path} L${x(puntos[puntos.length - 1].i)},${H} L${x(puntos[0].i)},${H} Z` : ''
   const last = puntos[puntos.length - 1]
+  const sel = cursor !== null ? puntos[cursor] : null
+  const alPasar = (clientX: number) => {
+    const r = ref.current?.getBoundingClientRect()
+    if (!r || !puntos.length) return
+    const px = clientX - r.left
+    let k = 0
+    puntos.forEach((p, j) => { if (Math.abs(x(p.i) - px) < Math.abs(x(puntos[k].i) - px)) k = j })
+    setCursor(k)
+  }
+  const etiquetaMes = (m: string) => `${fmtMes(m)}${m.slice(0, 4) !== mesActual.slice(0, 4) ? ` ${m.slice(2, 4)}` : ''}`
 
   return (
-    <div className="chart-wrap chart-compacto" ref={ref}>
-      <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H}>
-        <defs>
-          <linearGradient id="pgrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#f97316" stopOpacity="0.45" />
-            <stop offset="100%" stopColor="#f97316" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        {ticks.map((t, k) => (
-          <g key={k}>
-            <line x1={padL} x2={W - padR} y1={y(t)} y2={y(t)} stroke="var(--border)" strokeDasharray="3 4" />
-            <text x={padL - 8} y={y(t) + 3} fontSize="9" fill="var(--text3)" textAnchor="end" fontFamily="JetBrains Mono, monospace">{tickLabel(t)}</text>
-          </g>
-        ))}
-        {meses.map((m, i) => (
-          <text key={m} x={x(i)} y={H - 8} fontSize="9" fill={m === mesActual ? 'var(--text2)' : 'var(--text3)'} textAnchor="middle" fontFamily="Inter, sans-serif">{fmtMes(m)}</text>
-        ))}
-        {area && <path d={area} fill="url(#pgrad)" />}
-        {puntos.length > 1 && <path d={path} fill="none" stroke="#fb923c" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />}
-        {puntos.map(p => (
-          <circle key={p.m} cx={x(p.i)} cy={y(p.v)} r={p === last ? 4 : 2.5} fill={p === last ? '#fb923c' : '#0a0908'} stroke="#fb923c" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
-        ))}
-        {last && (
-          <g>
-            <line x1={x(last.i)} x2={x(last.i)} y1={y(last.v)} y2={H - padB} stroke="#fb923c" strokeOpacity="0.35" strokeDasharray="2 3" />
-            <rect x={Math.min(x(last.i) - 34, W - padR - 68)} y={y(last.v) - 26} width="68" height="18" rx="5" fill="#1b1917" stroke="var(--border2)" />
-            <text x={Math.min(x(last.i), W - padR - 34)} y={y(last.v) - 14} fontSize="10" fill="var(--text)" textAnchor="middle" fontFamily="JetBrains Mono, monospace">€{fmt(last.v)}</text>
-          </g>
+    <div className="spark-wrap">
+      <div className={`spark${sel ? ' is-hover' : ''}`} ref={ref} onPointerMove={e => alPasar(e.clientX)} onPointerDown={e => alPasar(e.clientX)} onPointerLeave={() => setCursor(null)}>
+        <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} aria-hidden="true">
+          <defs>
+            <linearGradient id="pgrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="currentColor" stopOpacity="0.08" />
+              <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          {area && <path d={area} fill="url(#pgrad)" />}
+          {puntos.length > 1 && <path className="spark__line" d={path} />}
+          {sel && <line className="spark__cur" x1={x(sel.i)} x2={x(sel.i)} y1={0} y2={H} />}
+          {sel && <circle className="spark__pt" cx={x(sel.i)} cy={y(sel.v)} r={4} />}
+        </svg>
+        {last && <i className="dot dot--green spark__end" style={{ left: x(last.i), top: y(last.v) }} aria-hidden="true" />}
+        {sel && (
+          <span className="tip caps spark__tip" style={{ left: x(sel.i), transform: `translateX(${x(sel.i) < W * 0.12 ? '0' : x(sel.i) > W * 0.88 ? '-100%' : '-50%'})` }}>
+            {etiquetaMes(sel.m)} · €{fmt(sel.v)}
+          </span>
         )}
-      </svg>
+      </div>
+      <div className="spark__meses caps" aria-hidden="true"><span>{etiquetaMes(meses[0])}</span><span>{etiquetaMes(mesActual)}</span></div>
     </div>
   )
 }
@@ -153,31 +157,30 @@ function IngresosChart({ facturas }: { facturas: Factura[] }) {
     return { m, cobrado: fs.filter(f => f.estado === 'cobrada').reduce((s, f) => s + f.importe, 0), pendiente: fs.filter(f => f.estado === 'pendiente').reduce((s, f) => s + f.importe, 0) }
   })
   const max = Math.max(...datos.map(d => d.cobrado + d.pendiente), 1)
-  const padL = 36, padR = 6, padT = 14, padB = 26
-  const bw = (W - padL - padR) / meses.length
+  // Barras finas: lo cobrado, sólido; lo pendiente, rayado. Encima, el total del mes.
+  const padT = 20, padB = 26
+  const bw = W / meses.length
   const h = (v: number) => (v / max) * (H - padT - padB)
-  const ticks = [0.25, 0.5, 0.75, 1].map(t => t * max)
   return (
-    <div className="chart-wrap" ref={ref}>
-      <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H}>
-        {ticks.map((t, k) => (
-          <g key={k}>
-            <line x1={padL} x2={W - padR} y1={H - padB - h(t)} y2={H - padB - h(t)} stroke="var(--border)" strokeDasharray="3 4" />
-            <text x={padL - 8} y={H - padB - h(t) + 3} fontSize="9" fill="var(--text3)" textAnchor="end" fontFamily="JetBrains Mono, monospace">{fmt(t / 1000)}k</text>
-          </g>
-        ))}
+    <div className="bars" ref={ref}>
+      <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} role="img" aria-label="Ingresos facturados por mes de emisión">
+        <defs>
+          <pattern id="rayas" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+            <line x1="0" y1="0" x2="0" y2="4" stroke="var(--dim)" strokeWidth="1.2" />
+          </pattern>
+        </defs>
         {datos.map((d, i) => {
-          const cx = padL + bw * i + bw / 2
-          const w = Math.min(bw * 0.5, 28)
+          const cx = bw * i + bw / 2
+          const w = Math.min(bw * 0.5, 14)
           const hc = h(d.cobrado), hp = h(d.pendiente)
+          const total = d.cobrado + d.pendiente
           return (
             <g key={d.m}>
-              {hc > 0 && <rect x={cx - w / 2} y={H - padB - hc} width={w} height={hc} rx="3" fill="#f97316" />}
-              {hp > 0 && <rect x={cx - w / 2} y={H - padB - hc - hp} width={w} height={hp} rx="3" fill="#fbbf24" fillOpacity="0.55" />}
-              {d.cobrado + d.pendiente > 0 && (
-                <text x={cx} y={H - padB - hc - hp - 5} fontSize="9" fill="var(--text2)" textAnchor="middle" fontFamily="JetBrains Mono, monospace">{((d.cobrado + d.pendiente) / 1000).toFixed(1)}k</text>
-              )}
-              <text x={cx} y={H - 8} fontSize="9" fill="var(--text3)" textAnchor="middle" fontFamily="Inter, sans-serif">{fmtMes(d.m)}</text>
+              {hc > 0 && <rect className="bars__c" x={cx - w / 2} y={H - padB - hc} width={w} height={hc} rx="2" />}
+              {hp > 0 && <rect className="bars__p" x={cx - w / 2 + 0.5} y={H - padB - hc - hp + 0.5} width={w - 1} height={Math.max(0, hp - 1)} rx="2" fill="url(#rayas)" />}
+              {!total && <rect x={cx - w / 2} y={H - padB - 2} width={w} height={2} rx="1" fill="var(--line)" />}
+              {total > 0 && <text className="bars__v" x={cx} y={H - padB - hc - hp - 7} textAnchor="middle">{(total / 1000).toFixed(1)}k</text>}
+              <text className={`bars__m${i === meses.length - 1 ? ' is-now' : ''}`} x={cx} y={H - 6} textAnchor="middle">{fmtMes(d.m)}</text>
             </g>
           )
         })}
@@ -229,6 +232,8 @@ export default function Home() {
   const [presupuestoTotal, setPresupuestoTotal] = useState(1800)
   const [loading, setLoading] = useState(true)
   const [lastUpdated, setLastUpdated] = useState<string>('')
+  // Lectura más antigua de los bancos, para la esquina de arriba (null = sin bancos conectados o aún cargando).
+  const [bancosSync, setBancosSync] = useState<number | null>(null)
 
   const loadData = useCallback(async () => {
     const [c, cr, f, fi, v, cfg, pr, di, sn, cf, co, mv, bk, mk] = await batchQuery([
@@ -287,9 +292,10 @@ export default function Home() {
     supabase.from('bancos_sesiones').select('ultimo_sync').then(async ({ data }) => {
       if (!data?.length) return
       const masViejo = Math.min(...data.map((s: { ultimo_sync: string | null }) => s.ultimo_sync ? new Date(s.ultimo_sync).getTime() : 0))
+      setBancosSync(masViejo)
       if (Date.now() - masViejo < 3 * 3600e3) return
       const r = await fetch('/api/bancos/sincronizar', { method: 'POST' }).catch(() => null)
-      if (r?.ok) loadData()
+      if (r?.ok) { setBancosSync(Date.now()); loadData() }
     })
   }, [loadData])
 
@@ -517,285 +523,176 @@ export default function Home() {
 
   return (
     <div className="app">
-      <aside className="sidebar">
-        <div className="brand">
-          <svg className="brand-mark" viewBox={VIEWBOX_JO} role="img" aria-label="JOUX Hub">
-            <rect x="-704" y="-1369" width="3700" height="3700" rx="830" fill="#0a0908" />
-            <g fill="#fff" dangerouslySetInnerHTML={{ __html: GLIFO_JO }} />
-          </svg>
-          <div>
-            <div className="brand-name">JOUX Hub</div>
-            <div className="brand-sub">Finanzas</div>
-          </div>
-        </div>
-        <div className="nav-scroll">
-          <div className="nav-group">
-            {secciones.map(s => {
-              const badge = s.tabs.reduce((t, x) => t + (x.badge || 0), 0)
-              return (
-                <button key={s.id} className={`nav-btn${seccionActiva.id === s.id ? ' active' : ''}`} onClick={() => abrirSeccion(s)}>
-                  <s.icon /><span>{s.label}</span>
-                  {!!badge && <span className="nav-badge">{badge}</span>}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-        <div className="nav-foot">{lastUpdated && `sync ${lastUpdated}`}</div>
-      </aside>
+      {/* Esquinas y menú, como joelschneider.io */}
+      <header className="frame frame--top caps">
+        <span className="mark">JOUX HUB</span>
+        <span className="frame__r">
+          <EstadoBancos sync={bancosSync} />
+          <NotificacionesBoton onIr={t => setTab(t as Tab)} />
+        </span>
+      </header>
 
-      <main className="main">
+      <Menu items={secciones.map(s => ({ id: s.id, label: s.label, badge: s.tabs.reduce((t, x) => t + (x.badge || 0), 0), tranquilo: s.id === 'treatments' }))}
+        activa={seccionActiva.id} onAbrir={id => { const s = secciones.find(x => x.id === id); if (s) abrirSeccion(s) }} />
+
+      {/* Las pantallas ya migradas van en la columna de la maqueta (724 px) */}
+      <main className={`main${['dashboard', 'facturas', 'compras', 'impuestos', 'clientes', 'bancos', 'compartidos'].includes(tab) || tab.startsWith('ts:') || tab.startsWith('mk:') ? ' main--col' : ''}`}>
         <header className="page-header">
-          <div>
+          <div className="page-header__txt">
             <h1 className="page-title">{titulo}</h1>
-            <div className="page-sub">{subtitulo}</div>
+            {subtitulo && <p className="tags caps">{subtitulo}</p>}
           </div>
           <div className="header-actions">
-            <ModoPrivado />
-            <NotificacionesBoton onIr={t => setTab(t as Tab)} />
-            <button className="btn" onClick={() => loadData()}><Icon.refresh />Actualizar</button>
-            {!marcaActiva && <button className={`btn${tab === 'clientes' ? '' : ' btn-primary'}`} onClick={() => setModal({ type: 'addProyecto' })}><Icon.plus />Nuevo proyecto</button>}
-            {tab === 'clientes' && <button className="btn btn-primary" onClick={() => setModal({ type: 'editCliente' })}><Icon.plus />Nuevo cliente</button>}
+            {!marcaActiva && <button className={tab === 'clientes' ? 'ghost' : 'pill'} onClick={() => setModal({ type: 'addProyecto' })}><Icon.plus />Nuevo proyecto</button>}
+            {tab === 'clientes' && <button className="pill" onClick={() => setModal({ type: 'editCliente' })}><Icon.plus />Nuevo cliente</button>}
           </div>
         </header>
 
         {seccionActiva.tabs.length > 1 && (
-          <nav className="subnav">
+          <nav className="subnav chips__row" aria-label={seccionActiva.label}>
             {seccionActiva.tabs.map(t => (
-              <button key={t.id} className={`subnav-btn${tab === t.id ? ' active' : ''}`} onClick={() => setTab(t.id)}>
-                {t.label}{!!t.badge && <span className="subnav-badge">{t.badge}</span>}
+              <button key={t.id} type="button" className="chip" aria-pressed={tab === t.id} onClick={() => setTab(t.id)}>
+                <span>{t.label}{!!t.badge && <b className={seccionActiva.id === 'treatments' ? 'dim' : undefined}>{t.badge}</b>}</span>
               </button>
             ))}
           </nav>
         )}
 
-        {/* Dashboard Tab */}
-        {tab === 'dashboard' && (
-          <>
-            <div className="stat-grid">
-              <div className="card stat-card stat-card-primary">
-                <div className="stat-icon"><Icon.spark /></div>
-                <div className="stat-label">Patrimonio total</div>
-                <div className="stat-value">€{fmt(totalPatrimonio)}</div>
+        {/* Overview: lo justo de cada sección, como la web; el detalle está en su pantalla */}
+        {tab === 'dashboard' && (() => {
+          const pago = proximoPago(facturasFiscales, compras, cuotaAutonomo, impuestosReales)
+          const flecha = <svg className="arr" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8h9M9 4.5 12.5 8 9 11.5" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          return (
+          <div className="col">
+            <section className="block" aria-label="Patrimonio">
+              <p className="label caps"><span>Patrimonio</span><i className="rule" /></p>
+              <div className="hero">
+                <p className="big">€{fmt(totalPatrimonio)}</p>
                 {deltaMes !== null ? (
-                  <div className={`stat-delta ${deltaMes > 0 ? 'up' : deltaMes < 0 ? 'down' : 'flat'}`}>
-                    {deltaMes > 0 ? '▲' : deltaMes < 0 ? '▼' : '•'} {deltaMes >= 0 ? '+' : '−'}€{fmt(Math.abs(deltaMes))}{deltaPct !== null ? ` (${deltaPct >= 0 ? '+' : ''}${deltaPct.toFixed(1)}%)` : ''} vs mes anterior
-                  </div>
+                  <p className="delta caps">
+                    <span className={deltaMes > 0 ? 'up' : deltaMes < 0 ? 'down' : undefined}>{deltaMes > 0 ? '▲' : deltaMes < 0 ? '▼' : '•'} {deltaMes >= 0 ? '+' : '−'}€{fmt(Math.abs(deltaMes))}{deltaPct !== null ? ` (${deltaPct >= 0 ? '+' : ''}${deltaPct.toFixed(1)}%)` : ''}</span>
+                    <span>vs mes anterior</span>
+                  </p>
                 ) : (
-                  <div className="stat-delta flat">• registrando historial</div>
+                  <p className="delta caps"><span>• registrando historial</span></p>
                 )}
               </div>
-              <div className="card stat-card">
-                <div className="stat-icon"><Icon.wallet /></div>
-                <div className="stat-label">Liquidez</div>
-                <div className="stat-value" style={{ color: 'var(--green)' }}>€{fmt(totalLiquidez)}</div>
-                <div className="stat-delta flat">{cuentas.filter(c => !c.padre_id).length} cuentas · {cuentas.filter(c => c.padre_id).length} apartados</div>
-              </div>
-              <div className="card stat-card">
-                <div className="stat-icon"><Icon.coin /></div>
-                <div className="stat-label">Crypto</div>
-                <div className="stat-value" style={{ color: 'var(--purple)' }}>€{fmt(totalCrypto)}</div>
-                <div className="stat-delta flat">ETH €{fmt(ethPrice)}</div>
-              </div>
-              <div className="card stat-card">
-                <div className="stat-icon"><Icon.invoice /></div>
-                <div className="stat-label">Por cobrar</div>
-                <div className="stat-value" style={{ color: 'var(--amber)' }}>€{fmt(totalPendiente)}</div>
-                <div className="stat-delta flat">{facturasPendientes.length} facturas</div>
-              </div>
-            </div>
+              <PatrimonioChart snapshots={snapshots} actual={totalPatrimonio} />
+              {snapshots.filter(s => s.fecha.slice(0, 7) !== mesActualKey).length < 2 && (
+                <p className="nota">Se guarda un punto cada día que abres el hub; el gráfico se completa mes a mes.</p>
+              )}
+              <dl className="split">
+                <div><dt className="caps">Liquidez</dt><dd><span className="num">€{fmt(totalLiquidez)}</span></dd></div>
+                <div><dt className="caps">Crypto</dt><dd><span className="num">€{fmt(totalCrypto)}</span></dd></div>
+                <div><dt className="caps">Por cobrar</dt><dd><span className="num">€{fmt(totalPendiente)}</span></dd></div>
+              </dl>
+            </section>
 
-            <CuentasCard cuentas={cuentas} aEuros={aEuros} fijosMes={fijos.reduce((t, i) => t + Number(i.limite), 0)}
-              variablesMes={variables.reduce((t, i) => t + Number(i.limite), 0)} pago={proximoPago(facturasFiscales, compras, cuotaAutonomo, impuestosReales)}
-              porCobrar={totalPendiente} onEdit={() => setModal({ type: 'editCuentas' })}
-              fijosPendientes={movsBanco.length ? (() => { const g = gastadoPorPartida(movsBanco, undefined, undefined, compartidos); return fijos.reduce((t, i) => t + Math.max(0, Number(i.limite) - (g[i.nombre] || 0)), 0) })() : null} />
+            {/* Próximo pago de impuestos: frase apagada + botón, sin caja */}
+            {pago && (
+              <button type="button" className="cta" onClick={() => setTab('impuestos')}>
+                <span className="cta__l"><i className="dot dot--amber" aria-hidden="true" />IVA e IRPF del T{pago.q}{pago.declarado ? ' (gestor)' : pago.cerrado ? '' : ' estimado'} · {fmtDate(pago.plazo)}</span>
+                <span className="cta__b">€{fmt2(pago.total)}{flecha}</span>
+              </button>
+            )}
 
-            {marcasLista.length > 0 && <MarcaCard facturas={demoMarcas ? DEMO_FACTURAS : facturas} proyectos={demoMarcas ? [] : proyectos} marcas={marcasLista} demo={demoMarcas} />}
-
-            <div className="dash-grid-3">
-              <PresupuestoCards fijos={fijos} variables={variables} movimientos={movsBanco} compartidos={compartidos} />
-              <div className="card">
-                <div className="card-head">
-                  <div>
-                    <div className="card-title">Patrimonio</div>
-                    <div className="card-kicker" style={{ marginTop: 2 }}>Evolución mensual</div>
-                  </div>
-                </div>
-                <div className="mono" style={{ fontSize: 22, letterSpacing: -0.5 }}>€{fmt(totalPatrimonio)}</div>
-                {deltaMes !== null && (
-                  <div className={`stat-delta ${deltaMes > 0 ? 'up' : deltaMes < 0 ? 'down' : 'flat'}`} style={{ marginTop: 2, marginBottom: 8 }}>
-                    {deltaMes > 0 ? '▲' : deltaMes < 0 ? '▼' : '•'} {deltaMes >= 0 ? '+' : '−'}€{fmt(Math.abs(deltaMes))} vs mes anterior
-                  </div>
-                )}
-                <PatrimonioChart snapshots={snapshots} actual={totalPatrimonio} />
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
-                  {([['Liquidez', totalLiquidez, 'var(--green)'], ['Crypto', totalCrypto, 'var(--purple)'], ['Por cobrar', totalPendiente, 'var(--amber)']] as [string, number, string][]).map(([n, v, c]) => (
-                    <div key={n} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
-                      <i style={{ width: 6, height: 6, borderRadius: 3, background: c }} />
-                      <span style={{ flex: 1, color: 'var(--text2)' }}>{n}</span>
-                      <span className="mono" style={{ color: 'var(--text)' }}>€{fmt(v)}</span>
-                      <span className="mono" style={{ width: 38, textAlign: 'right', color: 'var(--text3)', fontSize: 11 }}>{totalPatrimonio > 0 ? Math.round(v / (totalPatrimonio + totalPendiente) * 100) : 0}%</span>
-                    </div>
-                  ))}
-                </div>
-                {snapshots.filter(s => s.fecha.slice(0, 7) !== mesActualKey).length < 2 && (
-                  <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 8 }}>Se guarda un punto cada día que abres el hub; el gráfico se completa mes a mes.</div>
-                )}
-              </div>
-            </div>
-
-            <div className="dash-grid-2">
-              <div className="card">
-                <div className="card-head">
-                  <div>
-                    <div className="card-title">Ingresos facturados</div>
-                    <div className="card-kicker" style={{ marginTop: 2 }}>Por mes de emisión</div>
-                  </div>
-                  <div className="chart-legend">
-                    <span><i style={{ background: '#f97316' }} />Cobrado</span>
-                    <span><i style={{ background: '#fbbf24', opacity: 0.6 }} />Pendiente</span>
-                  </div>
-                </div>
-                <IngresosChart facturas={facturasFiscales} />
-                <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border)' }}>
-                  <div className="card-kicker" style={{ marginBottom: 6 }}>Crypto</div>
-                  {crypto.map(c => {
-                    const val = c.symbol === 'ETH' ? c.cantidad * ethPrice : 0
-                    return (
-                      <div key={c.id} className="row">
-                        <div className="acct-avatar" style={{ background: 'var(--purple-dim)', color: 'var(--purple)', borderColor: 'rgba(167,139,250,0.35)' }}>{c.symbol}</div>
-                        <div className="row-main">
-                          <div className="row-title">{c.cantidad} {c.symbol}</div>
-                          <div className="row-sub mono">€{fmt2(ethPrice)} / {c.symbol} · precio en vivo</div>
-                        </div>
-                        <div className="row-side"><span className="row-amount" style={{ color: 'var(--purple)' }}>€{fmt(val)}</span></div>
+            <section className="block" aria-label="Por cobrar">
+              <p className="label caps"><span>Por cobrar</span><i className="rule" /><button type="button" className="label__m copy" onClick={() => setTab('facturas')}>Facturas →</button></p>
+              {facturasPendientes.length === 0 ? <p className="empty">No hay facturas pendientes.</p> : (
+                <ul className="list focus">
+                  {facturasPendientes.slice(0, 7).map(f => (
+                    <li key={f.id} className="fila">
+                      <div className="fila__main">
+                        <span className="fila__t" title={`${f.cliente}${f.descripcion ? ` · ${f.descripcion}` : ''}`}>{f.cliente}{f.descripcion ? <span> · {f.descripcion}</span> : null}</span>
+                        <span className="fila__s caps" title={`Vence ${fmtDate(f.fecha_vencimiento || f.fecha)}${f.numero ? ` · ${f.numero}` : ''}${lineaImpuestos(f)}`}>Vence {fmtDate(f.fecha_vencimiento || f.fecha)}{f.numero ? ` · ${f.numero}` : ''}{lineaImpuestos(f)}</span>
                       </div>
-                    )
-                  })}
-                </div>
-              </div>
+                      <span className="num">€{fmt(totalACobrar(f))}</span>
+                      <button type="button" className="tick" onClick={() => marcarCobrada(f)} title="Marcar como cobrada" aria-label={`Marcar como cobrada: ${f.cliente}`}><Icon.check /></button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
 
-              <div className="card">
-                <div className="card-head">
-                  <div>
-                    <div className="card-title">Próximas facturas</div>
-                    <div className="card-kicker" style={{ marginTop: 2 }}>€{fmt(totalPendiente)} por cobrar</div>
-                  </div>
-                  <button className="btn btn-ghost" onClick={() => setTab('facturas')}>Ver todas →</button>
-                </div>
-                {facturasPendientes.length === 0 && <div className="chart-empty">No hay facturas pendientes.</div>}
-                {facturasPendientes.slice(0, 7).map(f => (
-                  <div key={f.id} className="row">
-                    <div className="row-main">
-                      <div className="row-title" title={`${f.cliente}${f.descripcion ? ` · ${f.descripcion}` : ''}`}>{f.cliente}{f.descripcion ? ` · ${f.descripcion}` : ''}</div>
-                      <div className="row-sub">Vence {fmtDate(f.fecha_vencimiento || f.fecha)}{f.numero ? ` · ${f.numero}` : ''}{lineaImpuestos(f)}</div>
-                    </div>
-                    <div className="row-side">
-                      <span className="row-amount" style={{ color: 'var(--green)' }}>+€{fmt(totalACobrar(f))}</span>
-                      <button className="icon-btn ok" onClick={() => marcarCobrada(f)} title="Marcar como cobrada"><Icon.check /></button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+            <section className="block" aria-label="Ingresos facturados por mes de emisión">
+              <p className="label caps"><span>Ingresos facturados</span><i className="rule" /></p>
+              <IngresosChart facturas={facturasFiscales} />
+              <p className="legend caps"><span><i className="sw" />Cobrado</span><span><i className="sw sw--p" />Pendiente</span></p>
+            </section>
+
+            <div className="duo">
+              <CuentasCard cuentas={cuentas} aEuros={aEuros} fijosMes={fijos.reduce((t, i) => t + Number(i.limite), 0)}
+                variablesMes={variables.reduce((t, i) => t + Number(i.limite), 0)} pago={pago}
+                porCobrar={totalPendiente} onEdit={() => setModal({ type: 'editCuentas' })}
+                fijosPendientes={movsBanco.length ? (() => { const g = gastadoPorPartida(movsBanco, undefined, undefined, compartidos); return fijos.reduce((t, i) => t + Math.max(0, Number(i.limite) - (g[i.nombre] || 0)), 0) })() : null}
+                extra={crypto.map(c => ({ key: `crypto-${c.id}`, titulo: `${c.cantidad} ${c.symbol}`, linea: `€${fmt2(ethPrice)} / ${c.symbol} · precio en vivo`, monto: `€${fmt(c.symbol === 'ETH' ? c.cantidad * ethPrice : 0)}` }))} />
+              {marcasLista.length > 0 && <MarcaCard facturas={demoMarcas ? DEMO_FACTURAS : facturas} proyectos={demoMarcas ? [] : proyectos} marcas={marcasLista} demo={demoMarcas} />}
             </div>
-          </>
-        )}
 
-        {/* Facturas Tab */}
-        {tab === 'facturas' && (() => {
-          const chip: React.CSSProperties = { background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 7, padding: '4px 10px', color: 'var(--text2)', fontSize: 12, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }
-          const chipOn: React.CSSProperties = { ...chip, background: 'var(--accent)', color: '#000', border: '1px solid var(--accent)', fontWeight: 500 }
-          const neutra: React.CSSProperties = { background: 'var(--surface2)', color: 'var(--text2)' }
-          const verHref = (f: Factura) => f.archivo_path ? `/api/facturas/archivo?id=${f.id}` : `/invoice/${f.id}`
-          const marcas = (f: Factura) => (
-            <>
-              {f.origen === 'historico' && <span className="pill" style={neutra} title="Factura ya declarada, con su PDF original">declarada</span>}
-              {f.origen === 'regularizacion' && <span className="pill" style={neutra} title="Cobro de 2024-2025 facturado a posteriori">regularizada</span>}
-              {fueraDeOrden.has(f.id) && <span className="pill pill-amber" title="La fecha no sigue el orden de su número: revisala">fuera de orden</span>}
-            </>
+            <PresupuestoCards fijos={fijos} variables={variables} movimientos={movsBanco} compartidos={compartidos} />
+          </div>
           )
+        })()}
+
+        {/* Facturas: pendientes arriba; debajo, las cobradas con sus filtros. Cada factura, una fila que se despliega. */}
+        {tab === 'facturas' && (() => {
+          const verHref = (f: Factura) => f.archivo_path ? `/api/facturas/archivo?id=${f.id}` : `/invoice/${f.id}`
           // Las más recientes por fecha de cobro (o de emisión si no la tiene).
           const cobradas = facturasCobradas.filter(enFiltro).sort((a, b) => (b.fecha_cobro || b.fecha).localeCompare(a.fecha_cobro || a.fecha) || b.fecha.localeCompare(a.fecha))
           return (
-            <div className="card">
-              <div className="card-head">
-                <div className="card-title">Pendientes <span style={{ color: 'var(--text3)', fontWeight: 400 }}>· {facturasPendientes.length}</span></div>
-                <span className="row-amount" style={{ color: 'var(--amber)' }}>€{fmt(totalPendiente)}</span>
-              </div>
-              {facturasPendientes.length === 0 && <div className="chart-empty">No hay facturas pendientes.</div>}
-              {facturasPendientes.map(f => (
-                <div key={f.id} className="row">
-                  <div className="row-main">
-                    <div className="row-title">{f.cliente}{f.descripcion ? <span style={{ color: 'var(--text3)' }}> · {f.descripcion}</span> : null}</div>
-                    <div className="row-sub">{f.numero ? `${f.numero} · ` : ''}T{trimDe(f.fecha)} {f.fecha.slice(0, 4)} · Vence {fmtDate(f.fecha_vencimiento || f.fecha)}{lineaImpuestos(f)}</div>
-                  </div>
-                  <div className="row-side">
-                    <span className="row-amount" style={{ color: 'var(--green)' }}>+€{fmt(totalACobrar(f))}</span>
-                    {marcas(f)}
-                    <span className="pill pill-amber">pendiente</span>
-                    <a className="icon-btn accent" href={verHref(f)} target="_blank" rel="noopener noreferrer" title="Ver factura"><Icon.invoice /></a>
-                    <button className="icon-btn ok" onClick={() => marcarCobrada(f)} title="Marcar como cobrada"><Icon.check /></button>
-                    <button className="icon-btn danger" onClick={() => deleteFactura(f.id)} title="Borrar"><Icon.x /></button>
-                  </div>
-                </div>
-              ))}
+            <div className="col">
+              <section className="block" aria-label="Pendientes">
+                <p className="label caps"><span>Pendientes · {facturasPendientes.length}</span><i className="rule" /></p>
+                {facturasPendientes.length === 0 ? <p className="empty">No hay facturas pendientes.</p> : (
+                  <ul className="projs focus">
+                    {facturasPendientes.map(f => (
+                      <FilaFactura key={f.id} f={f} trim={trimDe(f.fecha)} fueraDeOrden={fueraDeOrden.has(f.id)} href={verHref(f)}
+                        onCobrar={() => marcarCobrada(f)} onBorrar={() => deleteFactura(f.id)} />
+                    ))}
+                  </ul>
+                )}
+              </section>
 
-              <div className="card-head" style={{ marginTop: 24, paddingTop: 18, borderTop: '1px solid var(--border)', flexWrap: 'wrap', gap: 10 }}>
-                <div className="card-title">Cobradas <span style={{ color: 'var(--text3)', fontWeight: 400 }}>· {cobradas.length}</span></div>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-                  {aniosFacturas.map(a => <button key={a} style={a === filtroAnio ? chipOn : chip} onClick={() => setFiltroAnio(a)}>{a}</button>)}
-                  <span style={{ width: 8 }} />
-                  {[0, 1, 2, 3, 4].map(q => <button key={q} style={q === filtroTrim ? chipOn : chip} onClick={() => setFiltroTrim(q)}>{q ? `T${q}` : 'Todo'}</button>)}
-                  <span className="row-amount" style={{ color: 'var(--text2)', marginLeft: 8 }} title="Lo cobrado (con IVA y retención en los clientes de España)">€{fmt(cobradas.reduce((s, f) => s + totalACobrar(f), 0))}</span>
+              <section className="block" aria-label="Cobradas">
+                <p className="label caps">
+                  <span>Cobradas · {cobradas.length}</span><i className="rule" />
+                  <span className="label__m" title="Lo cobrado (con IVA y retención en los clientes de España)">€{fmt(cobradas.reduce((s, f) => s + totalACobrar(f), 0))}</span>
+                </p>
+                <div className="filt">
+                  <span className="seg caps" role="group" aria-label="Año">
+                    {aniosFacturas.map(a => <button key={a} type="button" aria-pressed={a === filtroAnio} onClick={() => setFiltroAnio(a)}>{a}</button>)}
+                  </span>
+                  <span className="seg caps" role="group" aria-label="Trimestre">
+                    {[0, 1, 2, 3, 4].map(q => <button key={q} type="button" aria-pressed={q === filtroTrim} onClick={() => setFiltroTrim(q)}>{q ? `T${q}` : 'Todo'}</button>)}
+                  </span>
                 </div>
-              </div>
-              {cobradas.length === 0 && <div className="chart-empty">No hay facturas cobradas en este período.</div>}
-              {cobradas.map(f => (
-                <div key={f.id} className="row muted">
-                  <div className="row-main">
-                    <div className="row-title">{f.cliente}{f.descripcion ? <span style={{ color: 'var(--text3)' }}> · {f.descripcion}</span> : null}</div>
-                    <div className="row-sub">{f.numero ? `${f.numero} · ` : ''}T{trimDe(f.fecha)} {f.fecha.slice(0, 4)} · Emitida {fmtDate(f.fecha)}{f.fecha_cobro ? ` · Cobrada ${fmtDate(f.fecha_cobro)}` : ''}{lineaImpuestos(f)}</div>
-                  </div>
-                  <div className="row-side">
-                    <span className="row-amount">€{fmt(totalACobrar(f))}</span>
-                    {marcas(f)}
-                    <a className="icon-btn accent" href={verHref(f)} target="_blank" rel="noopener noreferrer" title="Ver factura"><Icon.invoice /></a>
-                    <button className="icon-btn danger" onClick={() => deleteFactura(f.id)} title="Borrar"><Icon.x /></button>
-                  </div>
-                </div>
-              ))}
+                {cobradas.length === 0 ? <p className="empty">No hay facturas cobradas en este período.</p> : (
+                  <ul className="projs focus">
+                    {cobradas.map(f => (
+                      <FilaFactura key={f.id} f={f} trim={trimDe(f.fecha)} fueraDeOrden={fueraDeOrden.has(f.id)} href={verHref(f)}
+                        onBorrar={() => deleteFactura(f.id)} />
+                    ))}
+                  </ul>
+                )}
+              </section>
             </div>
           )
         })()}
 
         {/* Clientes Tab */}
         {tab === 'clientes' && (
-          <div className="card">
-            <div className="card-head">
-              <div className="card-title">Clientes <span style={{ color: 'var(--text3)', fontWeight: 400 }}>· {clientesFiscales.length}</span></div>
-            </div>
-            {clientesFiscales.length === 0 && <div className="chart-empty">No hay clientes con datos fiscales cargados todavía.</div>}
-            {clientesFiscales.map(c => (
-              <div key={c.cliente} className="row">
-                <div className="row-main">
-                  <div className="row-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    {c.cliente}
-                    <span className={`pill${c.pais ? '' : ' pill-amber'}`} style={c.pais ? { background: 'var(--surface3)', color: 'var(--text2)' } : undefined}
-                      title={c.pais ? PAISES.find(x => x.value === c.pais)?.label : 'Sin país: sus facturas salen sin IVA. Editalo para elegirlo.'}>
-                      {c.pais === 'ES' ? 'España' : c.pais === 'UE' ? 'UE' : c.pais === 'EXT' ? 'Fuera UE' : 'sin país'}
-                    </span>
-                  </div>
-                  <div className="row-sub">{c.identificador || 'Sin identificador fiscal'}{c.direccion ? ` · ${c.direccion.replace(/\n/g, ', ')}` : ''}</div>
-                </div>
-                <div className="row-side">
-                  <button className="icon-btn accent" onClick={() => setModal({ type: 'editCliente', data: { cliente: c } })} title="Editar"><Icon.edit /></button>
-                  <button className="icon-btn danger" onClick={() => deleteClienteFiscal(c.cliente)} title="Borrar"><Icon.x /></button>
-                </div>
-              </div>
-            ))}
-            <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border)' }}>
-              Estos datos se usan para generar el PDF de cada factura.
-            </div>
+          <div className="col">
+            <section className="block" aria-label="Clientes">
+              <p className="label caps"><span>Clientes</span><i className="rule" /><span className="label__m">{clientesFiscales.length}</span></p>
+              {clientesFiscales.length === 0 ? <p className="empty">No hay clientes con datos fiscales cargados todavía.</p> : (
+                <ul className="projs focus">
+                  {clientesFiscales.map(c => (
+                    <FilaCliente key={c.cliente} c={c} onEditar={() => setModal({ type: 'editCliente', data: { cliente: c } })} onBorrar={() => deleteClienteFiscal(c.cliente)} />
+                  ))}
+                </ul>
+              )}
+              <p className="nota">Estos datos se usan para generar el PDF de cada factura.</p>
+            </section>
           </div>
         )}
 
@@ -882,14 +779,18 @@ export default function Home() {
         {marcaActiva && <MarcaTab key={marcaActiva.key} marca={marcaActiva} proyectos={proyectosAgencia} demo={demoMarcas}
           numerosExistentes={facturas.map(f => f.numero)} clientes={clientesFiscales} acciones={demoMarcas ? undefined : accionesAgencia} />}
         {marcaTsActiva && gruposMarcaTs.length === 0 && (
-          <div className="card chart-empty">Todavía no hay proyectos en {marcaTsActiva.nombre}. Crea uno con «Nuevo proyecto».</div>
+          <p className="empty">Todavía no hay proyectos en {marcaTsActiva.nombre}. Crea uno con «Nuevo proyecto».</p>
         )}
-        {marcaTsActiva && gruposMarcaTs.map(g => (
-          <div key={g.key} style={{ marginBottom: gruposMarcaTs.length > 1 ? 28 : 0 }}>
-            {gruposMarcaTs.length > 1 && <div className="card-kicker" style={{ margin: '0 2px 10px' }}>{g.label}</div>}
-            <TimesheetTab grupo={g} proyectos={proyectosMarcaTs} dias={dias} facturas={facturas} clientesFiscales={clientesFiscales} reload={loadData} />
+        {marcaTsActiva && gruposMarcaTs.length > 0 && (
+          <div className="col">
+            <ResumenTreatments marca={marcaTsActiva.key} proyectos={proyectosMarcaTs} facturas={facturas} dias={dias} clientesFiscales={clientesFiscales}
+              marcaDeFactura={f => f.marca || (() => { const p = proyectos.find(x => x.id === f.proyecto_id); return p ? marcaTsDe(p) : '' })()} />
+            {/* Un bloque por cliente o grupo, cada uno con su link; con un solo grupo, el nombre ya está en el título */}
+            {gruposMarcaTs.map(g => (
+              <TimesheetTab key={g.key} grupo={g} etiqueta={gruposMarcaTs.length > 1 ? g.label : 'Proyectos'} proyectos={proyectosMarcaTs} dias={dias} facturas={facturas} clientesFiscales={clientesFiscales} reload={loadData} />
+            ))}
           </div>
-        ))}
+        )}
 
         {/* Modals */}
         {modal && (
@@ -914,6 +815,15 @@ export default function Home() {
           </div>
         )}
       </main>
+
+      <footer className="frame frame--bottom caps">
+        <span>Valencia <Reloj />{lastUpdated && <><span className="sep">/</span>Datos {lastUpdated}</>}</span>
+        <span className="frame__r">
+          <button type="button" className="tgl hit" onClick={() => loadData()} title="Volver a cargar los datos"><Icon.refresh />Actualizar</button>
+          <ModoPrivado />
+          <TemaBoton />
+        </span>
+      </footer>
     </div>
   )
 }
@@ -1020,41 +930,39 @@ function ModalCliente({ cliente, onSave, onClose }: { cliente?: ClienteFiscal, o
   // Si el país no se eligió a mano, se sugiere a partir del identificador y la dirección.
   const [paisElegido, setPaisElegido] = useState<PaisFiscal | null>(cliente?.pais || null)
   const pais = paisElegido || detectarPais(identificador, direccion)
-  const inputStyleLocal = { width: '100%', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 7, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'Inter, sans-serif', outline: 'none' }
-  const labelStyleLocal = { display: 'block' as const, fontSize: 12, color: 'var(--text2)', marginBottom: 6 }
+  // Campos de una sola línea y botones de la web (mismo estado y mismo guardado que antes).
   return (
     <>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, fontSize: 16, fontWeight: 500 }}>
-        {cliente ? `Editar cliente · ${cliente.cliente}` : 'Nuevo cliente'} <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', fontSize: 20 }}>×</button>
+      <div className="modal__head"><h2>{cliente ? `Editar cliente · ${cliente.cliente}` : 'Nuevo cliente'}</h2><button type="button" className="modal__x" onClick={onClose} aria-label="Cerrar">×</button></div>
+      <div className="modal__campos">
+        <div className="field">
+          <label className="caps" htmlFor="cf-nombre">Nombre del cliente</label>
+          <input id="cf-nombre" value={nombre} disabled={!!cliente} onChange={e => setNombre(e.target.value)} placeholder="Ej: Ambushed, Hans Emanuel Productions..." />
+          {cliente && <p className="nota field__nota">El nombre no se puede cambiar aquí porque es lo que vincula este cliente con sus facturas.</p>}
+        </div>
+        <div className="field">
+          <label className="caps" htmlFor="cf-id">Identificador fiscal · NIF/CIF, VAT, teléfono…</label>
+          <input id="cf-id" value={identificador} onChange={e => setIdentificador(e.target.value)} placeholder="Ej: 12810068 · VAT 12810068 · 07752660689" />
+        </div>
+        <div className="field">
+          <label className="caps" htmlFor="cf-dir">Dirección fiscal</label>
+          <textarea id="cf-dir" value={direccion} onChange={e => setDireccion(e.target.value)} placeholder="Calle, número&#10;Ciudad, país" rows={3} />
+        </div>
+        <div className="field">
+          <label className="caps" htmlFor="cf-pais">País fiscal · define el formato de sus facturas</label>
+          <span className="field__sel">
+            <select id="cf-pais" value={pais || ''} onChange={e => setPaisElegido((e.target.value || null) as PaisFiscal | null)}>
+              <option value="">Sin definir (sin IVA)</option>
+              {PAISES.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+            </select>
+            <Chevron />
+          </span>
+          {!paisElegido && pais && <p className="nota field__nota">Detectado automáticamente por la dirección / identificador.</p>}
+        </div>
       </div>
-      <div style={{ marginBottom: 14 }}>
-        <label style={labelStyleLocal}>Nombre del cliente</label>
-        <input value={nombre} disabled={!!cliente} onChange={e => setNombre(e.target.value)} placeholder="Ej: Ambushed, Hans Emanuel Productions..."
-          style={{ ...inputStyleLocal, opacity: cliente ? 0.6 : 1 }} />
-        {cliente && <div style={{ fontSize: 10.5, color: 'var(--text3)', marginTop: 4 }}>El nombre no se puede cambiar acá porque es lo que vincula este cliente con sus facturas.</div>}
-      </div>
-      <div style={{ marginBottom: 14 }}>
-        <label style={labelStyleLocal}>Identificador fiscal (NIF/CIF, VAT, teléfono...)</label>
-        <input value={identificador} onChange={e => setIdentificador(e.target.value)} placeholder="Ej: 12810068 · VAT 12810068 · 07752660689" style={inputStyleLocal} />
-      </div>
-      <div style={{ marginBottom: 14 }}>
-        <label style={labelStyleLocal}>Dirección fiscal</label>
-        <textarea value={direccion} onChange={e => setDireccion(e.target.value)} placeholder="Calle, número&#10;Ciudad, país" rows={3} style={{ ...inputStyleLocal, resize: 'vertical' as const }} />
-      </div>
-      <div style={{ marginBottom: 14 }}>
-        <label style={labelStyleLocal}>País fiscal (define el formato de sus facturas)</label>
-        <select value={pais || ''} onChange={e => setPaisElegido((e.target.value || null) as PaisFiscal | null)} style={inputStyleLocal}>
-          <option value="">Sin definir (sin IVA)</option>
-          {PAISES.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-        </select>
-        {!paisElegido && pais && <div style={{ fontSize: 10.5, color: 'var(--text3)', marginTop: 4 }}>Detectado automáticamente por la dirección / identificador.</div>}
-      </div>
-      <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
-        <button onClick={onClose} style={{ padding: '9px 18px', borderRadius: 7, fontSize: 13, cursor: 'pointer', background: 'var(--surface2)', color: 'var(--text2)', border: '1px solid var(--border)', fontFamily: 'Inter, sans-serif' }}>Cancelar</button>
-        <button onClick={() => nombre && onSave({ cliente: nombre, identificador, direccion, pais })}
-          style={{ flex: 1, padding: '9px 18px', borderRadius: 7, fontSize: 13, cursor: 'pointer', background: 'var(--accent)', color: '#000', border: 'none', fontWeight: 500, fontFamily: 'Inter, sans-serif' }}>
-          Guardar
-        </button>
+      <div className="modal__foot">
+        <button type="button" className="copy caps" onClick={onClose}>Cancelar</button>
+        <button type="button" className="pill pill--sm" onClick={() => nombre && onSave({ cliente: nombre, identificador, direccion, pais })}>Guardar</button>
       </div>
     </>
   )
@@ -1065,14 +973,134 @@ const labelStyle = { display: 'block', fontSize: 12, color: 'var(--text2)', marg
 const cancelBtnStyle = { padding: '9px 18px', borderRadius: 7, fontSize: 13, cursor: 'pointer', background: 'var(--surface2)', color: 'var(--text2)', border: '1px solid var(--border)', fontFamily: 'Inter, sans-serif' }
 const confirmBtnStyle = { flex: 1, padding: '9px 18px', borderRadius: 7, fontSize: 13, cursor: 'pointer', background: 'var(--accent)', color: '#000', border: 'none', fontWeight: 500, fontFamily: 'Inter, sans-serif' }
 
-const statusColor: Record<string, string> = { activo: 'var(--amber)', completado: 'var(--text2)', facturado: 'var(--green)' }
+// Estado de cada proyecto y de cada día, con su punto: verde = activo o hecho, ámbar = por facturar o en curso.
+const ESTADO_PROYECTO: Record<string, [string, string]> = { activo: ['Activo', 'dot--green'], completado: ['Completado', 'dot--wait'], facturado: ['Facturado', 'dot--off'] }
+const ESTADO_DIA: Record<string, [string, string]> = { pendiente: ['Pendiente', 'dot--off'], en_progreso: ['En progreso', 'dot--wait'], hecho: ['Hecho', 'dot--ok'] }
+const Chevron = () => <svg className="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6.2 8 10l4-3.8" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" /></svg>
 
-function TimesheetTab({ grupo, proyectos, dias, facturas, clientesFiscales, reload }: { grupo: GrupoTimesheet, proyectos: Proyecto[], dias: DiaTrabajado[], facturas: Factura[], clientesFiscales: ClienteFiscal[], reload: () => void }) {
+// Una factura: cliente · concepto, una línea pequeña (número y la fecha que importa), importe y el punto
+// de estado. Al desplegar: el desglose, las fechas, el origen y las acciones de siempre.
+function FilaFactura({ f, trim, fueraDeOrden, href, onCobrar, onBorrar }: { f: Factura, trim: number, fueraDeOrden: boolean, href: string, onCobrar?: () => void, onBorrar: () => void }) {
+  const [abierta, setAbierta] = useState(false)
+  const pendiente = f.estado === 'pendiente'
+  const d = desgloseFactura(f)
+  const [estado, punto] = pendiente ? ['Pendiente', 'dot--wait'] : ['Cobrada', 'dot--ok']
+  const origen = f.origen === 'historico' ? 'Factura ya declarada, con su PDF original'
+    : f.origen === 'regularizacion' ? 'Cobro de 2024-2025 facturado a posteriori' : null
+  return (
+    <li className={`p${abierta ? ' is-open' : ''}`}>
+      <button type="button" className="p__head p__head--fa" aria-expanded={abierta} onClick={() => setAbierta(!abierta)}>
+        <span className="fa__t">{f.cliente}{f.descripcion ? <span> · {f.descripcion}</span> : null}</span>
+        <span className="p__s caps">
+          {f.numero ? `${f.numero} · ` : ''}{pendiente ? `Vence ${fmtDate(f.fecha_vencimiento || f.fecha)}` : f.fecha_cobro ? `Cobrada ${fmtDate(f.fecha_cobro)}` : `Emitida ${fmtDate(f.fecha)}`}
+          {fueraDeOrden && <> · <span className="aviso" title="La fecha no sigue el orden de su número: revisala">fuera de orden</span></>}
+        </span>
+        <span className="p__v num">€{fmt(totalACobrar(f))}</span>
+        <span className="st" title={estado}><i className={`dot ${punto}`} aria-hidden="true" /><span className="sr">{estado}</span></span>
+        <Chevron />
+      </button>
+      {abierta && (
+        <div className="p__body">
+          <div className="fd">
+            {d ? (
+              <dl className="desg">
+                <div><dt>Base</dt><dd className="num">€{fmt2(d.base)}</dd></div>
+                <div><dt>IVA 21 %</dt><dd className="num">+€{fmt2(d.iva)}</dd></div>
+                <div><dt>Retención IRPF 15 %</dt><dd className="num">−€{fmt2(d.ret)}</dd></div>
+                <div className="desg__t"><dt>{pendiente ? 'A cobrar' : 'Cobrado'}</dt><dd className="num">€{fmt2(d.total)}</dd></div>
+              </dl>
+            ) : <span />}
+            <dl className="meta">
+              <div><dt>Emitida</dt><dd>{fmtDate(f.fecha)} {f.fecha.slice(0, 4)} · T{trim}</dd></div>
+              <div><dt>Vence</dt><dd>{fmtDate(f.fecha_vencimiento || f.fecha)}</dd></div>
+              {f.fecha_cobro && <div><dt>Cobrada</dt><dd>{fmtDate(f.fecha_cobro)}</dd></div>}
+              {origen && <div><dt>Origen</dt><dd>{origen}</dd></div>}
+              {fueraDeOrden && <div><dt>Aviso</dt><dd className="aviso">La fecha no sigue el orden de su número: revisala</dd></div>}
+            </dl>
+          </div>
+          <div className="p__foot">
+            {onCobrar && <button type="button" className="pill pill--sm" onClick={onCobrar}><Icon.check />Marcar como cobrada</button>}
+            <span className="foot__r">
+              <a className="copy caps" href={href} target="_blank" rel="noopener noreferrer">Ver factura →</a>
+              <button type="button" className="copy caps borrar" onClick={onBorrar}>Borrar</button>
+            </span>
+          </div>
+        </div>
+      )}
+    </li>
+  )
+}
+
+// Resumen de una pestaña de Treatments, como el de Webs: lo cobrado del año en grande, lo pendiente al lado, una línea fina
+// (cobrado, pendiente, por facturar) y lo que falta facturar. Cobrado y pendiente siguen la regla de «Por marca» del Overview
+// (año en curso, sin los registros internos, importe a cobrar); por facturar suma los proyectos activos y completados,
+// con IVA y retención si el cliente es de España (el mismo importe que su fila).
+function ResumenTreatments({ marca, proyectos, facturas, dias, clientesFiscales, marcaDeFactura }: {
+  marca: string, proyectos: Proyecto[], facturas: Factura[], dias: DiaTrabajado[], clientesFiscales: ClienteFiscal[], marcaDeFactura: (f: Factura) => string
+}) {
+  const anio = new Date().getFullYear()
+  let cobrado = 0, pendiente = 0, porFacturar = 0
+  for (const f of facturas) {
+    if (f.fiscal === false || !f.fecha || Number(f.fecha.slice(0, 4)) !== anio || marcaDeFactura(f) !== marca) continue
+    if (f.estado === 'cobrada') cobrado += totalACobrar(f); else pendiente += totalACobrar(f)
+  }
+  for (const p of proyectos) {
+    if (p.status === 'facturado') continue
+    const base = dias.filter(d => d.proyecto_id === p.id).reduce((s, d) => s + Number(d.total_day), 0)
+    porFacturar += desglose(base, clientesFiscales.find(c => c.cliente === p.cliente)?.pais === 'ES')?.total ?? base
+  }
+  const segmentos = ([[cobrado, 'var(--green)'], [pendiente, 'var(--amber)'], [porFacturar, 'var(--dim)']] as const).filter(([v]) => v > 0)
+  return (
+    <section className="block" aria-label="Resumen">
+      <p className="label caps"><span>Cobrado</span><i className="rule" /><span className="label__m">{anio}</span></p>
+      <div className="hero">
+        <p className="big">€{fmt(cobrado)}</p>
+        <p className="delta caps"><span>€{fmt(pendiente)}</span><span>pendiente</span></p>
+      </div>
+      <div className="stack" aria-hidden="true">{segmentos.map(([v, c], k) => <i key={k} style={{ flex: v, background: c }} />)}</div>
+      <dl className="split"><div><dt className="caps">Por facturar</dt><dd><span className="num">€{fmt(porFacturar)}</span></dd></div></dl>
+    </section>
+  )
+}
+
+// Un cliente fiscal: nombre, identificador y país; al desplegar, lo que sale en el PDF de sus facturas y las acciones
+function FilaCliente({ c, onEditar, onBorrar }: { c: ClienteFiscal, onEditar: () => void, onBorrar: () => void }) {
+  const [abierta, setAbierta] = useState(false)
+  const pais = c.pais === 'ES' ? 'España' : c.pais === 'UE' ? 'UE' : c.pais === 'EXT' ? 'Fuera UE' : null
+  const formato = c.pais ? PAISES.find(x => x.value === c.pais)?.label : 'Sin país: sus facturas salen sin IVA. Edítalo para elegirlo.'
+  return (
+    <li className={`p${abierta ? ' is-open' : ''}`}>
+      <button type="button" className="p__head p__head--cli" aria-expanded={abierta} onClick={() => setAbierta(!abierta)}>
+        <span className="p__main">
+          <span className="p__n">{c.cliente}</span>
+          <span className="p__s caps">{c.identificador || 'Sin identificador fiscal'}</span>
+        </span>
+        <span className={`st caps${pais ? '' : ' aviso'}`} title={formato}>{!pais && <i className="dot dot--wait" aria-hidden="true" />}{pais || 'Sin país'}</span>
+        <Chevron />
+      </button>
+      {abierta && (
+        <div className="p__body">
+          <dl className="meta meta--cli">
+            <div><dt>Identificador</dt><dd className={c.identificador ? undefined : 'aviso'}>{c.identificador || 'Sin identificador fiscal'}</dd></div>
+            <div><dt>Dirección</dt><dd className={c.direccion ? undefined : 'aviso'}>{c.direccion ? c.direccion.replace(/\n/g, ', ') : 'Sin dirección'}</dd></div>
+            <div><dt>Facturas</dt><dd className={c.pais ? undefined : 'aviso'}>{formato}</dd></div>
+          </dl>
+          <div className="p__foot">
+            <button type="button" className="ghost" onClick={onEditar}><Icon.edit />Editar datos</button>
+            <button type="button" className="copy caps borrar" onClick={onBorrar}>Borrar</button>
+          </div>
+        </div>
+      )}
+    </li>
+  )
+}
+
+
+function TimesheetTab({ grupo, etiqueta, proyectos, dias, facturas, clientesFiscales, reload }: { grupo: GrupoTimesheet, etiqueta: string, proyectos: Proyecto[], dias: DiaTrabajado[], facturas: Factura[], clientesFiscales: ClienteFiscal[], reload: () => void }) {
   const [modal, setModal] = useState<Modal>(null)
   const [expandido, setExpandido] = useState<number | null>(null)
   const [token, setToken] = useState('')
   const [linkCopiado, setLinkCopiado] = useState(false)
-  const [copyHover, setCopyHover] = useState(false)
   const [clienteFiltro, setClienteFiltro] = useState('todos')
 
   const link = linkPublico(grupo)
@@ -1163,137 +1191,125 @@ function TimesheetTab({ grupo, proyectos, dias, facturas, clientesFiscales, relo
     reload()
   }
 
+  // Como la web: un bloque por grupo con su link público; cada proyecto, una fila que se despliega en su timesheet.
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 16px', marginBottom: 16, fontSize: 12, color: 'var(--text2)' }}>
-        <span>Link público de solo lectura para {grupo.label}</span>
-        <button
-          onClick={copiarLink}
-          onMouseEnter={() => setCopyHover(true)}
-          onMouseLeave={() => setCopyHover(false)}
-          style={{
-            fontSize: 11, borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontFamily: 'Inter, sans-serif',
-            transition: 'background 0.15s, border-color 0.15s, color 0.15s',
-            background: linkCopiado ? 'var(--green-dim)' : copyHover ? 'var(--border)' : 'none',
-            border: `1px solid ${linkCopiado ? 'var(--green)' : 'var(--border)'}`,
-            color: linkCopiado ? 'var(--green)' : 'var(--text)',
-          }}
-        >
-          {linkCopiado ? '✓ Link copiado' : 'Copiar link'}
-        </button>
-      </div>
+    <section className="block" aria-label={grupo.label}>
+      <p className="label caps">
+        <span>{etiqueta}</span><i className="rule" />
+        <button type="button" className="label__m copy" onClick={copiarLink} title={`Link público de solo lectura para ${grupo.label}`}>{linkCopiado ? 'Link copiado ✓' : `/${link.ruta}/ · Copiar link`}</button>
+      </p>
 
       {grupo.clientes.length > 1 && (
-        <div style={{ marginBottom: 16 }}>
-          <select value={clienteFiltro} onChange={e => setClienteFiltro(e.target.value)}
-            style={{ fontSize: 11, padding: '4px 10px', borderRadius: 6, background: 'var(--surface2)', color: 'var(--text2)', border: '1px solid var(--border)', fontFamily: 'Inter, sans-serif' }}>
+        <label className="sel caps">
+          <span className="sr">Cliente</span>
+          <select value={clienteFiltro} onChange={e => setClienteFiltro(e.target.value)}>
             <option value="todos">Todos los clientes</option>
             {grupo.clientes.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
-        </div>
+          <Chevron />
+        </label>
       )}
 
-      {proyectosFiltrados.length === 0 && (
-        <div style={{ textAlign: 'center', color: 'var(--text3)', fontSize: 13, padding: '40px 0' }}>No hay proyectos todavía.</div>
-      )}
+      {proyectosFiltrados.length === 0 ? <p className="empty">No hay proyectos todavía.</p> : (
+        <ul className="projs focus">
+          {proyectosFiltrados.map(p => {
+            const total = totalProyecto(p.id)
+            const horas = p.modo_rate === 'hora' ? horasProyecto(p.id) : null
+            // Clientes de España: el total lleva IVA 21 % y retención 15 % encima de la base.
+            const imp = desglose(total, clientesFiscales.find(c => c.cliente === p.cliente)?.pais === 'ES')
+            const isOpen = expandido === p.id
+            const ds = diasDe(p.id)
+            const factura = p.status === 'facturado' ? facturas.find(f => f.proyecto_id === p.id) : undefined
+            // Horas y stand by en nodos de texto separados, como antes: el modo privado tapa las horas sueltas.
+            const cantidad = horas && horas.hrs + horas.sb > 0 ? <>{fmtHoras(horas.hrs)}{horas.sb > 0 ? ` · SB ${fmtHoras(horas.sb)}` : ''}</> : p.modo_rate === 'hora' ? 'por hora' : 'por día'
+            const [estado, punto] = ESTADO_PROYECTO[p.status] || [p.status, 'dot--off']
+            return (
+              <li key={p.id} className={`p${isOpen ? ' is-open' : ''}`}>
+                <button type="button" className="p__head" aria-expanded={isOpen} onClick={() => setExpandido(isOpen ? null : p.id)}>
+                  <span className="p__main">
+                    <span className="p__n">{p.nombre}</span>
+                    <span className="p__s caps">{p.cliente} · {cantidad}{p.numero_proyecto ? ` · ${p.numero_proyecto}` : ''}</span>
+                  </span>
+                  <span className="p__v num" title={imp ? `Base €${fmt2(imp.base)} + IVA 21 % €${fmt2(imp.iva)} − retención 15 % €${fmt2(imp.ret)}` : undefined}>€{imp ? fmt2(imp.total) : fmt(total)}</span>
+                  <span className="st caps"><i className={`dot ${punto}`} aria-hidden="true" />{estado}</span>
+                  <Chevron />
+                </button>
 
-      {proyectosFiltrados.map(p => {
-        const total = totalProyecto(p.id)
-        const horas = p.modo_rate === 'hora' ? horasProyecto(p.id) : null
-        // Clientes de España: el total lleva IVA 21 % y retención 15 % encima de la base.
-        const imp = desglose(total, clientesFiscales.find(c => c.cliente === p.cliente)?.pais === 'ES')
-        const isOpen = expandido === p.id
-        return (
-          <div key={p.id} className="proj-card">
-            <div className="proj-head" onClick={() => setExpandido(isOpen ? null : p.id)}>
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 500 }}>{p.nombre}</div>
-                <div style={{ fontSize: 11, color: 'var(--text3)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <select value={p.cliente} onClick={e => e.stopPropagation()} onChange={e => cambiarCliente(p, e.target.value)} title="Cambiar cliente"
-                    style={{ background: 'none', border: 'none', borderBottom: '1px dotted var(--border)', color: 'var(--text3)', fontSize: 11, fontFamily: 'Inter, sans-serif', outline: 'none', padding: 0, cursor: 'pointer' }}>
-                    {!clientesFiscales.some(c => c.cliente === p.cliente) && <option value={p.cliente}>{p.cliente}</option>}
-                    {clientesFiscales.map(c => <option key={c.cliente} value={c.cliente}>{c.cliente}</option>)}
-                  </select>
-                  <span>·</span>
-                  {p.modo_rate === 'hora' ? 'por hora' : 'por día'}
-                  <span>·</span>
-                  <input
-                    key={p.id + (p.numero_proyecto || '')}
-                    defaultValue={p.numero_proyecto || ''}
-                    placeholder="Nº de referencia"
-                    onClick={e => e.stopPropagation()}
-                    onBlur={e => { if (e.target.value !== (p.numero_proyecto || '')) updateNumeroProyecto(p.id, e.target.value) }}
-                    style={{ background: 'none', border: 'none', borderBottom: '1px dotted var(--border)', color: 'var(--text3)', fontSize: 11, fontFamily: 'Inter, sans-serif', outline: 'none', width: 110, padding: 0 }}
-                  />
-                </div>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                {horas && horas.hrs + horas.sb > 0 && (
-                  <div style={{ fontSize: 11.5, color: 'var(--text3)', fontFamily: 'JetBrains Mono, monospace' }}>{fmtHoras(horas.hrs)}{horas.sb > 0 ? ` · SB ${fmtHoras(horas.sb)}` : ''}</div>
-                )}
-                <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 14, fontWeight: 500, textAlign: 'right' }}>
-                  €{imp ? fmt2(imp.total) : fmt(total)}
-                  {imp && <div style={{ fontSize: 10.5, fontWeight: 400, color: 'var(--text3)' }} title={`Base €${fmt2(imp.base)} + IVA 21 % €${fmt2(imp.iva)} − retención 15 % €${fmt2(imp.ret)}`}>base €{fmt2(imp.base)} · IVA + ret.</div>}
-                </div>
-                {(() => {
-                  if (p.status !== 'facturado') return null
-                  const factura = facturas.find(f => f.proyecto_id === p.id)
-                  return factura ? (
-                    <a className="icon-btn accent" href={`/invoice/${factura.id}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} title="Ver/generar factura"><Icon.invoice /></a>
-                  ) : null
-                })()}
-                <select value={p.status} onClick={e => e.stopPropagation()} onChange={e => cambiarStatus(p, e.target.value)}
-                  style={{ fontSize: 11, padding: '3px 8px', borderRadius: 20, background: 'var(--surface2)', color: statusColor[p.status], border: '1px solid var(--border)', fontFamily: 'Inter, sans-serif' }}>
-                  <option value="activo">Activo</option>
-                  <option value="completado">Completado</option>
-                  <option value="facturado">Facturado</option>
-                </select>
-                <button className="icon-btn danger" onClick={e => { e.stopPropagation(); deleteProyecto(p.id) }} title="Borrar proyecto"><Icon.x /></button>
-              </div>
-            </div>
+                {isOpen && (
+                  <div className="p__body">
+                    <ul className="dias">
+                      {ds.length === 0 && <li className="dias__vacio">Sin días cargados.</li>}
+                      {ds.map(d => {
+                        const [estadoDia, puntoDia] = ESTADO_DIA[d.status] || [d.status, 'dot--off']
+                        return (
+                          <li key={d.id} className="d">
+                            <button type="button" className="d__btn" onClick={() => setModal({ type: 'editDia', data: { dia: d, porHora: p.modo_rate === 'hora' } })} title="Editar día">
+                              <span className="d__f caps">{fmtDate(d.fecha)}</span>
+                              <span className="d__q">{d.hrs != null ? `${d.hrs}h × €${d.rate}${d.standby_hrs > 0 ? ` · SB ${d.standby_hrs}h` : ''}` : `€${d.rate}/día`}</span>
+                              <span className="num">€{fmt2(d.total_day)}</span>
+                              <span className="d__st" title={estadoDia}><i className={`dot ${puntoDia}`} aria-hidden="true" /><span className="sr">{estadoDia}</span></span>
+                            </button>
+                            <button type="button" className="d__x" onClick={() => deleteDia(d.id)} title="Borrar día" aria-label={`Borrar el día ${fmtDate(d.fecha)}`}><Icon.x /></button>
+                          </li>
+                        )
+                      })}
+                      {ds.length > 1 && (
+                        <li className="d d--tot">
+                          <span className="d__fila">
+                            <span className="d__f caps">Total</span>
+                            <span className="d__q">{horas ? `${fmtHoras(horas.hrs)}${horas.sb > 0 ? ` · SB ${fmtHoras(horas.sb)}` : ''}` : `${ds.length} días`}</span>
+                            <span className="num">€{fmt2(total)}</span>
+                            <span />
+                          </span>
+                          <span className="d__hueco" />
+                        </li>
+                      )}
+                    </ul>
 
-            {isOpen && (
-              <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border)' }}>
-                {diasDe(p.id).length === 0 && (
-                  <div style={{ fontSize: 12, color: 'var(--text3)', padding: '8px 0' }}>Sin días cargados.</div>
-                )}
-                {diasDe(p.id).map(d => (
-                  <div key={d.id} onClick={() => setModal({ type: 'editDia', data: { dia: d, porHora: p.modo_rate === 'hora' } })}
-                    style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', fontSize: 12, borderBottom: '0.5px solid var(--border)', cursor: 'pointer' }}>
-                    <div style={{ color: 'var(--text2)', width: 70 }}>{fmtDate(d.fecha)}</div>
-                    {d.hrs != null ? (
-                      <div style={{ color: 'var(--text3)', flex: 1 }}>{d.hrs}h × €{d.rate}{d.standby_hrs > 0 ? ` · SB ${d.standby_hrs}h` : ''}</div>
-                    ) : (
-                      <div style={{ color: 'var(--text3)', flex: 1 }}>€{d.rate}/día</div>
+                    {imp && ds.length > 0 && (
+                      <dl className="tax">
+                        <div><dt>IVA 21 %</dt><dd className="num">+€{fmt2(imp.iva)}</dd></div>
+                        <div><dt>Retención IRPF 15 %</dt><dd className="num">−€{fmt2(imp.ret)}</dd></div>
+                        <div><dt>Total a cobrar</dt><dd className="num">€{fmt2(imp.total)}</dd></div>
+                      </dl>
                     )}
-                    <div style={{ fontFamily: 'JetBrains Mono, monospace', width: 70, textAlign: 'right' }}>€{fmt2(d.total_day)}</div>
-                    <span style={{ fontSize: 10, color: 'var(--text3)', width: 80, textAlign: 'right' }}>{d.status}</span>
-                    <button className="icon-btn danger" style={{ width: 24, height: 24, marginLeft: 8 }} onClick={e => { e.stopPropagation(); deleteDia(d.id) }} title="Borrar día"><Icon.x /></button>
-                  </div>
-                ))}
-                {diasDe(p.id).length > 1 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0 2px', fontSize: 12, fontWeight: 500 }}>
-                    <div style={{ width: 70 }}>Total</div>
-                    <div style={{ color: 'var(--text2)', flex: 1 }}>{horas ? `${fmtHoras(horas.hrs)}${horas.sb > 0 ? ` · SB ${fmtHoras(horas.sb)}` : ''}` : `${diasDe(p.id).length} días`}</div>
-                    <div style={{ fontFamily: 'JetBrains Mono, monospace', width: 70, textAlign: 'right' }}>€{fmt2(total)}</div>
-                    <span style={{ width: 112 }} />
+
+                    <div className="p__foot">
+                      <button type="button" className="add caps" onClick={() => setModal({ type: 'addDia', data: { proyectoId: p.id, porHora: p.modo_rate === 'hora' } })}><Icon.plus />Nuevo día</button>
+                      <span className="foot__r">
+                        {factura && <a className="copy caps" href={`/invoice/${factura.id}`} target="_blank" rel="noopener noreferrer" title="Ver/generar factura">{factura.numero || 'Factura'} →</a>}
+                        <span className="seg caps" role="group" aria-label="Estado del proyecto">
+                          {(['activo', 'completado', 'facturado'] as const).map(st => (
+                            <button key={st} type="button" aria-pressed={p.status === st} onClick={() => { if (st !== p.status) cambiarStatus(p, st) }}>{ESTADO_PROYECTO[st][0]}</button>
+                          ))}
+                        </span>
+                      </span>
+                    </div>
+
+                    <div className="p__meta caps">
+                      <label className="p__campo">Cliente
+                        <select value={p.cliente} onChange={e => cambiarCliente(p, e.target.value)} title="Cambiar cliente">
+                          {!clientesFiscales.some(c => c.cliente === p.cliente) && <option value={p.cliente}>{p.cliente}</option>}
+                          {clientesFiscales.map(c => <option key={c.cliente} value={c.cliente}>{c.cliente}</option>)}
+                        </select>
+                      </label>
+                      <label className="p__campo">Ref.
+                        <input
+                          key={p.id + (p.numero_proyecto || '')}
+                          defaultValue={p.numero_proyecto || ''}
+                          placeholder="Nº de referencia"
+                          onBlur={e => { if (e.target.value !== (p.numero_proyecto || '')) updateNumeroProyecto(p.id, e.target.value) }}
+                        />
+                      </label>
+                      <button type="button" className="copy borrar" onClick={() => deleteProyecto(p.id)}>Borrar proyecto</button>
+                    </div>
                   </div>
                 )}
-                {imp && diasDe(p.id).length > 0 && (
-                  <div style={{ padding: '4px 0 2px', fontSize: 12, color: 'var(--text2)' }}>
-                    {([['IVA 21 %', `+€${fmt2(imp.iva)}`], ['Retención IRPF 15 %', `−€${fmt2(imp.ret)}`], ['Total a cobrar', `€${fmt2(imp.total)}`]] as [string, string][]).map(([l, v], k) => (
-                      <div key={l} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', fontWeight: k === 2 ? 500 : 400, color: k === 2 ? 'var(--text)' : undefined }}>
-                        <span>{l}</span><span style={{ fontFamily: 'JetBrains Mono, monospace', marginRight: 112 }}>{v}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <button className="btn btn-dashed" style={{ marginTop: 10 }} onClick={() => setModal({ type: 'addDia', data: { proyectoId: p.id, porHora: p.modo_rate === 'hora' } })}><Icon.plus />Nuevo día</button>
-              </div>
-            )}
-          </div>
-        )
-      })}
+              </li>
+            )
+          })}
+        </ul>
+      )}
 
       {modal && (
         <div className="modal-bg" onClick={() => setModal(null)}>
@@ -1307,7 +1323,7 @@ function TimesheetTab({ grupo, proyectos, dias, facturas, clientesFiscales, relo
           </div>
         </div>
       )}
-    </div>
+    </section>
   )
 }
 
@@ -1346,52 +1362,60 @@ function ModalAddProyecto({ clienteInicial, onAdd, onClose }: { clienteInicial?:
     onAdd({ nombre, cliente: clienteFinal, numero_proyecto: numeroProyecto, modo_rate: modo })
   }
 
+  // Campos de una sola línea y botones de la web (mismo estado y mismas acciones que antes).
   return (
     <>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, fontSize: 16, fontWeight: 500 }}>
-        Nuevo proyecto <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', fontSize: 20 }}>×</button>
-      </div>
-      <div style={{ marginBottom: 14 }}>
-        <label style={labelStyle}>Nombre del proyecto</label>
-        <input value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Ej: Verizon x FIFA World Cup" style={inputStyle} />
-      </div>
-      <div style={{ marginBottom: 14 }}>
-        <label style={labelStyle}>Cliente</label>
+      <div className="modal__head"><h2>Nuevo proyecto</h2><button type="button" className="modal__x" onClick={onClose} aria-label="Cerrar">×</button></div>
+      <div className="modal__campos">
+        <div className="field">
+          <label className="caps" htmlFor="np-nombre">Nombre del proyecto</label>
+          <input id="np-nombre" value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Ej: Verizon x FIFA World Cup" />
+        </div>
         {!nuevoCliente ? (
-          <select value={cliente} onChange={e => {
-            if (e.target.value === '__nuevo__') { setNuevoCliente(true); return }
-            setCliente(e.target.value)
-          }} style={inputStyle}>
-            {clientesGuardados.map(c => <option key={c.cliente} value={c.cliente}>{c.cliente}</option>)}
-            <option value="__nuevo__">+ Nuevo cliente...</option>
-          </select>
-        ) : (
-          <div style={{ border: '1px solid var(--border)', borderRadius: 7, padding: 12 }}>
-            <input value={nuevoNombre} onChange={e => setNuevoNombre(e.target.value)} placeholder="Nombre del cliente" style={{ ...inputStyle, marginBottom: 8 }} />
-            <input value={nuevoIdentificador} onChange={e => setNuevoIdentificador(e.target.value)} placeholder="Identificador (CIF/VAT/registro)" style={{ ...inputStyle, marginBottom: 8 }} />
-            <textarea value={nuevoDireccion} onChange={e => setNuevoDireccion(e.target.value)} placeholder="Dirección" rows={2} style={{ ...inputStyle, resize: 'vertical' as const, marginBottom: 8 }} />
-            <button type="button" onClick={() => setNuevoCliente(false)} style={{ fontSize: 11, color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>← Elegir cliente guardado</button>
+          <div className="field">
+            <label className="caps" htmlFor="np-cliente">Cliente</label>
+            <select id="np-cliente" value={cliente} onChange={e => {
+              if (e.target.value === '__nuevo__') { setNuevoCliente(true); return }
+              setCliente(e.target.value)
+            }}>
+              {clientesGuardados.map(c => <option key={c.cliente} value={c.cliente}>{c.cliente}</option>)}
+              <option value="__nuevo__">+ Nuevo cliente...</option>
+            </select>
+            <Chevron />
           </div>
+        ) : (
+          <>
+            <div className="field">
+              <label className="caps" htmlFor="np-nuevo">Cliente nuevo</label>
+              <input id="np-nuevo" value={nuevoNombre} onChange={e => setNuevoNombre(e.target.value)} placeholder="Nombre del cliente" />
+            </div>
+            <div className="field">
+              <label className="caps" htmlFor="np-id">Identificador</label>
+              <input id="np-id" value={nuevoIdentificador} onChange={e => setNuevoIdentificador(e.target.value)} placeholder="Identificador (CIF/VAT/registro)" />
+            </div>
+            <div className="field">
+              <label className="caps" htmlFor="np-dir">Dirección</label>
+              <textarea id="np-dir" value={nuevoDireccion} onChange={e => setNuevoDireccion(e.target.value)} placeholder="Dirección" rows={2} />
+            </div>
+            <button type="button" className="copy caps modal__volver" onClick={() => setNuevoCliente(false)}>← Elegir cliente guardado</button>
+          </>
         )}
-      </div>
-      <div style={{ marginBottom: 14 }}>
-        <label style={labelStyle}>Rate</label>
-        <div style={{ display: 'flex', gap: 8 }}>
-          {([['hora', 'Por hora'], ['dia', 'Fijo por día']] as const).map(([m, label]) => (
-            <button key={m} type="button" onClick={() => setModoElegido(m)}
-              style={{ ...inputStyle, flex: 1, cursor: 'pointer', textAlign: 'center', borderColor: modo === m ? 'var(--accent)' : 'var(--border)', color: modo === m ? 'var(--accent-bright)' : 'var(--text2)', background: modo === m ? 'var(--accent-dim)' : 'var(--surface2)' }}>
-              {label}
-            </button>
-          ))}
+        <div className="field">
+          <span className="caps field__l">Rate</span>
+          <span className="seg caps" role="group" aria-label="Rate">
+            {([['hora', 'Por hora'], ['dia', 'Fijo por día']] as const).map(([m, label]) => (
+              <button key={m} type="button" aria-pressed={modo === m} onClick={() => setModoElegido(m)}>{label}</button>
+            ))}
+          </span>
+        </div>
+        <div className="field">
+          <label className="caps" htmlFor="np-ref">Nº de referencia (para el cliente, ej: 268)</label>
+          <input id="np-ref" value={numeroProyecto} onChange={e => setNumeroProyecto(e.target.value)} placeholder="Ej: F260099" />
         </div>
       </div>
-      <div style={{ marginBottom: 14 }}>
-        <label style={labelStyle}>Nº de referencia (para el cliente, ej: 268)</label>
-        <input value={numeroProyecto} onChange={e => setNumeroProyecto(e.target.value)} placeholder="Ej: F260099" style={inputStyle} />
-      </div>
-      <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
-        <button onClick={onClose} style={cancelBtnStyle}>Cancelar</button>
-        <button onClick={crear} style={confirmBtnStyle}>Crear</button>
+      <div className="modal__foot">
+        <button type="button" className="copy caps" onClick={onClose}>Cancelar</button>
+        <button type="button" className="pill pill--sm" onClick={crear}>Crear</button>
       </div>
     </>
   )
@@ -1417,42 +1441,42 @@ function ModalAddDia({ porHora, dia, onAdd, onClose }: { porHora: boolean, dia?:
 
   return (
     <>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, fontSize: 16, fontWeight: 500 }}>
-        {dia ? 'Editar día' : 'Nuevo día'} <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', fontSize: 20 }}>×</button>
-      </div>
-      <div style={{ marginBottom: 14 }}>
-        <label style={labelStyle}>Fecha</label>
-        <input type="date" value={fecha} onChange={e => setFecha(e.target.value)} style={inputStyle} />
-      </div>
-      <div style={{ marginBottom: 14 }}>
-        <label style={labelStyle}>{porHora ? 'Rate por hora (€)' : 'Rate por día (€)'}</label>
-        <input type="number" value={rate} onChange={e => setRate(e.target.value)} placeholder="0" style={inputStyle} />
-      </div>
-      {porHora && (
-        <>
-          <div style={{ marginBottom: 14 }}>
-            <label style={labelStyle}>Horas trabajadas</label>
-            <input type="number" value={hrs} onChange={e => setHrs(e.target.value)} placeholder="0" style={inputStyle} />
+      <div className="modal__head"><h2>{dia ? 'Editar día' : 'Nuevo día'}</h2><button type="button" className="modal__x" onClick={onClose} aria-label="Cerrar">×</button></div>
+      <div className="modal__campos">
+        <div className="field">
+          <label className="caps" htmlFor="nd-fecha">Fecha</label>
+          <input id="nd-fecha" type="date" value={fecha} onChange={e => setFecha(e.target.value)} />
+        </div>
+        <div className="field">
+          <label className="caps" htmlFor="nd-rate">{porHora ? 'Rate por hora (€)' : 'Rate por día (€)'}</label>
+          <input id="nd-rate" type="number" value={rate} onChange={e => setRate(e.target.value)} placeholder="0" />
+        </div>
+        {porHora && (
+          <div className="modal__par">
+            <div className="field">
+              <label className="caps" htmlFor="nd-hrs">Horas trabajadas</label>
+              <input id="nd-hrs" type="number" value={hrs} onChange={e => setHrs(e.target.value)} placeholder="0" />
+            </div>
+            <div className="field">
+              <label className="caps" htmlFor="nd-sb">Stand by hrs</label>
+              <input id="nd-sb" type="number" value={standby} onChange={e => setStandby(e.target.value)} placeholder="0" />
+            </div>
           </div>
-          <div style={{ marginBottom: 14 }}>
-            <label style={labelStyle}>Stand by hrs</label>
-            <input type="number" value={standby} onChange={e => setStandby(e.target.value)} placeholder="0" style={inputStyle} />
-          </div>
-        </>
-      )}
-      <div style={{ marginBottom: 14 }}>
-        <label style={labelStyle}>Status</label>
-        <select value={status} onChange={e => setStatus(e.target.value)} style={inputStyle}>
-          <option value="pendiente">Pendiente</option>
-          <option value="en_progreso">En progreso</option>
-          <option value="hecho">Hecho</option>
-        </select>
+        )}
+        <div className="field">
+          <label className="caps" htmlFor="nd-status">Status</label>
+          <select id="nd-status" value={status} onChange={e => setStatus(e.target.value)}>
+            <option value="pendiente">Pendiente</option>
+            <option value="en_progreso">En progreso</option>
+            <option value="hecho">Hecho</option>
+          </select>
+          <Chevron />
+        </div>
       </div>
-      <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
-        <button onClick={onClose} style={cancelBtnStyle}>Cancelar</button>
-        <button onClick={submit} style={confirmBtnStyle}>{dia ? 'Guardar' : 'Agregar'}</button>
+      <div className="modal__foot">
+        <button type="button" className="copy caps" onClick={onClose}>Cancelar</button>
+        <button type="button" className="pill pill--sm" onClick={submit}>{dia ? 'Guardar' : 'Agregar'}</button>
       </div>
     </>
   )
 }
-
