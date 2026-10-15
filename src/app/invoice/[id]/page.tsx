@@ -30,8 +30,8 @@ export default async function InvoicePage({ params, searchParams }: Props) {
 
   if (!factura) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', fontFamily: 'Inter, sans-serif', color: '#888' }}>
-        Factura no encontrada
+      <div className="app">
+        <main className="publica publica--vacia"><p className="empty">Factura no encontrada</p></main>
       </div>
     )
   }

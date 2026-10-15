@@ -29,28 +29,30 @@ function LoginForm() {
     }
   }
 
+  // Una sola contraseña, con el campo de una línea y el botón de la web (mismo envío que antes).
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', fontFamily: 'Inter, sans-serif' }}>
-      <div style={{ width: 320, padding: 32, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14 }}>
-        <div style={{ fontSize: 18, fontWeight: 500, marginBottom: 20 }}>JOUX Hub</div>
-        <input
-          type="password"
-          value={password}
-          onChange={e => setPassword(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && submit()}
-          placeholder="Contraseña"
-          autoFocus
-          style={{ width: '100%', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 7, padding: '10px 12px', color: 'var(--text)', fontSize: 14, outline: 'none', marginBottom: 12, fontFamily: 'Inter, sans-serif' }}
-        />
-        {error && <div style={{ color: 'var(--red)', fontSize: 12, marginBottom: 12 }}>{error}</div>}
-        <button
-          onClick={submit}
-          disabled={loading}
-          style={{ width: '100%', padding: '10px 12px', borderRadius: 7, background: 'var(--accent)', color: '#000', border: 'none', fontWeight: 500, fontSize: 14, cursor: loading ? 'default' : 'pointer', opacity: loading ? 0.6 : 1, fontFamily: 'Inter, sans-serif' }}
-        >
-          {loading ? 'Entrando...' : 'Entrar'}
-        </button>
-      </div>
+    <div className="app">
+      <main className="login">
+        <h1 className="login__marca caps">JOUX Hub</h1>
+        <div className={`field${error ? ' is-bad' : ''}`}>
+          <label className="caps" htmlFor="pw">Contraseña</label>
+          <input
+            id="pw"
+            type="password"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && submit()}
+            autoFocus
+          />
+        </div>
+        <div className="login__foot">
+          {error && <span className="login__msg caps" role="alert">{error}</span>}
+          <button type="button" className="pill" onClick={submit} disabled={loading}>
+            {loading ? 'Entrando...' : 'Entrar'}
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8h9M9 4.5 12.5 8 9 11.5" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          </button>
+        </div>
+      </main>
     </div>
   )
 }

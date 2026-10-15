@@ -36,8 +36,8 @@ export async function metadataTimesheet(ruta: RutaPublica, token: string): Promi
 }
 
 const NoEncontrado = () => (
-  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', fontFamily: 'Inter, sans-serif', color: '#888', background: '#f5f5f5' }}>
-    Not found
+  <div className="app">
+    <main className="publica publica--vacia"><p className="empty">Not found</p></main>
   </div>
 )
 
