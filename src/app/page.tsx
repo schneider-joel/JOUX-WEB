@@ -9,6 +9,7 @@ import ImpuestosTab, { proximoPago, claveReal, type Reales } from './impuestos-t
 import CuentasCard from './cuentas-card'
 import MarcaCard from './marca-card'
 import LeadsCard from './leads-card'
+import ProyectosActivosCard, { type ProyectoActivo } from './proyectos-activos-card'
 import { totalACobrar, desglose, desgloseFactura } from '@/lib/importes'
 import MarcaTab, { type AccionesAgencia } from './marca-tab'
 import { DEMO_FACTURAS, DEMO_MARCAS, DEMO_PROYECTOS, aProyectoAgencia, facturaSueltaAAgencia, demoMarcasActivo, esAgencia, porOrden, type Marca } from '@/lib/marcas'
@@ -209,6 +210,16 @@ export default function Home() {
     if (p.get('ok') || p.get('error')) setMensajeBanco({ ok: !!p.get('ok'), error: p.get('error') || undefined })
     window.history.replaceState(null, '', '/')
   }, [])
+  // Proyecto que se abrió desde «Proyectos activos»: su pestaña lo muestra desplegado y se baja hasta él.
+  const [abrirProyecto, setAbrirProyecto] = useState<number | null>(null)
+  useEffect(() => {
+    if (abrirProyecto == null) return
+    const t = setTimeout(() => {
+      document.getElementById(`proyecto-${abrirProyecto}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+      setAbrirProyecto(null)
+    }, 60)
+    return () => clearTimeout(t)
+  }, [abrirProyecto, tab])
   const [modal, setModal] = useState<Modal>(null)
   const [cuentas, setCuentas] = useState<Cuenta[]>([])
   const [crypto, setCrypto] = useState<Crypto[]>([])
@@ -483,6 +494,22 @@ export default function Home() {
     id: `ts:${m.key}` as Tab, label: m.nombre,
     badge: proyectosTs.filter(p => marcaTsDe(p) === m.key && p.status === 'activo').length,
   }))
+  // Overview › Proyectos activos: webs y treatments con status «activo», por orden de marca y cliente.
+  const nombreMarca = (k: string) => marcasLista.find(m => m.key === k)?.nombre || k
+  const proyectosActivos: (ProyectoActivo & { tab: Tab })[] = proyectos.filter(p => p.status === 'activo').map(p => {
+    const agencia = deAgencia(p)
+    const marca = agencia ? p.marca! : marcaTsDe(p)
+    const base = agencia ? Number(p.precio_cerrado || 0) : dias.filter(d => d.proyecto_id === p.id).reduce((s, d) => s + Number(d.total_day), 0)
+    return {
+      id: p.id, nombre: agencia ? p.web || p.nombre : p.nombre, cliente: p.cliente, marca: nombreMarca(marca),
+      importe: base || null, cerrado: agencia && p.precio_cerrado != null,
+      conFiscales: clientesFiscales.some(c => c.cliente === p.cliente),
+      tab: `${agencia ? 'mk' : 'ts'}:${marca}` as Tab,
+    }
+  }).sort((a, b) => {
+    const orden = (n: string) => marcasLista.findIndex(m => m.nombre === n)
+    return orden(a.marca) - orden(b.marca) || a.cliente.localeCompare(b.cliente, 'es')
+  })
   // Badge = pagos pendientes de cobro de la marca.
   const marcasTabs = agencias.map(m => ({ id: `mk:${m.key}` as Tab, label: m.nombre, badge: proyectosAgencia.filter(p => p.marca === m.key).flatMap(p => p.pagos).filter(x => x.estado === 'pendiente').length }))
   const secciones: Seccion[] = [
@@ -598,6 +625,9 @@ export default function Home() {
             )}
 
             {!demoMarcas && <LeadsCard />}
+
+            {!demoMarcas && <ProyectosActivosCard proyectos={proyectosActivos}
+              onAbrir={id => { const p = proyectosActivos.find(x => x.id === id); if (p) { setAbrirProyecto(id); setTab(p.tab) } }} />}
 
             <section className="block" aria-label="Por cobrar">
               <p className="label caps"><span>Por cobrar</span><i className="rule" /><button type="button" className="label__m copy" onClick={() => setTab('facturas')}>Facturas →</button></p>
@@ -779,7 +809,7 @@ export default function Home() {
         {tab === 'bancos' && <BancosTab cuentas={cuentas} mensaje={mensajeBanco} reload={loadData} />}
 
         {/* Webs: una pestaña por marca de precio cerrado. Treatments: un bloque por cliente o grupo, cada uno con su link. */}
-        {marcaActiva && <MarcaTab key={marcaActiva.key} marca={marcaActiva} proyectos={proyectosAgencia} demo={demoMarcas}
+        {marcaActiva && <MarcaTab key={marcaActiva.key} abrir={abrirProyecto} marca={marcaActiva} proyectos={proyectosAgencia} demo={demoMarcas}
           numerosExistentes={facturas.map(f => f.numero)} clientes={clientesFiscales} acciones={demoMarcas ? undefined : accionesAgencia} />}
         {marcaTsActiva && gruposMarcaTs.length === 0 && (
           <p className="empty">Todavía no hay proyectos en {marcaTsActiva.nombre}. Crea uno con «Nuevo proyecto».</p>
@@ -790,7 +820,7 @@ export default function Home() {
               marcaDeFactura={f => f.marca || (() => { const p = proyectos.find(x => x.id === f.proyecto_id); return p ? marcaTsDe(p) : '' })()} />
             {/* Un bloque por cliente o grupo, cada uno con su link; con un solo grupo, el nombre ya está en el título */}
             {gruposMarcaTs.map(g => (
-              <TimesheetTab key={g.key} grupo={g} etiqueta={gruposMarcaTs.length > 1 ? g.label : 'Proyectos'} proyectos={proyectosMarcaTs} dias={dias} facturas={facturas} clientesFiscales={clientesFiscales} reload={loadData} />
+              <TimesheetTab key={g.key} abrir={abrirProyecto} grupo={g} etiqueta={gruposMarcaTs.length > 1 ? g.label : 'Proyectos'} proyectos={proyectosMarcaTs} dias={dias} facturas={facturas} clientesFiscales={clientesFiscales} reload={loadData} />
             ))}
           </div>
         )}
@@ -1099,9 +1129,9 @@ function FilaCliente({ c, onEditar, onBorrar }: { c: ClienteFiscal, onEditar: ()
 }
 
 
-function TimesheetTab({ grupo, etiqueta, proyectos, dias, facturas, clientesFiscales, reload }: { grupo: GrupoTimesheet, etiqueta: string, proyectos: Proyecto[], dias: DiaTrabajado[], facturas: Factura[], clientesFiscales: ClienteFiscal[], reload: () => void }) {
+function TimesheetTab({ abrir, grupo, etiqueta, proyectos, dias, facturas, clientesFiscales, reload }: { abrir?: number | null, grupo: GrupoTimesheet, etiqueta: string, proyectos: Proyecto[], dias: DiaTrabajado[], facturas: Factura[], clientesFiscales: ClienteFiscal[], reload: () => void }) {
   const [modal, setModal] = useState<Modal>(null)
-  const [expandido, setExpandido] = useState<number | null>(null)
+  const [expandido, setExpandido] = useState<number | null>(abrir ?? null)
   const [token, setToken] = useState('')
   const [linkCopiado, setLinkCopiado] = useState(false)
   const [clienteFiltro, setClienteFiltro] = useState('todos')
@@ -1227,7 +1257,7 @@ function TimesheetTab({ grupo, etiqueta, proyectos, dias, facturas, clientesFisc
             const cantidad = horas && horas.hrs + horas.sb > 0 ? <>{fmtHoras(horas.hrs)}{horas.sb > 0 ? ` · SB ${fmtHoras(horas.sb)}` : ''}</> : p.modo_rate === 'hora' ? 'por hora' : 'por día'
             const [estado, punto] = ESTADO_PROYECTO[p.status] || [p.status, 'dot--off']
             return (
-              <li key={p.id} className={`p${isOpen ? ' is-open' : ''}`}>
+              <li key={p.id} id={`proyecto-${p.id}`} className={`p${isOpen ? ' is-open' : ''}`}>
                 <button type="button" className="p__head" aria-expanded={isOpen} onClick={() => setExpandido(isOpen ? null : p.id)}>
                   <span className="p__main">
                     <span className="p__n">{p.nombre}</span>

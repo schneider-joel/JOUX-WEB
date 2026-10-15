@@ -43,10 +43,11 @@ type Props = {
   clientes: { cliente: string; pais?: PaisFiscal | null }[]
   demo: boolean
   acciones?: AccionesAgencia
+  abrir?: number | null                        // proyecto que llega desplegado (desde Overview)
 }
 type Sel = { p: ProyectoAgencia; i: 0 | 1 }
 
-export default function MarcaTab({ marca, proyectos: iniciales, numerosExistentes, clientes, demo, acciones }: Props) {
+export default function MarcaTab({ marca, proyectos: iniciales, numerosExistentes, clientes, demo, acciones, abrir }: Props) {
   // Demo: copia local que los botones modifican. Real: siempre lo que llega de la base de datos.
   const [local, setProyectos] = useState(iniciales.filter(p => p.marca === marca.key))
   const proyectos = acciones ? iniciales.filter(p => p.marca === marca.key) : local
@@ -136,7 +137,7 @@ export default function MarcaTab({ marca, proyectos: iniciales, numerosExistente
         {aviso && <p className="nota">{aviso}</p>}
         {ordenados.length === 0 ? <p className="empty">Todavía no hay clientes en {marca.nombre}.</p> : (
           <ul className="projs focus">
-            {ordenados.map(p => <FilaWeb key={p.id} p={p} onFacturar={i => setFacturando({ p, i })} onVer={i => setViendo({ p, i })} />)}
+            {ordenados.map(p => <FilaWeb key={p.id} p={p} abierta={p.id === abrir} onFacturar={i => setFacturando({ p, i })} onVer={i => setViendo({ p, i })} />)}
           </ul>
         )}
       </section>
@@ -168,8 +169,8 @@ export default function MarcaTab({ marca, proyectos: iniciales, numerosExistente
 
 // Una web: cliente, su dominio debajo (y el aviso si faltan datos fiscales), precio base y una barra
 // de dos mitades, una por pago. Al desplegar, los dos pagos; cada uno abre su diálogo de siempre.
-function FilaWeb({ p, onFacturar, onVer }: { p: ProyectoAgencia; onFacturar: (i: 0 | 1) => void; onVer: (i: 0 | 1) => void }) {
-  const [abierta, setAbierta] = useState(false)
+function FilaWeb({ p, abierta: inicial, onFacturar, onVer }: { p: ProyectoAgencia; abierta?: boolean; onFacturar: (i: 0 | 1) => void; onVer: (i: 0 | 1) => void }) {
+  const [abierta, setAbierta] = useState(!!inicial)
   // El siguiente pago que se puede facturar (el segundo, solo después del primero).
   const facturable = p.unica ? -1 : p.pagos[0].estado === 'sin_facturar' ? 0 : p.pagos[1].estado === 'sin_facturar' ? 1 : -1
   const estadoTxt = p.unica ? `Factura única ${VOZ[p.unica.estado]}`
@@ -178,7 +179,7 @@ function FilaWeb({ p, onFacturar, onVer }: { p: ProyectoAgencia; onFacturar: (i:
   const esWeb = /^[^\s/]+\.[a-z]{2,}$/i.test(p.web)
   const pendientes = p.unica ? [] : ([0, 1] as const).filter(i => p.pagos[i].estado === 'pendiente')
   return (
-    <li className={`p${abierta ? ' is-open' : ''}`}>
+    <li id={`proyecto-${p.id}`} className={`p${abierta ? ' is-open' : ''}`}>
       <button type="button" className="p__head p__head--web" aria-expanded={abierta} onClick={() => setAbierta(!abierta)}>
         <span className="p__main">
           <span className="p__n">{p.cliente}</span>
