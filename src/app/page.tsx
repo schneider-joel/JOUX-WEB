@@ -534,7 +534,7 @@ export default function Home() {
         activa={seccionActiva.id} onAbrir={id => { const s = secciones.find(x => x.id === id); if (s) abrirSeccion(s) }} />
 
       {/* Las pantallas ya migradas van en la columna de la maqueta (724 px) */}
-      <main className={`main${['dashboard', 'facturas', 'compras', 'impuestos', 'bancos'].includes(tab) || tab.startsWith('ts:') || tab.startsWith('mk:') ? ' main--col' : ''}`}>
+      <main className={`main${['dashboard', 'facturas', 'compras', 'impuestos', 'clientes', 'bancos'].includes(tab) || tab.startsWith('ts:') || tab.startsWith('mk:') ? ' main--col' : ''}`}>
         <header className="page-header">
           <div className="page-header__txt">
             <h1 className="page-title">{titulo}</h1>
@@ -679,32 +679,18 @@ export default function Home() {
 
         {/* Clientes Tab */}
         {tab === 'clientes' && (
-          <div className="card">
-            <div className="card-head">
-              <div className="card-title">Clientes <span style={{ color: 'var(--text3)', fontWeight: 400 }}>· {clientesFiscales.length}</span></div>
-            </div>
-            {clientesFiscales.length === 0 && <div className="chart-empty">No hay clientes con datos fiscales cargados todavía.</div>}
-            {clientesFiscales.map(c => (
-              <div key={c.cliente} className="row">
-                <div className="row-main">
-                  <div className="row-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    {c.cliente}
-                    <span className={`pill${c.pais ? '' : ' pill-amber'}`} style={c.pais ? { background: 'var(--surface3)', color: 'var(--text2)' } : undefined}
-                      title={c.pais ? PAISES.find(x => x.value === c.pais)?.label : 'Sin país: sus facturas salen sin IVA. Editalo para elegirlo.'}>
-                      {c.pais === 'ES' ? 'España' : c.pais === 'UE' ? 'UE' : c.pais === 'EXT' ? 'Fuera UE' : 'sin país'}
-                    </span>
-                  </div>
-                  <div className="row-sub">{c.identificador || 'Sin identificador fiscal'}{c.direccion ? ` · ${c.direccion.replace(/\n/g, ', ')}` : ''}</div>
-                </div>
-                <div className="row-side">
-                  <button className="icon-btn accent" onClick={() => setModal({ type: 'editCliente', data: { cliente: c } })} title="Editar"><Icon.edit /></button>
-                  <button className="icon-btn danger" onClick={() => deleteClienteFiscal(c.cliente)} title="Borrar"><Icon.x /></button>
-                </div>
-              </div>
-            ))}
-            <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border)' }}>
-              Estos datos se usan para generar el PDF de cada factura.
-            </div>
+          <div className="col">
+            <section className="block" aria-label="Clientes">
+              <p className="label caps"><span>Clientes</span><i className="rule" /><span className="label__m">{clientesFiscales.length}</span></p>
+              {clientesFiscales.length === 0 ? <p className="empty">No hay clientes con datos fiscales cargados todavía.</p> : (
+                <ul className="projs focus">
+                  {clientesFiscales.map(c => (
+                    <FilaCliente key={c.cliente} c={c} onEditar={() => setModal({ type: 'editCliente', data: { cliente: c } })} onBorrar={() => deleteClienteFiscal(c.cliente)} />
+                  ))}
+                </ul>
+              )}
+              <p className="nota">Estos datos se usan para generar el PDF de cada factura.</p>
+            </section>
           </div>
         )}
 
@@ -940,41 +926,39 @@ function ModalCliente({ cliente, onSave, onClose }: { cliente?: ClienteFiscal, o
   // Si el país no se eligió a mano, se sugiere a partir del identificador y la dirección.
   const [paisElegido, setPaisElegido] = useState<PaisFiscal | null>(cliente?.pais || null)
   const pais = paisElegido || detectarPais(identificador, direccion)
-  const inputStyleLocal = { width: '100%', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 7, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'Inter, sans-serif', outline: 'none' }
-  const labelStyleLocal = { display: 'block' as const, fontSize: 12, color: 'var(--text2)', marginBottom: 6 }
+  // Campos de una sola línea y botones de la web (mismo estado y mismo guardado que antes).
   return (
     <>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, fontSize: 16, fontWeight: 500 }}>
-        {cliente ? `Editar cliente · ${cliente.cliente}` : 'Nuevo cliente'} <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', fontSize: 20 }}>×</button>
+      <div className="modal__head"><h2>{cliente ? `Editar cliente · ${cliente.cliente}` : 'Nuevo cliente'}</h2><button type="button" className="modal__x" onClick={onClose} aria-label="Cerrar">×</button></div>
+      <div className="modal__campos">
+        <div className="field">
+          <label className="caps" htmlFor="cf-nombre">Nombre del cliente</label>
+          <input id="cf-nombre" value={nombre} disabled={!!cliente} onChange={e => setNombre(e.target.value)} placeholder="Ej: Ambushed, Hans Emanuel Productions..." />
+          {cliente && <p className="nota field__nota">El nombre no se puede cambiar aquí porque es lo que vincula este cliente con sus facturas.</p>}
+        </div>
+        <div className="field">
+          <label className="caps" htmlFor="cf-id">Identificador fiscal · NIF/CIF, VAT, teléfono…</label>
+          <input id="cf-id" value={identificador} onChange={e => setIdentificador(e.target.value)} placeholder="Ej: 12810068 · VAT 12810068 · 07752660689" />
+        </div>
+        <div className="field">
+          <label className="caps" htmlFor="cf-dir">Dirección fiscal</label>
+          <textarea id="cf-dir" value={direccion} onChange={e => setDireccion(e.target.value)} placeholder="Calle, número&#10;Ciudad, país" rows={3} />
+        </div>
+        <div className="field">
+          <label className="caps" htmlFor="cf-pais">País fiscal · define el formato de sus facturas</label>
+          <span className="field__sel">
+            <select id="cf-pais" value={pais || ''} onChange={e => setPaisElegido((e.target.value || null) as PaisFiscal | null)}>
+              <option value="">Sin definir (sin IVA)</option>
+              {PAISES.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+            </select>
+            <Chevron />
+          </span>
+          {!paisElegido && pais && <p className="nota field__nota">Detectado automáticamente por la dirección / identificador.</p>}
+        </div>
       </div>
-      <div style={{ marginBottom: 14 }}>
-        <label style={labelStyleLocal}>Nombre del cliente</label>
-        <input value={nombre} disabled={!!cliente} onChange={e => setNombre(e.target.value)} placeholder="Ej: Ambushed, Hans Emanuel Productions..."
-          style={{ ...inputStyleLocal, opacity: cliente ? 0.6 : 1 }} />
-        {cliente && <div style={{ fontSize: 10.5, color: 'var(--text3)', marginTop: 4 }}>El nombre no se puede cambiar acá porque es lo que vincula este cliente con sus facturas.</div>}
-      </div>
-      <div style={{ marginBottom: 14 }}>
-        <label style={labelStyleLocal}>Identificador fiscal (NIF/CIF, VAT, teléfono...)</label>
-        <input value={identificador} onChange={e => setIdentificador(e.target.value)} placeholder="Ej: 12810068 · VAT 12810068 · 07752660689" style={inputStyleLocal} />
-      </div>
-      <div style={{ marginBottom: 14 }}>
-        <label style={labelStyleLocal}>Dirección fiscal</label>
-        <textarea value={direccion} onChange={e => setDireccion(e.target.value)} placeholder="Calle, número&#10;Ciudad, país" rows={3} style={{ ...inputStyleLocal, resize: 'vertical' as const }} />
-      </div>
-      <div style={{ marginBottom: 14 }}>
-        <label style={labelStyleLocal}>País fiscal (define el formato de sus facturas)</label>
-        <select value={pais || ''} onChange={e => setPaisElegido((e.target.value || null) as PaisFiscal | null)} style={inputStyleLocal}>
-          <option value="">Sin definir (sin IVA)</option>
-          {PAISES.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-        </select>
-        {!paisElegido && pais && <div style={{ fontSize: 10.5, color: 'var(--text3)', marginTop: 4 }}>Detectado automáticamente por la dirección / identificador.</div>}
-      </div>
-      <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
-        <button onClick={onClose} style={{ padding: '9px 18px', borderRadius: 7, fontSize: 13, cursor: 'pointer', background: 'var(--surface2)', color: 'var(--text2)', border: '1px solid var(--border)', fontFamily: 'Inter, sans-serif' }}>Cancelar</button>
-        <button onClick={() => nombre && onSave({ cliente: nombre, identificador, direccion, pais })}
-          style={{ flex: 1, padding: '9px 18px', borderRadius: 7, fontSize: 13, cursor: 'pointer', background: 'var(--accent)', color: '#000', border: 'none', fontWeight: 500, fontFamily: 'Inter, sans-serif' }}>
-          Guardar
-        </button>
+      <div className="modal__foot">
+        <button type="button" className="copy caps" onClick={onClose}>Cancelar</button>
+        <button type="button" className="pill pill--sm" onClick={() => nombre && onSave({ cliente: nombre, identificador, direccion, pais })}>Guardar</button>
       </div>
     </>
   )
@@ -1036,6 +1020,38 @@ function FilaFactura({ f, trim, fueraDeOrden, href, onCobrar, onBorrar }: { f: F
               <a className="copy caps" href={href} target="_blank" rel="noopener noreferrer">Ver factura →</a>
               <button type="button" className="copy caps borrar" onClick={onBorrar}>Borrar</button>
             </span>
+          </div>
+        </div>
+      )}
+    </li>
+  )
+}
+
+// Un cliente fiscal: nombre, identificador y país; al desplegar, lo que sale en el PDF de sus facturas y las acciones
+function FilaCliente({ c, onEditar, onBorrar }: { c: ClienteFiscal, onEditar: () => void, onBorrar: () => void }) {
+  const [abierta, setAbierta] = useState(false)
+  const pais = c.pais === 'ES' ? 'España' : c.pais === 'UE' ? 'UE' : c.pais === 'EXT' ? 'Fuera UE' : null
+  const formato = c.pais ? PAISES.find(x => x.value === c.pais)?.label : 'Sin país: sus facturas salen sin IVA. Edítalo para elegirlo.'
+  return (
+    <li className={`p${abierta ? ' is-open' : ''}`}>
+      <button type="button" className="p__head p__head--cli" aria-expanded={abierta} onClick={() => setAbierta(!abierta)}>
+        <span className="p__main">
+          <span className="p__n">{c.cliente}</span>
+          <span className="p__s caps">{c.identificador || 'Sin identificador fiscal'}</span>
+        </span>
+        <span className={`st caps${pais ? '' : ' aviso'}`} title={formato}>{!pais && <i className="dot dot--wait" aria-hidden="true" />}{pais || 'Sin país'}</span>
+        <Chevron />
+      </button>
+      {abierta && (
+        <div className="p__body">
+          <dl className="meta meta--cli">
+            <div><dt>Identificador</dt><dd className={c.identificador ? undefined : 'aviso'}>{c.identificador || 'Sin identificador fiscal'}</dd></div>
+            <div><dt>Dirección</dt><dd className={c.direccion ? undefined : 'aviso'}>{c.direccion ? c.direccion.replace(/\n/g, ', ') : 'Sin dirección'}</dd></div>
+            <div><dt>Facturas</dt><dd className={c.pais ? undefined : 'aviso'}>{formato}</dd></div>
+          </dl>
+          <div className="p__foot">
+            <button type="button" className="ghost" onClick={onEditar}><Icon.edit />Editar datos</button>
+            <button type="button" className="copy caps borrar" onClick={onBorrar}>Borrar</button>
           </div>
         </div>
       )}
