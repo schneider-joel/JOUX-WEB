@@ -338,6 +338,8 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: #8A8A87
 /* Botones con aspecto de texto: el enlace de una etiqueta («Facturas →») y la llamada a la acción */
 button.copy, button.cta { background: none; border: 0; padding: 0; font: inherit; text-transform: inherit; letter-spacing: inherit; color: inherit; cursor: pointer; text-align: left; }
 button.copy { color: var(--muted); }
+/* …salvo que el propio botón lleve .caps (el reseteo de arriba se lo quitaría) */
+button.copy.caps { font-family: var(--mono); font-size: 11.5px; letter-spacing: .04em; text-transform: uppercase; }
 
 /* Filas de lista: un texto principal + una línea pequeña debajo + importe (+ acción) */
 .fila { display: flex; align-items: center; gap: 16px; min-width: 0; }
@@ -457,6 +459,30 @@ button.copy { color: var(--muted); }
 .sel .chev { position: absolute; right: 12px; top: 50%; translate: 0 -50%; pointer-events: none; }
 .app .sel select:focus { box-shadow: none; border-color: var(--dim) !important; }
 
+/* Facturas: cliente · concepto, una línea pequeña, importe y punto; al desplegar, desglose, fechas y acciones */
+.p__head--fa { grid-template-columns: minmax(0, 1fr) auto 6px 14px; grid-template-areas: "t v d c" "s v d c"; gap: 3px 18px; padding: 12px 0; }
+.fa__t { grid-area: t; font-size: 16px; letter-spacing: -.01em; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fa__t span { color: var(--muted); }
+.p.is-open .fa__t { white-space: normal; }
+.p__head--fa .p__s { grid-area: s; }
+.p__head--fa .p__v { grid-area: v; }
+.p__head--fa .st { grid-area: d; justify-content: center; }
+.p__head--fa .chev { grid-area: c; }
+.fd { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px 36px; }
+.desg { display: flex; flex-direction: column; font-size: 14px; color: var(--muted); }
+.desg div { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 3px 0; }
+.desg .num { font-size: 13.5px; }
+.desg div.desg__t { color: var(--text); border-top: 1px solid var(--line); margin-top: 6px; padding-top: 10px; }
+.meta { display: flex; flex-direction: column; font-size: 14px; }
+.meta div { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 12px; align-items: baseline; padding: 3px 0; }
+.meta dt { color: var(--dim); }
+.meta dd { color: var(--muted); }
+.meta dd.aviso { color: var(--amber); }
+.p__foot .foot__r { margin-left: auto; }
+/* Filtros en una fila: año y trimestre */
+.filt { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.filt .seg button { padding: 6px 10px; }
+
 /* Diálogos: campos de una sola línea y los botones de la web */
 .modal__head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 26px; }
 .modal__head h2 { font-size: 18px; font-weight: 500; letter-spacing: -.01em; }
@@ -480,7 +506,13 @@ button.copy { color: var(--muted); }
   .p__head { grid-template-columns: minmax(0, 1fr) auto 14px; grid-template-areas: "main main chev" "st val val"; }
   .p__n { font-size: 18px; }
   .d__btn, .d__fila { grid-template-columns: 54px minmax(0, 1fr) auto 10px; gap: 10px; }
-  .tax div::after { width: 38px; }  /* 10 + 10 + 10 + 24 − 16: el hueco del punto y del botón de borrar */
+  .tax div::after { width: 38px; }
+  .p__head--fa { grid-template-columns: minmax(0, 1fr) auto 14px; grid-template-areas: "t t c" "s v d"; gap: 4px 12px; }
+  .fd { grid-template-columns: minmax(0, 1fr); }
+  /* los filtros siguen en una fila, que se desliza como el menú */
+  .filt { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: -6px -22px; padding: 6px 22px; }
+  .filt::-webkit-scrollbar { display: none; }
+  .filt > * { flex: none; }  /* 10 + 10 + 10 + 24 − 16: el hueco del punto y del botón de borrar */
 }
 
 /* ---- Buttons (pantallas antiguas, con el aspecto de .ghost y .pill) ---- */

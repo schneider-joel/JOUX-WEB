@@ -534,7 +534,7 @@ export default function Home() {
         activa={seccionActiva.id} onAbrir={id => { const s = secciones.find(x => x.id === id); if (s) abrirSeccion(s) }} />
 
       {/* Las pantallas ya migradas van en la columna de la maqueta (724 px) */}
-      <main className={`main${tab === 'dashboard' || tab.startsWith('ts:') ? ' main--col' : ''}`}>
+      <main className={`main${tab === 'dashboard' || tab === 'facturas' || tab.startsWith('ts:') ? ' main--col' : ''}`}>
         <header className="page-header">
           <div className="page-header__txt">
             <h1 className="page-title">{titulo}</h1>
@@ -632,69 +632,47 @@ export default function Home() {
           )
         })()}
 
-        {/* Facturas Tab */}
+        {/* Facturas: pendientes arriba; debajo, las cobradas con sus filtros. Cada factura, una fila que se despliega. */}
         {tab === 'facturas' && (() => {
-          const chip: React.CSSProperties = { background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 7, padding: '4px 10px', color: 'var(--text2)', fontSize: 12, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }
-          const chipOn: React.CSSProperties = { ...chip, background: 'var(--accent)', color: '#000', border: '1px solid var(--accent)', fontWeight: 500 }
-          const neutra: React.CSSProperties = { background: 'var(--surface2)', color: 'var(--text2)' }
           const verHref = (f: Factura) => f.archivo_path ? `/api/facturas/archivo?id=${f.id}` : `/invoice/${f.id}`
-          const marcas = (f: Factura) => (
-            <>
-              {f.origen === 'historico' && <span className="pill" style={neutra} title="Factura ya declarada, con su PDF original">declarada</span>}
-              {f.origen === 'regularizacion' && <span className="pill" style={neutra} title="Cobro de 2024-2025 facturado a posteriori">regularizada</span>}
-              {fueraDeOrden.has(f.id) && <span className="pill pill-amber" title="La fecha no sigue el orden de su número: revisala">fuera de orden</span>}
-            </>
-          )
           // Las más recientes por fecha de cobro (o de emisión si no la tiene).
           const cobradas = facturasCobradas.filter(enFiltro).sort((a, b) => (b.fecha_cobro || b.fecha).localeCompare(a.fecha_cobro || a.fecha) || b.fecha.localeCompare(a.fecha))
           return (
-            <div className="card">
-              <div className="card-head">
-                <div className="card-title">Pendientes <span style={{ color: 'var(--text3)', fontWeight: 400 }}>· {facturasPendientes.length}</span></div>
-                <span className="row-amount" style={{ color: 'var(--amber)' }}>€{fmt(totalPendiente)}</span>
-              </div>
-              {facturasPendientes.length === 0 && <div className="chart-empty">No hay facturas pendientes.</div>}
-              {facturasPendientes.map(f => (
-                <div key={f.id} className="row">
-                  <div className="row-main">
-                    <div className="row-title">{f.cliente}{f.descripcion ? <span style={{ color: 'var(--text3)' }}> · {f.descripcion}</span> : null}</div>
-                    <div className="row-sub">{f.numero ? `${f.numero} · ` : ''}T{trimDe(f.fecha)} {f.fecha.slice(0, 4)} · Vence {fmtDate(f.fecha_vencimiento || f.fecha)}{lineaImpuestos(f)}</div>
-                  </div>
-                  <div className="row-side">
-                    <span className="row-amount" style={{ color: 'var(--green)' }}>+€{fmt(totalACobrar(f))}</span>
-                    {marcas(f)}
-                    <span className="pill pill-amber">pendiente</span>
-                    <a className="icon-btn accent" href={verHref(f)} target="_blank" rel="noopener noreferrer" title="Ver factura"><Icon.invoice /></a>
-                    <button className="icon-btn ok" onClick={() => marcarCobrada(f)} title="Marcar como cobrada"><Icon.check /></button>
-                    <button className="icon-btn danger" onClick={() => deleteFactura(f.id)} title="Borrar"><Icon.x /></button>
-                  </div>
-                </div>
-              ))}
+            <div className="col">
+              <section className="block" aria-label="Pendientes">
+                <p className="label caps"><span>Pendientes · {facturasPendientes.length}</span><i className="rule" /></p>
+                {facturasPendientes.length === 0 ? <p className="empty">No hay facturas pendientes.</p> : (
+                  <ul className="projs focus">
+                    {facturasPendientes.map(f => (
+                      <FilaFactura key={f.id} f={f} trim={trimDe(f.fecha)} fueraDeOrden={fueraDeOrden.has(f.id)} href={verHref(f)}
+                        onCobrar={() => marcarCobrada(f)} onBorrar={() => deleteFactura(f.id)} />
+                    ))}
+                  </ul>
+                )}
+              </section>
 
-              <div className="card-head" style={{ marginTop: 24, paddingTop: 18, borderTop: '1px solid var(--border)', flexWrap: 'wrap', gap: 10 }}>
-                <div className="card-title">Cobradas <span style={{ color: 'var(--text3)', fontWeight: 400 }}>· {cobradas.length}</span></div>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-                  {aniosFacturas.map(a => <button key={a} style={a === filtroAnio ? chipOn : chip} onClick={() => setFiltroAnio(a)}>{a}</button>)}
-                  <span style={{ width: 8 }} />
-                  {[0, 1, 2, 3, 4].map(q => <button key={q} style={q === filtroTrim ? chipOn : chip} onClick={() => setFiltroTrim(q)}>{q ? `T${q}` : 'Todo'}</button>)}
-                  <span className="row-amount" style={{ color: 'var(--text2)', marginLeft: 8 }} title="Lo cobrado (con IVA y retención en los clientes de España)">€{fmt(cobradas.reduce((s, f) => s + totalACobrar(f), 0))}</span>
+              <section className="block" aria-label="Cobradas">
+                <p className="label caps">
+                  <span>Cobradas · {cobradas.length}</span><i className="rule" />
+                  <span className="label__m" title="Lo cobrado (con IVA y retención en los clientes de España)">€{fmt(cobradas.reduce((s, f) => s + totalACobrar(f), 0))}</span>
+                </p>
+                <div className="filt">
+                  <span className="seg caps" role="group" aria-label="Año">
+                    {aniosFacturas.map(a => <button key={a} type="button" aria-pressed={a === filtroAnio} onClick={() => setFiltroAnio(a)}>{a}</button>)}
+                  </span>
+                  <span className="seg caps" role="group" aria-label="Trimestre">
+                    {[0, 1, 2, 3, 4].map(q => <button key={q} type="button" aria-pressed={q === filtroTrim} onClick={() => setFiltroTrim(q)}>{q ? `T${q}` : 'Todo'}</button>)}
+                  </span>
                 </div>
-              </div>
-              {cobradas.length === 0 && <div className="chart-empty">No hay facturas cobradas en este período.</div>}
-              {cobradas.map(f => (
-                <div key={f.id} className="row muted">
-                  <div className="row-main">
-                    <div className="row-title">{f.cliente}{f.descripcion ? <span style={{ color: 'var(--text3)' }}> · {f.descripcion}</span> : null}</div>
-                    <div className="row-sub">{f.numero ? `${f.numero} · ` : ''}T{trimDe(f.fecha)} {f.fecha.slice(0, 4)} · Emitida {fmtDate(f.fecha)}{f.fecha_cobro ? ` · Cobrada ${fmtDate(f.fecha_cobro)}` : ''}{lineaImpuestos(f)}</div>
-                  </div>
-                  <div className="row-side">
-                    <span className="row-amount">€{fmt(totalACobrar(f))}</span>
-                    {marcas(f)}
-                    <a className="icon-btn accent" href={verHref(f)} target="_blank" rel="noopener noreferrer" title="Ver factura"><Icon.invoice /></a>
-                    <button className="icon-btn danger" onClick={() => deleteFactura(f.id)} title="Borrar"><Icon.x /></button>
-                  </div>
-                </div>
-              ))}
+                {cobradas.length === 0 ? <p className="empty">No hay facturas cobradas en este período.</p> : (
+                  <ul className="projs focus">
+                    {cobradas.map(f => (
+                      <FilaFactura key={f.id} f={f} trim={trimDe(f.fecha)} fueraDeOrden={fueraDeOrden.has(f.id)} href={verHref(f)}
+                        onBorrar={() => deleteFactura(f.id)} />
+                    ))}
+                  </ul>
+                )}
+              </section>
             </div>
           )
         })()}
@@ -1011,6 +989,60 @@ const confirmBtnStyle = { flex: 1, padding: '9px 18px', borderRadius: 7, fontSiz
 const ESTADO_PROYECTO: Record<string, [string, string]> = { activo: ['Activo', 'dot--green'], completado: ['Completado', 'dot--wait'], facturado: ['Facturado', 'dot--off'] }
 const ESTADO_DIA: Record<string, [string, string]> = { pendiente: ['Pendiente', 'dot--off'], en_progreso: ['En progreso', 'dot--wait'], hecho: ['Hecho', 'dot--ok'] }
 const Chevron = () => <svg className="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6.2 8 10l4-3.8" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" /></svg>
+
+// Una factura: cliente · concepto, una línea pequeña (número y la fecha que importa), importe y el punto
+// de estado. Al desplegar: el desglose, las fechas, el origen y las acciones de siempre.
+function FilaFactura({ f, trim, fueraDeOrden, href, onCobrar, onBorrar }: { f: Factura, trim: number, fueraDeOrden: boolean, href: string, onCobrar?: () => void, onBorrar: () => void }) {
+  const [abierta, setAbierta] = useState(false)
+  const pendiente = f.estado === 'pendiente'
+  const d = desgloseFactura(f)
+  const [estado, punto] = pendiente ? ['Pendiente', 'dot--wait'] : ['Cobrada', 'dot--ok']
+  const origen = f.origen === 'historico' ? 'Factura ya declarada, con su PDF original'
+    : f.origen === 'regularizacion' ? 'Cobro de 2024-2025 facturado a posteriori' : null
+  return (
+    <li className={`p${abierta ? ' is-open' : ''}`}>
+      <button type="button" className="p__head p__head--fa" aria-expanded={abierta} onClick={() => setAbierta(!abierta)}>
+        <span className="fa__t">{f.cliente}{f.descripcion ? <span> · {f.descripcion}</span> : null}</span>
+        <span className="p__s caps">
+          {f.numero ? `${f.numero} · ` : ''}{pendiente ? `Vence ${fmtDate(f.fecha_vencimiento || f.fecha)}` : f.fecha_cobro ? `Cobrada ${fmtDate(f.fecha_cobro)}` : `Emitida ${fmtDate(f.fecha)}`}
+          {fueraDeOrden && <> · <span className="aviso" title="La fecha no sigue el orden de su número: revisala">fuera de orden</span></>}
+        </span>
+        <span className="p__v num">€{fmt(totalACobrar(f))}</span>
+        <span className="st" title={estado}><i className={`dot ${punto}`} aria-hidden="true" /><span className="sr">{estado}</span></span>
+        <Chevron />
+      </button>
+      {abierta && (
+        <div className="p__body">
+          <div className="fd">
+            {d ? (
+              <dl className="desg">
+                <div><dt>Base</dt><dd className="num">€{fmt2(d.base)}</dd></div>
+                <div><dt>IVA 21 %</dt><dd className="num">+€{fmt2(d.iva)}</dd></div>
+                <div><dt>Retención IRPF 15 %</dt><dd className="num">−€{fmt2(d.ret)}</dd></div>
+                <div className="desg__t"><dt>{pendiente ? 'A cobrar' : 'Cobrado'}</dt><dd className="num">€{fmt2(d.total)}</dd></div>
+              </dl>
+            ) : <span />}
+            <dl className="meta">
+              <div><dt>Emitida</dt><dd>{fmtDate(f.fecha)} {f.fecha.slice(0, 4)} · T{trim}</dd></div>
+              <div><dt>Vence</dt><dd>{fmtDate(f.fecha_vencimiento || f.fecha)}</dd></div>
+              {f.fecha_cobro && <div><dt>Cobrada</dt><dd>{fmtDate(f.fecha_cobro)}</dd></div>}
+              {origen && <div><dt>Origen</dt><dd>{origen}</dd></div>}
+              {fueraDeOrden && <div><dt>Aviso</dt><dd className="aviso">La fecha no sigue el orden de su número: revisala</dd></div>}
+            </dl>
+          </div>
+          <div className="p__foot">
+            {onCobrar && <button type="button" className="pill pill--sm" onClick={onCobrar}><Icon.check />Marcar como cobrada</button>}
+            <span className="foot__r">
+              <a className="copy caps" href={href} target="_blank" rel="noopener noreferrer">Ver factura →</a>
+              <button type="button" className="copy caps borrar" onClick={onBorrar}>Borrar</button>
+            </span>
+          </div>
+        </div>
+      )}
+    </li>
+  )
+}
+
 
 function TimesheetTab({ grupo, etiqueta, proyectos, dias, facturas, clientesFiscales, reload }: { grupo: GrupoTimesheet, etiqueta: string, proyectos: Proyecto[], dias: DiaTrabajado[], facturas: Factura[], clientesFiscales: ClienteFiscal[], reload: () => void }) {
   const [modal, setModal] = useState<Modal>(null)
