@@ -3,14 +3,16 @@
 import { useCallback, useEffect, useState } from 'react'
 import { deudaDe, saldo, type GastoCompartido, type Persona } from '@/lib/compartidos'
 
-const eur = (n: number) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(n)
+// Importes como en el resto del hub: «€1.100,50», con punto de miles siempre
+const eur = (n: number) => (n < 0 ? '−' : '') + '€' + new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: 'always' } as unknown as Intl.NumberFormatOptions).format(Math.abs(n))
 const hoy = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
 const fechaCorta = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })
 const mesDe = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })
 const CATEGORIAS = ['Alquiler', 'Agua', 'Luz', 'Supermercado', 'Casa', 'Salidas', 'Viajes', 'Otros']
 
-const campo: React.CSSProperties = { width: '100%', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px', color: 'var(--text)', fontSize: 14, fontFamily: 'Inter, sans-serif', outline: 'none' }
-const etiqueta: React.CSSProperties = { display: 'block', fontSize: 12, color: 'var(--text2)', marginBottom: 6 }
+const svg = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, viewBox: '0 0 24 24' }
+const IconMas = () => <svg {...svg}><path d="M12 5v14M5 12h14" /></svg>
+const Chevron = () => <svg className="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6.2 8 10l4-3.8" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" /></svg>
 
 type Datos = { quien: Persona; pareja: string; gastos: GastoCompartido[]; token?: string }
 type Borrador = { tipo: 'gasto' | 'liquidacion'; fecha: string; concepto: string; importe: string; pagador: Persona; para: Persona[]; categoria: string }
@@ -31,8 +33,8 @@ export default function CompartidosVista({ token }: { token?: string }) {
   }, [qs])
   useEffect(() => { cargar() }, [cargar])
 
-  if (error) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--text3)' }}>{error === 'No autorizado' ? 'Este link no es válido.' : error}</div>
-  if (!datos) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--text3)' }}>Cargando…</div>
+  if (error) return <p className="empty">{error === 'No autorizado' ? 'Este link no es válido.' : error}</p>
+  if (!datos) return <p className="empty">Cargando…</p>
 
   const yo = datos.quien
   const otro: Persona = yo === 'joel' ? 'pareja' : 'joel'
@@ -74,129 +76,164 @@ export default function CompartidosVista({ token }: { token?: string }) {
   const porMes = new Map<string, GastoCompartido[]>()
   for (const g of datos.gastos) porMes.set(g.fecha.slice(0, 7), [...(porMes.get(g.fecha.slice(0, 7)) || []), g])
 
+  const paz = Math.abs(s) < 0.01
+  const esGasto = borrador?.tipo === 'gasto'
+
+  // Campos de una sola línea y botones de la web (mismo estado, mismos cálculos y mismo guardado que antes).
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div className="card" style={{ textAlign: 'center', padding: '26px 20px' }}>
-        <div style={{ fontSize: 12, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-          {Math.abs(s) < 0.01 ? 'Estáis en paz' : s > 0 ? `${nombreOtro} te debe` : `Le debes a ${nombreOtro}`}
+    <div className="col">
+      {/* El saldo manda; el link de la pareja, en la etiqueta */}
+      <section className="block" aria-label="Saldo">
+        <p className="label caps"><span>Casona</span><i className="rule" />
+          {datos.token && <button type="button" className="label__m copy caps hit" onClick={copiarLink}>{copiado ? 'Link copiado ✓' : `Copiar link para ${datos.pareja}`}</button>}
+        </p>
+        <div className="hero">
+          <div className="bal">
+            <p className="bal__k caps"><i className={`dot ${paz ? 'dot--off' : s > 0 ? 'dot--green' : 'dot--wait'}`} aria-hidden="true" />{paz ? 'Estáis en paz' : s > 0 ? `${nombreOtro} te debe` : `Le debes a ${nombreOtro}`}</p>
+            <p className="big">{eur(Math.abs(s))}</p>
+          </div>
+          <div className="bal__acts">
+            <button type="button" className="pill" onClick={nuevoGasto}><IconMas />Añadir gasto</button>
+            {!paz && <button type="button" className="ghost" onClick={saldar}>Saldar cuenta</button>}
+          </div>
         </div>
-        <div className="mono" style={{ fontSize: 34, fontWeight: 500, marginTop: 6, color: Math.abs(s) < 0.01 ? 'var(--text2)' : s > 0 ? 'var(--green)' : 'var(--amber)' }}>{eur(Math.abs(s))}</div>
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 16, flexWrap: 'wrap' }}>
-          <button className="btn btn-primary" onClick={nuevoGasto}>+ Añadir gasto</button>
-          {Math.abs(s) >= 0.01 && <button className="btn" onClick={saldar}>Saldar cuenta</button>}
-          {datos.token && <button className="btn btn-ghost" onClick={copiarLink}>{copiado ? '✓ Link copiado' : `Copiar link para ${datos.pareja}`}</button>}
-        </div>
-      </div>
+      </section>
 
       {borrador && (
-        <div className="card">
-          <div className="card-head"><div className="card-title">{borrador.tipo === 'liquidacion' ? 'Saldar cuenta' : 'Nuevo gasto'}</div></div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-            <div>
-              <label style={etiqueta}>{borrador.tipo === 'liquidacion' ? 'Quién transfiere' : 'Quién pagó'}</label>
-              <select value={borrador.pagador} onChange={e => setBorrador({ ...borrador, pagador: e.target.value as Persona })} style={campo}>
-                <option value={yo}>Tú</option>
-                <option value={otro}>{nombreOtro}</option>
-              </select>
-            </div>
-            <div>
-              <label style={etiqueta}>Importe (€)</label>
-              <input type="number" inputMode="decimal" step="0.01" value={borrador.importe} onChange={e => setBorrador({ ...borrador, importe: e.target.value })} placeholder="0,00" style={campo} autoFocus />
-            </div>
-            <div>
-              <label style={etiqueta}>Fecha</label>
-              <input type="date" value={borrador.fecha} onChange={e => setBorrador({ ...borrador, fecha: e.target.value })} style={campo} />
-            </div>
-          </div>
-          {borrador.tipo === 'gasto' && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginTop: 12 }}>
-              <div>
-                <label style={etiqueta}>Concepto</label>
-                <input value={borrador.concepto} onChange={e => setBorrador({ ...borrador, concepto: e.target.value })} placeholder="Ej: Compra Mercadona" style={campo} />
+        <section className="block" aria-label={borrador.tipo === 'liquidacion' ? 'Saldar cuenta' : 'Nuevo gasto'}>
+          <p className="label caps"><span>{borrador.tipo === 'liquidacion' ? 'Saldar cuenta' : 'Nuevo gasto'}</span><i className="rule" /></p>
+          <div className="gf">
+            <div className={`gf__grid${esGasto ? '' : ' gf__grid--liq'}`}>
+              {esGasto && (
+                <div className="field gf__con">
+                  <label className="caps" htmlFor="g-con">Concepto</label>
+                  <input id="g-con" value={borrador.concepto} onChange={e => setBorrador({ ...borrador, concepto: e.target.value })} placeholder="Ej: Compra Mercadona" />
+                </div>
+              )}
+              <div className="field">
+                <label className="caps" htmlFor="g-imp">Importe €</label>
+                <input id="g-imp" type="number" inputMode="decimal" step="0.01" value={borrador.importe} onChange={e => setBorrador({ ...borrador, importe: e.target.value })} placeholder="0,00" autoFocus />
               </div>
-              <div>
-                <label style={etiqueta}>Categoría (opcional)</label>
-                <select value={borrador.categoria} onChange={e => setBorrador({ ...borrador, categoria: e.target.value })} style={campo}>
-                  <option value="">—</option>
-                  {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
+              <div className="field">
+                <label className="caps" htmlFor="g-fecha">Fecha</label>
+                <input id="g-fecha" type="date" value={borrador.fecha} onChange={e => setBorrador({ ...borrador, fecha: e.target.value })} />
               </div>
-            </div>
-          )}
-          {borrador.tipo === 'gasto' && (
-            <div style={{ marginTop: 12 }}>
-              <label style={etiqueta}>Dividir entre</label>
-              <div style={{ border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
-                {([yo, otro] as Persona[]).map((p, i) => {
-                  const marcado = borrador.para.includes(p)
-                  const parte = marcado && Number(borrador.importe) > 0 ? Number(borrador.importe) / borrador.para.length : 0
-                  return (
-                    <label key={p} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', cursor: 'pointer', borderTop: i ? '1px solid var(--border)' : undefined, background: 'var(--surface2)' }}>
-                      <input type="checkbox" checked={marcado} style={{ width: 18, height: 18, accentColor: 'var(--accent)' }}
-                        onChange={e => setBorrador({ ...borrador, para: e.target.checked ? Array.from(new Set([...borrador.para, p])) : borrador.para.filter(x => x !== p) })} />
-                      <span style={{ flex: 1, fontSize: 14 }}>{p === yo ? `${p === 'joel' ? 'Joel' : datos.pareja} (tú)` : nombreOtro}</span>
-                      <span className="mono" style={{ fontSize: 14, color: marcado ? 'var(--text)' : 'var(--text3)' }}>{eur(parte)}</span>
-                    </label>
-                  )
-                })}
-              </div>
-              {!repartoDe(borrador) && (
-                <div style={{ fontSize: 12, color: 'var(--amber)', marginTop: 6 }}>
-                  {borrador.para.length === 0 ? 'Elige al menos una persona.' : 'Si el gasto es solo de quien lo pagó, no genera deuda: no hace falta apuntarlo.'}
+              {esGasto && (
+                <div className="field gf__cat">
+                  <label className="caps" htmlFor="g-cat">Categoría · opcional</label>
+                  <select id="g-cat" value={borrador.categoria} onChange={e => setBorrador({ ...borrador, categoria: e.target.value })}>
+                    <option value="">—</option>
+                    {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <Chevron />
                 </div>
               )}
             </div>
-          )}
-          {Number(borrador.importe) > 0 && (borrador.tipo === 'liquidacion' || repartoDe(borrador)) && (
-            <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 12 }}>
-              {borrador.tipo === 'liquidacion'
-                ? `${borrador.pagador === yo ? 'Tú le pasas' : `${nombreOtro} te pasa`} ${eur(Number(borrador.importe))}.`
-                : `${borrador.pagador === yo ? `${nombreOtro} te debe` : `Le debes a ${nombreOtro}`} ${eur(repartoDe(borrador) === 'otro' ? Number(borrador.importe) : Number(borrador.importe) / 2)} por este gasto.`}
+            <div className="gf__chips">
+              <fieldset className="chips">
+                <legend className="caps">{borrador.tipo === 'liquidacion' ? 'Quién transfiere' : 'Quién pagó'}</legend>
+                <div className="chips__row">
+                  {([yo, otro] as Persona[]).map(p => (
+                    <label key={p} className="chip">
+                      <input type="radio" name="pagador" value={p} checked={borrador.pagador === p} onChange={e => setBorrador({ ...borrador, pagador: e.target.value as Persona })} />
+                      <span>{p === yo ? 'Tú' : nombreOtro}</span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+              {esGasto && (
+                <fieldset className="chips gf__para">
+                  <legend className="caps">Dividir entre</legend>
+                  <ul className="gf__lista">
+                    {([yo, otro] as Persona[]).map(p => {
+                      const marcado = borrador.para.includes(p)
+                      const parte = marcado && Number(borrador.importe) > 0 ? Number(borrador.importe) / borrador.para.length : 0
+                      return (
+                        <li key={p}>
+                          <label className="check">
+                            <input type="checkbox" checked={marcado}
+                              onChange={e => setBorrador({ ...borrador, para: e.target.checked ? Array.from(new Set([...borrador.para, p])) : borrador.para.filter(x => x !== p) })} />
+                            <span className={marcado ? 'gf__n is-on' : 'gf__n'}>{p === yo ? `${p === 'joel' ? 'Joel' : datos.pareja} (tú)` : nombreOtro}</span>
+                          </label>
+                          <span className={`num${marcado ? '' : ' dim'}`}>{eur(parte)}</span>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </fieldset>
+              )}
             </div>
-          )}
-          <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
-            <button className="btn" onClick={() => setBorrador(null)}>Cancelar</button>
-            <button className="btn btn-primary" disabled={guardando || !(Number(borrador.importe) > 0) || (borrador.tipo === 'gasto' && (!borrador.concepto.trim() || !repartoDe(borrador)))} onClick={guardar} style={{ flex: 1, justifyContent: 'center' }}>
-              {guardando ? 'Guardando…' : 'Guardar'}
-            </button>
+            {esGasto && !repartoDe(borrador) && (
+              <p className="nota aviso">
+                {borrador.para.length === 0 ? 'Elige al menos una persona.' : 'Si el gasto es solo de quien lo pagó, no genera deuda: no hace falta apuntarlo.'}
+              </p>
+            )}
+            {Number(borrador.importe) > 0 && (borrador.tipo === 'liquidacion' || repartoDe(borrador)) && (
+              <p className="gf__prev">
+                {borrador.tipo === 'liquidacion'
+                  ? `${borrador.pagador === yo ? 'Tú le pasas' : `${nombreOtro} te pasa`} ${eur(Number(borrador.importe))}.`
+                  : `${borrador.pagador === yo ? `${nombreOtro} te debe` : `Le debes a ${nombreOtro}`} ${eur(repartoDe(borrador) === 'otro' ? Number(borrador.importe) : Number(borrador.importe) / 2)} por este gasto.`}
+              </p>
+            )}
+            <div className="gf__foot">
+              <button type="button" className="copy caps" onClick={() => setBorrador(null)}>Cancelar</button>
+              <button type="button" className="pill pill--sm" disabled={guardando || !(Number(borrador.importe) > 0) || (borrador.tipo === 'gasto' && (!borrador.concepto.trim() || !repartoDe(borrador)))} onClick={guardar}>
+                {guardando ? 'Guardando…' : 'Guardar'}
+              </button>
+            </div>
           </div>
-        </div>
+        </section>
       )}
 
-      <div className="card">
-        <div className="card-head"><div className="card-title">Movimientos</div></div>
-        {datos.gastos.length === 0 && <div style={{ fontSize: 13, color: 'var(--text3)', padding: '10px 0' }}>Todavía no hay gastos. {yo === 'joel' ? 'Tus pagos del alquiler y el agua' : 'Los pagos del alquiler y el agua de Joel'} se añaden solos desde el banco.</div>}
-        {Array.from(porMes.entries()).map(([mes, gs]) => (
-          <div key={mes} style={{ marginBottom: 10 }}>
-            <div style={{ fontSize: 11, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.08em', margin: '10px 0 4px' }}>{mesDe(gs[0].fecha)}</div>
+      {/* Un bloque por mes; cada gasto, una fila que se despliega en su detalle (y borrar) */}
+      {datos.gastos.length === 0 ? (
+        <section className="block" aria-label="Movimientos">
+          <p className="label caps"><span>Movimientos</span><i className="rule" /></p>
+          <p className="empty">Todavía no hay gastos. {yo === 'joel' ? 'Tus pagos del alquiler y el agua' : 'Los pagos del alquiler y el agua de Joel'} se añaden solos desde el banco.</p>
+        </section>
+      ) : Array.from(porMes.entries()).map(([mes, gs]) => (
+        <section key={mes} className="block" aria-label={mesDe(gs[0].fecha)}>
+          <p className="label caps"><span>{mesDe(gs[0].fecha)}</span><i className="rule" /></p>
+          <ul className="projs focus">
             {gs.map(g => {
               const e = efecto(g)
               const puedeBorrar = yo === 'joel' || g.creado_por === yo
+              const liq = g.tipo === 'liquidacion'
+              const quien = liq ? `${nombre(g.pagador)} → ${paraQuien(elOtroDe(g.pagador))}` : `Pagó ${sujeto(g.pagador)}`
+              const detalle = liq
+                ? `${quien} · ${eur(Number(g.importe))}${g.movimiento_id ? ' · del banco' : ''}`
+                : `Pagó ${sujeto(g.pagador)} ${eur(Number(g.importe))} · ${g.reparto === 'mitad' ? 'a medias' : `todo para ${paraQuien(elOtroDe(g.pagador))}`}${g.movimiento_id ? ' · del banco' : ''}`
               return (
-                <div key={g.id} className="row">
-                  <div style={{ width: 50, fontSize: 11.5, color: 'var(--text3)', flexShrink: 0 }}>{fechaCorta(g.fecha)}</div>
-                  <div className="row-main">
-                    <div className="row-title">{g.tipo === 'liquidacion' ? `💸 ${g.concepto}` : g.concepto}</div>
-                    <div className="row-sub">
-                      {g.tipo === 'liquidacion'
-                        ? `${nombre(g.pagador)} → ${paraQuien(elOtroDe(g.pagador))}`
-                        : `Pagó ${sujeto(g.pagador)} ${eur(Number(g.importe))} · ${g.reparto === 'mitad' ? 'a medias' : `todo para ${paraQuien(elOtroDe(g.pagador))}`}`}
-                      {g.movimiento_id && ' · del banco'}
-                    </div>
-                  </div>
-                  <div className="row-side">
-                    <span className="row-amount" style={{ color: e > 0 ? 'var(--green)' : 'var(--amber)' }}>{e > 0 ? '+' : '−'}{eur(Math.abs(e))}</span>
-                    {puedeBorrar && <button className="icon-btn danger" onClick={() => borrar(g)} title="Borrar">×</button>}
-                  </div>
-                </div>
+                <FilaGasto key={g.id} concepto={g.concepto} sub={`${fechaCorta(g.fecha)} · ${quien}`} detalle={detalle} efecto={e}
+                  liq={liq} banco={!!g.movimiento_id} onBorrar={puedeBorrar ? () => borrar(g) : undefined} />
               )
             })}
-          </div>
-        ))}
-        <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 10 }}>
-          Verde: te lo deben a ti. Ámbar: lo debes tú.
-        </div>
-      </div>
+          </ul>
+        </section>
+      ))}
+
+      <p className="nota">Verde: te lo deben a ti. Ámbar: lo debes tú.</p>
     </div>
+  )
+}
+
+// Un gasto: concepto, fecha y quién pagó, lo que deja en la cuenta y un punto si vino del banco; al desplegar, su detalle y borrar
+function FilaGasto({ concepto, sub, detalle, efecto: e, liq, banco, onBorrar }: { concepto: string, sub: string, detalle: string, efecto: number, liq: boolean, banco: boolean, onBorrar?: () => void }) {
+  const [abierta, setAbierta] = useState(false)
+  return (
+    <li className={`p${liq ? ' is-liq' : ''}${abierta ? ' is-open' : ''}`}>
+      <button type="button" className="p__head p__head--g" aria-expanded={abierta} onClick={() => setAbierta(!abierta)}>
+        <span className="p__main"><span className="g__t">{concepto}</span><span className="p__s caps">{sub}</span></span>
+        <span className={`p__v num ${e > 0 ? 'up' : 'aviso'}`}>{e > 0 ? '+' : '−'}{eur(Math.abs(e))}</span>
+        <span className="st" title={banco ? 'Del banco' : undefined}>{banco && <><i className="dot dot--ok" aria-hidden="true" /><span className="sr">Del banco</span></>}</span>
+        <Chevron />
+      </button>
+      {abierta && (
+        <div className="p__body g__body">
+          <p className="g__d">{detalle}</p>
+          {onBorrar && <div className="p__foot"><button type="button" className="copy caps borrar" onClick={onBorrar}>Borrar</button></div>}
+        </div>
+      )}
+    </li>
   )
 }
