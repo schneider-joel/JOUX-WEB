@@ -1,5 +1,7 @@
 'use client'
 
+import Link from 'next/link'
+
 // Proyectos en marcha (status «activo») de todas las marcas: para quién es cada uno y cuánto vale.
 // Cada fila abre la pestaña de su marca con el proyecto desplegado. Mismo estilo que la tarjeta «Leads».
 export type ProyectoActivo = {
@@ -17,7 +19,10 @@ const fmt = (n: number) => new Intl.NumberFormat('es-ES', { maximumFractionDigit
 export default function ProyectosActivosCard({ proyectos, onAbrir }: { proyectos: ProyectoActivo[]; onAbrir: (id: number) => void }) {
   return (
     <section className="block" aria-label="Proyectos activos">
-      <p className="label caps"><span>Proyectos activos{proyectos.length ? ` · ${proyectos.length}` : ''}</span><i className="rule" /></p>
+      <p className="label caps">
+        <span>Proyectos activos{proyectos.length ? ` · ${proyectos.length}` : ''}</span><i className="rule" />
+        <Link href="/proyectos" className="label__m copy">Seguimiento →</Link>
+      </p>
       {proyectos.length === 0 ? <p className="nota">No hay proyectos activos.</p> : (
         <ul className="list focus">
           {proyectos.map(p => (

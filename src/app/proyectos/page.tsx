@@ -1,0 +1,55 @@
+import Link from 'next/link'
+import { supabaseServer as sb } from '@/lib/supabase-server'
+import { esFaseProyecto } from '@/lib/leads'
+import type { ProyectoSeguimiento } from '@/lib/seguimiento'
+import Seguimiento from './seguimiento'
+
+export const dynamic = 'force-dynamic'
+// supabase-js usa fetch: sin esto, Next guarda sus respuestas en el Data Cache y la lista sale vieja.
+export const fetchCache = 'force-no-store'
+export const metadata = { title: 'Proyectos · JOUX Hub' }
+
+// Seguimiento visual de cada proyecto por fase (proyectos.fase). Entran los activos y los que ya
+// tienen fase; la fase se cambia aquí a mano y queda en eventos (proyecto.fase).
+export default async function ProyectosPage() {
+  const [{ data: proyectos, error }, { data: marcas }] = await Promise.all([
+    sb.from('proyectos').select('id, nombre, cliente, marca, fase, lead_id, created_at').or('status.eq.activo,fase.not.is.null').order('created_at', { ascending: false }),
+    sb.from('marcas').select('key, nombre, orden').order('orden'),
+  ])
+  const ids = (proyectos || []).map(p => p.id)
+  const { data: eventos } = ids.length
+    ? await sb.from('eventos').select('proyecto_id, tipo, datos, created_at').in('proyecto_id', ids).in('tipo', ['proyecto.fase', 'lead.ganado']).order('created_at')
+    : { data: [] }
+
+  const lista: ProyectoSeguimiento[] = (proyectos || []).map(p => {
+    const propios = (eventos || []).filter(e => e.proyecto_id === p.id)
+    const historial = propios
+      .map(e => ({ fase: e.tipo === 'lead.ganado' ? 'confirmado' : (e.datos as { a?: unknown })?.a, fecha: e.created_at as string }))
+      .filter((h): h is ProyectoSeguimiento['historial'][number] => esFaseProyecto(h.fase))
+    const ultimo = [...historial].reverse().find(h => h.fase === p.fase)
+    return {
+      id: p.id, nombre: p.nombre, cliente: p.cliente, marca: p.marca, lead_id: p.lead_id,
+      fase: esFaseProyecto(p.fase) ? p.fase : null, desde: ultimo?.fecha || p.created_at, historial,
+    }
+  })
+
+  return (
+    <div className="app">
+      <header className="frame frame--top caps">
+        <Link href="/" className="mark" style={{ textDecoration: 'none' }}>JOUX HUB</Link>
+        <Link href="/" className="copy">← Overview</Link>
+      </header>
+      <main className="main">
+        <header className="page-header trk__ancho">
+          <div className="page-header__txt">
+            <h1 className="page-title">Proyectos</h1>
+            <p className="tags caps">Seguimiento por etapa</p>
+          </div>
+          <Link href="/pipeline" className="copy caps">Leads →</Link>
+        </header>
+        {error ? <p className="empty trk__ancho">No se pudieron cargar los proyectos.</p>
+          : <Seguimiento proyectos={lista} marcas={(marcas || []).map(m => ({ key: m.key as string, nombre: m.nombre as string }))} />}
+      </main>
+    </div>
+  )
+}

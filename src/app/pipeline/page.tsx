@@ -1,20 +1,19 @@
 import Link from 'next/link'
 import { supabaseServer as sb } from '@/lib/supabase-server'
-import { ESTADOS_LEAD, ETIQUETA_ESTADO, ETIQUETA_FASE, FASES_PROYECTO, hace, type FaseProyecto, type Lead } from '@/lib/leads'
-import CambiarFase from './cambiar-fase'
+import { ESTADOS_LEAD, ETIQUETA_ESTADO, hace, type FaseProyecto, type Lead } from '@/lib/leads'
 
 export const dynamic = 'force-dynamic'
 // supabase-js usa fetch: sin esto, Next guarda sus respuestas en el Data Cache y la lista sale vieja.
 export const fetchCache = 'force-no-store'
 export const metadata = { title: 'Pipeline · JOUX Hub' }
 
-// Pipeline: los leads de todas las marcas en columnas por estado y, debajo, los proyectos con `fase`
-// (seguimiento, fase 3 de automatizacion.md), con el mismo filtro por marca (?marca=).
+// Pipeline: los leads de todas las marcas en columnas por estado, con filtro por marca (?marca=).
+// Los proyectos se siguen en /proyectos; aquí solo el enlace con cuántos hay.
 type Fila = Pick<Lead, 'id' | 'marca' | 'estado' | 'nombre' | 'email' | 'empresa' | 'recibido_en'>
 type FilaProyecto = { id: number; nombre: string; cliente: string; marca: string | null; fase: FaseProyecto; lead_id: number | null }
 
 export default async function PipelinePage({ searchParams }: { searchParams: { marca?: string } }) {
-  const [{ data: leads, error }, { data: marcas }, { data: proyectos, error: errorP }] = await Promise.all([
+  const [{ data: leads, error }, { data: marcas }, { data: proyectos }] = await Promise.all([
     sb.from('leads').select('id, marca, estado, nombre, email, empresa, recibido_en').order('recibido_en', { ascending: false }).limit(500),
     sb.from('marcas').select('key, nombre, orden').order('orden'),
     sb.from('proyectos').select('id, nombre, cliente, marca, fase, lead_id').not('fase', 'is', null).order('created_at', { ascending: false }),
@@ -74,39 +73,13 @@ export default async function PipelinePage({ searchParams }: { searchParams: { m
           </div>
         )}
 
-        <header className="page-header pipe__head" style={{ marginTop: 72 }}>
-          <div className="page-header__txt">
-            <h2 className="page-title">Proyectos</h2>
-            <p className="tags caps">Seguimiento por fase · {listaP.length}</p>
-          </div>
-        </header>
-        {errorP ? <p className="empty pipe__head">No se pudieron cargar los proyectos.</p> : (
-          <div className="pipe">
-            {FASES_PROYECTO.map(fase => {
-              const col = listaP.filter(p => p.fase === fase)
-              return (
-                <section key={fase} className="block pipe__col" aria-label={ETIQUETA_FASE[fase]}>
-                  <p className="label caps"><span>{ETIQUETA_FASE[fase]}</span><i className="rule" /><span className="label__m">{col.length}</span></p>
-                  {col.length === 0 ? <p className="nota">—</p> : (
-                    <ul className="list focus">
-                      {col.map(p => (
-                        <li key={p.id} className="fila pipe__proy">
-                          <span className="fila__main">
-                            {p.lead_id
-                              ? <Link href={`/leads/${p.lead_id}`} className="fila__t pipe__lead">{p.cliente}{p.nombre && p.nombre !== p.cliente ? <span> · {p.nombre}</span> : null}</Link>
-                              : <span className="fila__t">{p.cliente}{p.nombre && p.nombre !== p.cliente ? <span> · {p.nombre}</span> : null}</span>}
-                            {!filtro && <span className="fila__s caps">{nombreMarca.get(p.marca || '') || p.marca || 'Sin marca'}</span>}
-                          </span>
-                          <CambiarFase id={p.id} fase={p.fase} />
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </section>
-              )
-            })}
-          </div>
-        )}
+        <Link href="/proyectos" className="fila pipe__lead pipe__head" style={{ marginTop: 64, borderTop: '1px solid var(--line)', paddingTop: 20 }}>
+          <span className="fila__main">
+            <span className="fila__t">Proyectos</span>
+            <span className="fila__s caps">Seguimiento por etapa · {listaP.length}</span>
+          </span>
+          <span className="copy caps">Abrir →</span>
+        </Link>
       </main>
     </div>
   )
