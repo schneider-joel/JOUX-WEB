@@ -903,6 +903,8 @@ button.fila--btn { width: 100%; background: none; border: 0; padding: 0; font: i
 .lead__msg { white-space: pre-wrap; color: var(--muted); font-size: 15px; line-height: 1.55; overflow-wrap: anywhere; }
 .lead__meta div { grid-template-columns: 110px minmax(0, 1fr); }
 .lead__meta dd { overflow-wrap: anywhere; }
+/* Vista previa de «Marcar ganado»: nombres de columna largos (contacto_nombre) */
+.lead__filas div { grid-template-columns: 150px minmax(0, 1fr); }
 .lead__meta a { color: var(--text); }
 @media (hover: hover) and (pointer: fine) { .pipe__lead:hover .fila__t { color: var(--text); } }
 

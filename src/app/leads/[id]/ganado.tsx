@@ -20,7 +20,7 @@ function Fila({ titulo, fila }: { titulo: string; fila: Record<string, unknown> 
   return (
     <div className="block" style={{ gap: 8 }}>
       <p className="caps" style={{ color: 'var(--muted)' }}>{titulo}</p>
-      <dl className="meta lead__meta">
+      <dl className="meta lead__meta lead__filas">
         {Object.entries(fila).map(([k, v]) => <div key={k}><dt className="mono">{k}</dt><dd className="mono">{celda(v)}</dd></div>)}
       </dl>
     </div>
