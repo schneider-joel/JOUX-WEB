@@ -12,8 +12,17 @@ export type Lead = {
   id: number; marca: string; origen: string; id_externo: string | null; estado: EstadoLead
   nombre: string | null; email: string; empresa: string | null; telefono: string | null; pais: string | null
   idioma: 'es' | 'en'; interes: Record<string, unknown>; mensaje: string | null; campos: Record<string, unknown>
-  adjuntos: Adjunto[]; consentimiento: boolean; recibido_en: string; created_at: string; updated_at: string
+  adjuntos: Adjunto[]; consentimiento: boolean; proyecto_id: number | null; recibido_en: string; created_at: string; updated_at: string
 }
+// Fase de seguimiento de un proyecto (proyectos.fase). No toca `status` ni dispara facturas.
+export const FASES_PROYECTO = ['confirmado', 'material', 'en_curso', 'revision', 'cambios', 'entregado', 'cerrado'] as const
+export type FaseProyecto = typeof FASES_PROYECTO[number]
+export const ETIQUETA_FASE: Record<FaseProyecto, string> = {
+  confirmado: 'Confirmado', material: 'Material', en_curso: 'En curso', revision: 'Revisión',
+  cambios: 'Cambios', entregado: 'Entregado', cerrado: 'Cerrado',
+}
+export const esFaseProyecto = (x: unknown): x is FaseProyecto => typeof x === 'string' && (FASES_PROYECTO as readonly string[]).includes(x)
+
 export type Evento = { id: number; tipo: string; fuente: string; datos: Record<string, unknown>; created_at: string }
 
 // «hace 3 h», «hace 2 d»… y si es de hace más de una semana, la fecha.

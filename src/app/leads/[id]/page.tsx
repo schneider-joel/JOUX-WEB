@@ -1,7 +1,10 @@
 import Link from 'next/link'
 import { supabaseServer as sb } from '@/lib/supabase-server'
-import { ETIQUETA_ESTADO, esEstadoLead, fechaHora, hace, type Evento, type Lead } from '@/lib/leads'
+import { ETIQUETA_ESTADO, ETIQUETA_FASE, esEstadoLead, esFaseProyecto, fechaHora, hace, type Evento, type Lead } from '@/lib/leads'
+import type { ClienteFiscal } from '@/lib/ganado'
 import CambiarEstado from './cambiar-estado'
+import AccionesLead from './ganado'
+import FacturarPago1 from './facturar-pago'
 
 export const dynamic = 'force-dynamic'
 // supabase-js usa fetch: sin esto, Next guarda sus respuestas en el Data Cache y la lista sale vieja.
@@ -20,6 +23,9 @@ function textoEvento(e: Evento) {
     const a = esEstadoLead(e.datos.a) ? ETIQUETA_ESTADO[e.datos.a] : valor(e.datos.a)
     return `Estado: ${de} → ${a}`
   }
+  if (e.tipo === 'lead.ganado') return `Ganado: ${valor(e.datos.cliente)}${e.datos.cliente_nuevo ? ' (cliente nuevo)' : ''}${e.datos.tarifa_dia ? ` · €${valor(e.datos.tarifa_dia)}/día` : ''}`
+  if (e.tipo === 'lead.perdido') return `Perdido${e.datos.motivo ? `: ${valor(e.datos.motivo)}` : ''}`
+  if (e.tipo === 'proyecto.fase') return `Fase del proyecto: ${esFaseProyecto(e.datos.de) ? ETIQUETA_FASE[e.datos.de] : '—'} → ${esFaseProyecto(e.datos.a) ? ETIQUETA_FASE[e.datos.a] : valor(e.datos.a)}`
   return e.tipo
 }
 
@@ -39,10 +45,14 @@ export default async function LeadPage({ params }: { params: { id: string } }) {
   )
   if (!lead) return marco(<p className="empty">Este lead no existe.</p>)
 
-  const [{ data: eventos }, { data: marca }] = await Promise.all([
+  const [{ data: eventos }, { data: marca }, { data: clientes }, { data: proyecto }, { data: pago1 }] = await Promise.all([
     sb.from('eventos').select('id, tipo, fuente, datos, created_at').eq('lead_id', lead.id).order('created_at', { ascending: false }),
-    sb.from('marcas').select('nombre').eq('key', lead.marca).maybeSingle(),
+    sb.from('marcas').select('key, nombre, modo').eq('key', lead.marca).maybeSingle(),
+    sb.from('clientes_fiscales').select('cliente, identificador, direccion, pais').order('cliente'),
+    lead.proyecto_id ? sb.from('proyectos').select('id, nombre, cliente, fase, precio_cerrado').eq('id', lead.proyecto_id).maybeSingle() : Promise.resolve({ data: null }),
+    lead.proyecto_id ? sb.from('facturas').select('id, numero').eq('proyecto_id', lead.proyecto_id).eq('pago', 1).maybeSingle() : Promise.resolve({ data: null }),
   ])
+  const paisProyecto = proyecto ? (clientes || []).find(c => c.cliente === proyecto.cliente)?.pais ?? null : null
   const interes = Object.entries(lead.interes || {}).filter(([, v]) => v != null && v !== '')
   const campos = Object.entries(lead.campos || {})
 
@@ -57,6 +67,23 @@ export default async function LeadPage({ params }: { params: { id: string } }) {
       </header>
 
       <div className="col">
+        {proyecto ? (
+          <section className="block" aria-label="Proyecto">
+            <p className="label caps"><span>Proyecto</span><i className="rule" /></p>
+            <dl className="meta lead__meta">
+              <div><dt>Proyecto</dt><dd><Link href={`/pipeline${lead.marca ? `?marca=${lead.marca}` : ''}`}>{proyecto.nombre}</Link></dd></div>
+              <div><dt>Cliente</dt><dd>{proyecto.cliente}</dd></div>
+              <div><dt>Fase</dt><dd>{esFaseProyecto(proyecto.fase) ? ETIQUETA_FASE[proyecto.fase] : '—'}</dd></div>
+              {pago1 && <div><dt>Pago 1</dt><dd><a href={`/invoice/${pago1.id}`} target="_blank" rel="noopener noreferrer">{pago1.numero || 'Factura'}</a></dd></div>}
+            </dl>
+            {marca?.modo === 'cerrado' && proyecto.precio_cerrado != null && !pago1 && (
+              <FacturarPago1 proyectoId={proyecto.id} precio={Number(proyecto.precio_cerrado)} pais={paisProyecto} />
+            )}
+          </section>
+        ) : marca && (
+          <AccionesLead lead={lead} marca={marca} clientes={(clientes || []) as ClienteFiscal[]} />
+        )}
+
         <section className="block" aria-label="Contacto">
           <p className="label caps"><span>Contacto</span><i className="rule" /></p>
           <dl className="meta lead__meta">

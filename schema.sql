@@ -799,3 +799,16 @@ CREATE TABLE IF NOT EXISTS eventos (
 CREATE INDEX IF NOT EXISTS eventos_proyecto ON eventos (proyecto_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS eventos_lead ON eventos (lead_id, created_at DESC);
 ALTER TABLE eventos ENABLE ROW LEVEL SECURITY;
+
+-- MIGRACIÓN: seguimiento de proyectos (automatización fase 3, 2026-10-15, solo aditiva).
+-- `fase` es solo para el seguimiento y no dispara nada; `status` y su trigger siguen igual.
+-- La tarifa por día de un treatment ganado no tiene columna: va en el evento `lead.ganado`.
+ALTER TABLE proyectos ADD COLUMN IF NOT EXISTS fase TEXT
+  CHECK (fase IN ('confirmado','material','en_curso','revision','cambios','entregado','cerrado'));
+ALTER TABLE proyectos ADD COLUMN IF NOT EXISTS lead_id BIGINT REFERENCES leads(id);
+ALTER TABLE proyectos ADD COLUMN IF NOT EXISTS contacto_email TEXT;
+ALTER TABLE proyectos ADD COLUMN IF NOT EXISTS contacto_nombre TEXT;
+ALTER TABLE proyectos ADD COLUMN IF NOT EXISTS idioma TEXT CHECK (idioma IN ('es','en'));
+-- Carpeta de Pitchview o slug de arkevo-revision: así los avisos de esos sistemas encuentran su proyecto.
+ALTER TABLE proyectos ADD COLUMN IF NOT EXISTS ref_entrega TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS proyectos_ref_entrega ON proyectos (ref_entrega) WHERE ref_entrega IS NOT NULL;

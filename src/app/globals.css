@@ -889,6 +889,9 @@ button.fila--btn { width: 100%; background: none; border: 0; padding: 0; font: i
 .pipe__head, .pipe { width: 100%; max-width: 724px; margin-left: auto; margin-right: auto; }
 .pipe { display: flex; flex-direction: column; gap: 48px; }
 .pipe__col .fila__t, .pipe__col .fila__s { white-space: normal; }
+/* Proyecto: nombre y selector de fase; en columnas estrechas el selector baja debajo */
+.pipe__proy { flex-wrap: wrap; row-gap: 8px; }
+.pipe__proy .fila__main { min-width: 160px; }
 /* En pantallas anchas, columnas de verdad (con scroll horizontal si no caben) */
 @media (min-width: 1100px) {
   .pipe__head, .pipe { max-width: none; }

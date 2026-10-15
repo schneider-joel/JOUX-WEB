@@ -26,7 +26,8 @@ export default function CambiarEstado({ id, estado }: { id: number; estado: Esta
       <label className="sel caps" style={{ opacity: guardando ? .6 : 1 }}>
         <span className="sr">Estado</span>
         <select value={valor} disabled={guardando} onChange={e => cambiar(e.target.value as EstadoLead)} aria-label="Estado del lead">
-          {ESTADOS_LEAD.map(s => <option key={s} value={s}>{ETIQUETA_ESTADO[s]}</option>)}
+          {/* «Ganado» solo desde «Marcar ganado»: crea el cliente y el proyecto. */}
+          {ESTADOS_LEAD.map(s => <option key={s} value={s} disabled={s === 'ganado' && valor !== 'ganado'}>{ETIQUETA_ESTADO[s]}</option>)}
         </select>
         <svg className="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6.2 8 10l4-3.8" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" /></svg>
       </label>
