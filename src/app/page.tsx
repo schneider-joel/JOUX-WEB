@@ -316,7 +316,9 @@ export default function Home() {
     // Registros internos (timesheets de períodos ya declarados) no son la
     // factura real: la declarada está importada aparte como histórica.
     if (f.fiscal === false) return false
-    if (!f.proyecto_id) return true
+    // Pagos de webs (crear_factura_pago): su proyecto de precio cerrado nunca
+    // pasa a "Facturado", así que la regla del timesheet las ocultaría siempre.
+    if (!f.proyecto_id || f.pago) return true
     const p = proyectos.find(p => p.id === f.proyecto_id)
     return !p || p.status === 'facturado'
   }
