@@ -534,7 +534,7 @@ export default function Home() {
         activa={seccionActiva.id} onAbrir={id => { const s = secciones.find(x => x.id === id); if (s) abrirSeccion(s) }} />
 
       {/* Las pantallas ya migradas van en la columna de la maqueta (724 px) */}
-      <main className={`main${tab === 'dashboard' ? ' main--col' : ''}`}>
+      <main className={`main${tab === 'dashboard' || tab.startsWith('ts:') ? ' main--col' : ''}`}>
         <header className="page-header">
           <div className="page-header__txt">
             <h1 className="page-title">{titulo}</h1>
@@ -813,14 +813,16 @@ export default function Home() {
         {marcaActiva && <MarcaTab key={marcaActiva.key} marca={marcaActiva} proyectos={proyectosAgencia} demo={demoMarcas}
           numerosExistentes={facturas.map(f => f.numero)} clientes={clientesFiscales} acciones={demoMarcas ? undefined : accionesAgencia} />}
         {marcaTsActiva && gruposMarcaTs.length === 0 && (
-          <div className="card chart-empty">Todavía no hay proyectos en {marcaTsActiva.nombre}. Crea uno con «Nuevo proyecto».</div>
+          <p className="empty">Todavía no hay proyectos en {marcaTsActiva.nombre}. Crea uno con «Nuevo proyecto».</p>
         )}
-        {marcaTsActiva && gruposMarcaTs.map(g => (
-          <div key={g.key} style={{ marginBottom: gruposMarcaTs.length > 1 ? 28 : 0 }}>
-            {gruposMarcaTs.length > 1 && <div className="card-kicker" style={{ margin: '0 2px 10px' }}>{g.label}</div>}
-            <TimesheetTab grupo={g} proyectos={proyectosMarcaTs} dias={dias} facturas={facturas} clientesFiscales={clientesFiscales} reload={loadData} />
+        {marcaTsActiva && gruposMarcaTs.length > 0 && (
+          <div className="col">
+            {/* Un bloque por cliente o grupo, cada uno con su link; con un solo grupo, el nombre ya está en el título */}
+            {gruposMarcaTs.map(g => (
+              <TimesheetTab key={g.key} grupo={g} etiqueta={gruposMarcaTs.length > 1 ? g.label : 'Proyectos'} proyectos={proyectosMarcaTs} dias={dias} facturas={facturas} clientesFiscales={clientesFiscales} reload={loadData} />
+            ))}
           </div>
-        ))}
+        )}
 
         {/* Modals */}
         {modal && (
@@ -1005,14 +1007,16 @@ const labelStyle = { display: 'block', fontSize: 12, color: 'var(--text2)', marg
 const cancelBtnStyle = { padding: '9px 18px', borderRadius: 7, fontSize: 13, cursor: 'pointer', background: 'var(--surface2)', color: 'var(--text2)', border: '1px solid var(--border)', fontFamily: 'Inter, sans-serif' }
 const confirmBtnStyle = { flex: 1, padding: '9px 18px', borderRadius: 7, fontSize: 13, cursor: 'pointer', background: 'var(--accent)', color: '#000', border: 'none', fontWeight: 500, fontFamily: 'Inter, sans-serif' }
 
-const statusColor: Record<string, string> = { activo: 'var(--amber)', completado: 'var(--text2)', facturado: 'var(--green)' }
+// Estado de cada proyecto y de cada día, con su punto: verde = activo o hecho, ámbar = por facturar o en curso.
+const ESTADO_PROYECTO: Record<string, [string, string]> = { activo: ['Activo', 'dot--green'], completado: ['Completado', 'dot--wait'], facturado: ['Facturado', 'dot--off'] }
+const ESTADO_DIA: Record<string, [string, string]> = { pendiente: ['Pendiente', 'dot--off'], en_progreso: ['En progreso', 'dot--wait'], hecho: ['Hecho', 'dot--ok'] }
+const Chevron = () => <svg className="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6.2 8 10l4-3.8" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" /></svg>
 
-function TimesheetTab({ grupo, proyectos, dias, facturas, clientesFiscales, reload }: { grupo: GrupoTimesheet, proyectos: Proyecto[], dias: DiaTrabajado[], facturas: Factura[], clientesFiscales: ClienteFiscal[], reload: () => void }) {
+function TimesheetTab({ grupo, etiqueta, proyectos, dias, facturas, clientesFiscales, reload }: { grupo: GrupoTimesheet, etiqueta: string, proyectos: Proyecto[], dias: DiaTrabajado[], facturas: Factura[], clientesFiscales: ClienteFiscal[], reload: () => void }) {
   const [modal, setModal] = useState<Modal>(null)
   const [expandido, setExpandido] = useState<number | null>(null)
   const [token, setToken] = useState('')
   const [linkCopiado, setLinkCopiado] = useState(false)
-  const [copyHover, setCopyHover] = useState(false)
   const [clienteFiltro, setClienteFiltro] = useState('todos')
 
   const link = linkPublico(grupo)
@@ -1103,137 +1107,125 @@ function TimesheetTab({ grupo, proyectos, dias, facturas, clientesFiscales, relo
     reload()
   }
 
+  // Como la web: un bloque por grupo con su link público; cada proyecto, una fila que se despliega en su timesheet.
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 16px', marginBottom: 16, fontSize: 12, color: 'var(--text2)' }}>
-        <span>Link público de solo lectura para {grupo.label}</span>
-        <button
-          onClick={copiarLink}
-          onMouseEnter={() => setCopyHover(true)}
-          onMouseLeave={() => setCopyHover(false)}
-          style={{
-            fontSize: 11, borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontFamily: 'Inter, sans-serif',
-            transition: 'background 0.15s, border-color 0.15s, color 0.15s',
-            background: linkCopiado ? 'var(--green-dim)' : copyHover ? 'var(--border)' : 'none',
-            border: `1px solid ${linkCopiado ? 'var(--green)' : 'var(--border)'}`,
-            color: linkCopiado ? 'var(--green)' : 'var(--text)',
-          }}
-        >
-          {linkCopiado ? '✓ Link copiado' : 'Copiar link'}
-        </button>
-      </div>
+    <section className="block" aria-label={grupo.label}>
+      <p className="label caps">
+        <span>{etiqueta}</span><i className="rule" />
+        <button type="button" className="label__m copy" onClick={copiarLink} title={`Link público de solo lectura para ${grupo.label}`}>{linkCopiado ? 'Link copiado ✓' : `/${link.ruta}/ · Copiar link`}</button>
+      </p>
 
       {grupo.clientes.length > 1 && (
-        <div style={{ marginBottom: 16 }}>
-          <select value={clienteFiltro} onChange={e => setClienteFiltro(e.target.value)}
-            style={{ fontSize: 11, padding: '4px 10px', borderRadius: 6, background: 'var(--surface2)', color: 'var(--text2)', border: '1px solid var(--border)', fontFamily: 'Inter, sans-serif' }}>
+        <label className="sel caps">
+          <span className="sr">Cliente</span>
+          <select value={clienteFiltro} onChange={e => setClienteFiltro(e.target.value)}>
             <option value="todos">Todos los clientes</option>
             {grupo.clientes.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
-        </div>
+          <Chevron />
+        </label>
       )}
 
-      {proyectosFiltrados.length === 0 && (
-        <div style={{ textAlign: 'center', color: 'var(--text3)', fontSize: 13, padding: '40px 0' }}>No hay proyectos todavía.</div>
-      )}
+      {proyectosFiltrados.length === 0 ? <p className="empty">No hay proyectos todavía.</p> : (
+        <ul className="projs focus">
+          {proyectosFiltrados.map(p => {
+            const total = totalProyecto(p.id)
+            const horas = p.modo_rate === 'hora' ? horasProyecto(p.id) : null
+            // Clientes de España: el total lleva IVA 21 % y retención 15 % encima de la base.
+            const imp = desglose(total, clientesFiscales.find(c => c.cliente === p.cliente)?.pais === 'ES')
+            const isOpen = expandido === p.id
+            const ds = diasDe(p.id)
+            const factura = p.status === 'facturado' ? facturas.find(f => f.proyecto_id === p.id) : undefined
+            // Horas y stand by en nodos de texto separados, como antes: el modo privado tapa las horas sueltas.
+            const cantidad = horas && horas.hrs + horas.sb > 0 ? <>{fmtHoras(horas.hrs)}{horas.sb > 0 ? ` · SB ${fmtHoras(horas.sb)}` : ''}</> : p.modo_rate === 'hora' ? 'por hora' : 'por día'
+            const [estado, punto] = ESTADO_PROYECTO[p.status] || [p.status, 'dot--off']
+            return (
+              <li key={p.id} className={`p${isOpen ? ' is-open' : ''}`}>
+                <button type="button" className="p__head" aria-expanded={isOpen} onClick={() => setExpandido(isOpen ? null : p.id)}>
+                  <span className="p__main">
+                    <span className="p__n">{p.nombre}</span>
+                    <span className="p__s caps">{p.cliente} · {cantidad}{p.numero_proyecto ? ` · ${p.numero_proyecto}` : ''}</span>
+                  </span>
+                  <span className="p__v num" title={imp ? `Base €${fmt2(imp.base)} + IVA 21 % €${fmt2(imp.iva)} − retención 15 % €${fmt2(imp.ret)}` : undefined}>€{imp ? fmt2(imp.total) : fmt(total)}</span>
+                  <span className="st caps"><i className={`dot ${punto}`} aria-hidden="true" />{estado}</span>
+                  <Chevron />
+                </button>
 
-      {proyectosFiltrados.map(p => {
-        const total = totalProyecto(p.id)
-        const horas = p.modo_rate === 'hora' ? horasProyecto(p.id) : null
-        // Clientes de España: el total lleva IVA 21 % y retención 15 % encima de la base.
-        const imp = desglose(total, clientesFiscales.find(c => c.cliente === p.cliente)?.pais === 'ES')
-        const isOpen = expandido === p.id
-        return (
-          <div key={p.id} className="proj-card">
-            <div className="proj-head" onClick={() => setExpandido(isOpen ? null : p.id)}>
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 500 }}>{p.nombre}</div>
-                <div style={{ fontSize: 11, color: 'var(--text3)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <select value={p.cliente} onClick={e => e.stopPropagation()} onChange={e => cambiarCliente(p, e.target.value)} title="Cambiar cliente"
-                    style={{ background: 'none', border: 'none', borderBottom: '1px dotted var(--border)', color: 'var(--text3)', fontSize: 11, fontFamily: 'Inter, sans-serif', outline: 'none', padding: 0, cursor: 'pointer' }}>
-                    {!clientesFiscales.some(c => c.cliente === p.cliente) && <option value={p.cliente}>{p.cliente}</option>}
-                    {clientesFiscales.map(c => <option key={c.cliente} value={c.cliente}>{c.cliente}</option>)}
-                  </select>
-                  <span>·</span>
-                  {p.modo_rate === 'hora' ? 'por hora' : 'por día'}
-                  <span>·</span>
-                  <input
-                    key={p.id + (p.numero_proyecto || '')}
-                    defaultValue={p.numero_proyecto || ''}
-                    placeholder="Nº de referencia"
-                    onClick={e => e.stopPropagation()}
-                    onBlur={e => { if (e.target.value !== (p.numero_proyecto || '')) updateNumeroProyecto(p.id, e.target.value) }}
-                    style={{ background: 'none', border: 'none', borderBottom: '1px dotted var(--border)', color: 'var(--text3)', fontSize: 11, fontFamily: 'Inter, sans-serif', outline: 'none', width: 110, padding: 0 }}
-                  />
-                </div>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                {horas && horas.hrs + horas.sb > 0 && (
-                  <div style={{ fontSize: 11.5, color: 'var(--text3)', fontFamily: 'JetBrains Mono, monospace' }}>{fmtHoras(horas.hrs)}{horas.sb > 0 ? ` · SB ${fmtHoras(horas.sb)}` : ''}</div>
-                )}
-                <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 14, fontWeight: 500, textAlign: 'right' }}>
-                  €{imp ? fmt2(imp.total) : fmt(total)}
-                  {imp && <div style={{ fontSize: 10.5, fontWeight: 400, color: 'var(--text3)' }} title={`Base €${fmt2(imp.base)} + IVA 21 % €${fmt2(imp.iva)} − retención 15 % €${fmt2(imp.ret)}`}>base €{fmt2(imp.base)} · IVA + ret.</div>}
-                </div>
-                {(() => {
-                  if (p.status !== 'facturado') return null
-                  const factura = facturas.find(f => f.proyecto_id === p.id)
-                  return factura ? (
-                    <a className="icon-btn accent" href={`/invoice/${factura.id}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} title="Ver/generar factura"><Icon.invoice /></a>
-                  ) : null
-                })()}
-                <select value={p.status} onClick={e => e.stopPropagation()} onChange={e => cambiarStatus(p, e.target.value)}
-                  style={{ fontSize: 11, padding: '3px 8px', borderRadius: 20, background: 'var(--surface2)', color: statusColor[p.status], border: '1px solid var(--border)', fontFamily: 'Inter, sans-serif' }}>
-                  <option value="activo">Activo</option>
-                  <option value="completado">Completado</option>
-                  <option value="facturado">Facturado</option>
-                </select>
-                <button className="icon-btn danger" onClick={e => { e.stopPropagation(); deleteProyecto(p.id) }} title="Borrar proyecto"><Icon.x /></button>
-              </div>
-            </div>
+                {isOpen && (
+                  <div className="p__body">
+                    <ul className="dias">
+                      {ds.length === 0 && <li className="dias__vacio">Sin días cargados.</li>}
+                      {ds.map(d => {
+                        const [estadoDia, puntoDia] = ESTADO_DIA[d.status] || [d.status, 'dot--off']
+                        return (
+                          <li key={d.id} className="d">
+                            <button type="button" className="d__btn" onClick={() => setModal({ type: 'editDia', data: { dia: d, porHora: p.modo_rate === 'hora' } })} title="Editar día">
+                              <span className="d__f caps">{fmtDate(d.fecha)}</span>
+                              <span className="d__q">{d.hrs != null ? `${d.hrs}h × €${d.rate}${d.standby_hrs > 0 ? ` · SB ${d.standby_hrs}h` : ''}` : `€${d.rate}/día`}</span>
+                              <span className="num">€{fmt2(d.total_day)}</span>
+                              <span className="d__st" title={estadoDia}><i className={`dot ${puntoDia}`} aria-hidden="true" /><span className="sr">{estadoDia}</span></span>
+                            </button>
+                            <button type="button" className="d__x" onClick={() => deleteDia(d.id)} title="Borrar día" aria-label={`Borrar el día ${fmtDate(d.fecha)}`}><Icon.x /></button>
+                          </li>
+                        )
+                      })}
+                      {ds.length > 1 && (
+                        <li className="d d--tot">
+                          <span className="d__fila">
+                            <span className="d__f caps">Total</span>
+                            <span className="d__q">{horas ? `${fmtHoras(horas.hrs)}${horas.sb > 0 ? ` · SB ${fmtHoras(horas.sb)}` : ''}` : `${ds.length} días`}</span>
+                            <span className="num">€{fmt2(total)}</span>
+                            <span />
+                          </span>
+                          <span className="d__hueco" />
+                        </li>
+                      )}
+                    </ul>
 
-            {isOpen && (
-              <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border)' }}>
-                {diasDe(p.id).length === 0 && (
-                  <div style={{ fontSize: 12, color: 'var(--text3)', padding: '8px 0' }}>Sin días cargados.</div>
-                )}
-                {diasDe(p.id).map(d => (
-                  <div key={d.id} onClick={() => setModal({ type: 'editDia', data: { dia: d, porHora: p.modo_rate === 'hora' } })}
-                    style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', fontSize: 12, borderBottom: '0.5px solid var(--border)', cursor: 'pointer' }}>
-                    <div style={{ color: 'var(--text2)', width: 70 }}>{fmtDate(d.fecha)}</div>
-                    {d.hrs != null ? (
-                      <div style={{ color: 'var(--text3)', flex: 1 }}>{d.hrs}h × €{d.rate}{d.standby_hrs > 0 ? ` · SB ${d.standby_hrs}h` : ''}</div>
-                    ) : (
-                      <div style={{ color: 'var(--text3)', flex: 1 }}>€{d.rate}/día</div>
+                    {imp && ds.length > 0 && (
+                      <dl className="tax">
+                        <div><dt>IVA 21 %</dt><dd className="num">+€{fmt2(imp.iva)}</dd></div>
+                        <div><dt>Retención IRPF 15 %</dt><dd className="num">−€{fmt2(imp.ret)}</dd></div>
+                        <div><dt>Total a cobrar</dt><dd className="num">€{fmt2(imp.total)}</dd></div>
+                      </dl>
                     )}
-                    <div style={{ fontFamily: 'JetBrains Mono, monospace', width: 70, textAlign: 'right' }}>€{fmt2(d.total_day)}</div>
-                    <span style={{ fontSize: 10, color: 'var(--text3)', width: 80, textAlign: 'right' }}>{d.status}</span>
-                    <button className="icon-btn danger" style={{ width: 24, height: 24, marginLeft: 8 }} onClick={e => { e.stopPropagation(); deleteDia(d.id) }} title="Borrar día"><Icon.x /></button>
-                  </div>
-                ))}
-                {diasDe(p.id).length > 1 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0 2px', fontSize: 12, fontWeight: 500 }}>
-                    <div style={{ width: 70 }}>Total</div>
-                    <div style={{ color: 'var(--text2)', flex: 1 }}>{horas ? `${fmtHoras(horas.hrs)}${horas.sb > 0 ? ` · SB ${fmtHoras(horas.sb)}` : ''}` : `${diasDe(p.id).length} días`}</div>
-                    <div style={{ fontFamily: 'JetBrains Mono, monospace', width: 70, textAlign: 'right' }}>€{fmt2(total)}</div>
-                    <span style={{ width: 112 }} />
+
+                    <div className="p__foot">
+                      <button type="button" className="add caps" onClick={() => setModal({ type: 'addDia', data: { proyectoId: p.id, porHora: p.modo_rate === 'hora' } })}><Icon.plus />Nuevo día</button>
+                      <span className="foot__r">
+                        {factura && <a className="copy caps" href={`/invoice/${factura.id}`} target="_blank" rel="noopener noreferrer" title="Ver/generar factura">{factura.numero || 'Factura'} →</a>}
+                        <span className="seg caps" role="group" aria-label="Estado del proyecto">
+                          {(['activo', 'completado', 'facturado'] as const).map(st => (
+                            <button key={st} type="button" aria-pressed={p.status === st} onClick={() => { if (st !== p.status) cambiarStatus(p, st) }}>{ESTADO_PROYECTO[st][0]}</button>
+                          ))}
+                        </span>
+                      </span>
+                    </div>
+
+                    <div className="p__meta caps">
+                      <label className="p__campo">Cliente
+                        <select value={p.cliente} onChange={e => cambiarCliente(p, e.target.value)} title="Cambiar cliente">
+                          {!clientesFiscales.some(c => c.cliente === p.cliente) && <option value={p.cliente}>{p.cliente}</option>}
+                          {clientesFiscales.map(c => <option key={c.cliente} value={c.cliente}>{c.cliente}</option>)}
+                        </select>
+                      </label>
+                      <label className="p__campo">Ref.
+                        <input
+                          key={p.id + (p.numero_proyecto || '')}
+                          defaultValue={p.numero_proyecto || ''}
+                          placeholder="Nº de referencia"
+                          onBlur={e => { if (e.target.value !== (p.numero_proyecto || '')) updateNumeroProyecto(p.id, e.target.value) }}
+                        />
+                      </label>
+                      <button type="button" className="copy borrar" onClick={() => deleteProyecto(p.id)}>Borrar proyecto</button>
+                    </div>
                   </div>
                 )}
-                {imp && diasDe(p.id).length > 0 && (
-                  <div style={{ padding: '4px 0 2px', fontSize: 12, color: 'var(--text2)' }}>
-                    {([['IVA 21 %', `+€${fmt2(imp.iva)}`], ['Retención IRPF 15 %', `−€${fmt2(imp.ret)}`], ['Total a cobrar', `€${fmt2(imp.total)}`]] as [string, string][]).map(([l, v], k) => (
-                      <div key={l} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', fontWeight: k === 2 ? 500 : 400, color: k === 2 ? 'var(--text)' : undefined }}>
-                        <span>{l}</span><span style={{ fontFamily: 'JetBrains Mono, monospace', marginRight: 112 }}>{v}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <button className="btn btn-dashed" style={{ marginTop: 10 }} onClick={() => setModal({ type: 'addDia', data: { proyectoId: p.id, porHora: p.modo_rate === 'hora' } })}><Icon.plus />Nuevo día</button>
-              </div>
-            )}
-          </div>
-        )
-      })}
+              </li>
+            )
+          })}
+        </ul>
+      )}
 
       {modal && (
         <div className="modal-bg" onClick={() => setModal(null)}>
@@ -1247,7 +1239,7 @@ function TimesheetTab({ grupo, proyectos, dias, facturas, clientesFiscales, relo
           </div>
         </div>
       )}
-    </div>
+    </section>
   )
 }
 
@@ -1286,52 +1278,60 @@ function ModalAddProyecto({ clienteInicial, onAdd, onClose }: { clienteInicial?:
     onAdd({ nombre, cliente: clienteFinal, numero_proyecto: numeroProyecto, modo_rate: modo })
   }
 
+  // Campos de una sola línea y botones de la web (mismo estado y mismas acciones que antes).
   return (
     <>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, fontSize: 16, fontWeight: 500 }}>
-        Nuevo proyecto <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', fontSize: 20 }}>×</button>
-      </div>
-      <div style={{ marginBottom: 14 }}>
-        <label style={labelStyle}>Nombre del proyecto</label>
-        <input value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Ej: Verizon x FIFA World Cup" style={inputStyle} />
-      </div>
-      <div style={{ marginBottom: 14 }}>
-        <label style={labelStyle}>Cliente</label>
+      <div className="modal__head"><h2>Nuevo proyecto</h2><button type="button" className="modal__x" onClick={onClose} aria-label="Cerrar">×</button></div>
+      <div className="modal__campos">
+        <div className="field">
+          <label className="caps" htmlFor="np-nombre">Nombre del proyecto</label>
+          <input id="np-nombre" value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Ej: Verizon x FIFA World Cup" />
+        </div>
         {!nuevoCliente ? (
-          <select value={cliente} onChange={e => {
-            if (e.target.value === '__nuevo__') { setNuevoCliente(true); return }
-            setCliente(e.target.value)
-          }} style={inputStyle}>
-            {clientesGuardados.map(c => <option key={c.cliente} value={c.cliente}>{c.cliente}</option>)}
-            <option value="__nuevo__">+ Nuevo cliente...</option>
-          </select>
-        ) : (
-          <div style={{ border: '1px solid var(--border)', borderRadius: 7, padding: 12 }}>
-            <input value={nuevoNombre} onChange={e => setNuevoNombre(e.target.value)} placeholder="Nombre del cliente" style={{ ...inputStyle, marginBottom: 8 }} />
-            <input value={nuevoIdentificador} onChange={e => setNuevoIdentificador(e.target.value)} placeholder="Identificador (CIF/VAT/registro)" style={{ ...inputStyle, marginBottom: 8 }} />
-            <textarea value={nuevoDireccion} onChange={e => setNuevoDireccion(e.target.value)} placeholder="Dirección" rows={2} style={{ ...inputStyle, resize: 'vertical' as const, marginBottom: 8 }} />
-            <button type="button" onClick={() => setNuevoCliente(false)} style={{ fontSize: 11, color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>← Elegir cliente guardado</button>
+          <div className="field">
+            <label className="caps" htmlFor="np-cliente">Cliente</label>
+            <select id="np-cliente" value={cliente} onChange={e => {
+              if (e.target.value === '__nuevo__') { setNuevoCliente(true); return }
+              setCliente(e.target.value)
+            }}>
+              {clientesGuardados.map(c => <option key={c.cliente} value={c.cliente}>{c.cliente}</option>)}
+              <option value="__nuevo__">+ Nuevo cliente...</option>
+            </select>
+            <Chevron />
           </div>
+        ) : (
+          <>
+            <div className="field">
+              <label className="caps" htmlFor="np-nuevo">Cliente nuevo</label>
+              <input id="np-nuevo" value={nuevoNombre} onChange={e => setNuevoNombre(e.target.value)} placeholder="Nombre del cliente" />
+            </div>
+            <div className="field">
+              <label className="caps" htmlFor="np-id">Identificador</label>
+              <input id="np-id" value={nuevoIdentificador} onChange={e => setNuevoIdentificador(e.target.value)} placeholder="Identificador (CIF/VAT/registro)" />
+            </div>
+            <div className="field">
+              <label className="caps" htmlFor="np-dir">Dirección</label>
+              <textarea id="np-dir" value={nuevoDireccion} onChange={e => setNuevoDireccion(e.target.value)} placeholder="Dirección" rows={2} />
+            </div>
+            <button type="button" className="copy caps modal__volver" onClick={() => setNuevoCliente(false)}>← Elegir cliente guardado</button>
+          </>
         )}
-      </div>
-      <div style={{ marginBottom: 14 }}>
-        <label style={labelStyle}>Rate</label>
-        <div style={{ display: 'flex', gap: 8 }}>
-          {([['hora', 'Por hora'], ['dia', 'Fijo por día']] as const).map(([m, label]) => (
-            <button key={m} type="button" onClick={() => setModoElegido(m)}
-              style={{ ...inputStyle, flex: 1, cursor: 'pointer', textAlign: 'center', borderColor: modo === m ? 'var(--accent)' : 'var(--border)', color: modo === m ? 'var(--accent-bright)' : 'var(--text2)', background: modo === m ? 'var(--accent-dim)' : 'var(--surface2)' }}>
-              {label}
-            </button>
-          ))}
+        <div className="field">
+          <span className="caps field__l">Rate</span>
+          <span className="seg caps" role="group" aria-label="Rate">
+            {([['hora', 'Por hora'], ['dia', 'Fijo por día']] as const).map(([m, label]) => (
+              <button key={m} type="button" aria-pressed={modo === m} onClick={() => setModoElegido(m)}>{label}</button>
+            ))}
+          </span>
+        </div>
+        <div className="field">
+          <label className="caps" htmlFor="np-ref">Nº de referencia (para el cliente, ej: 268)</label>
+          <input id="np-ref" value={numeroProyecto} onChange={e => setNumeroProyecto(e.target.value)} placeholder="Ej: F260099" />
         </div>
       </div>
-      <div style={{ marginBottom: 14 }}>
-        <label style={labelStyle}>Nº de referencia (para el cliente, ej: 268)</label>
-        <input value={numeroProyecto} onChange={e => setNumeroProyecto(e.target.value)} placeholder="Ej: F260099" style={inputStyle} />
-      </div>
-      <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
-        <button onClick={onClose} style={cancelBtnStyle}>Cancelar</button>
-        <button onClick={crear} style={confirmBtnStyle}>Crear</button>
+      <div className="modal__foot">
+        <button type="button" className="copy caps" onClick={onClose}>Cancelar</button>
+        <button type="button" className="pill pill--sm" onClick={crear}>Crear</button>
       </div>
     </>
   )
@@ -1357,42 +1357,42 @@ function ModalAddDia({ porHora, dia, onAdd, onClose }: { porHora: boolean, dia?:
 
   return (
     <>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, fontSize: 16, fontWeight: 500 }}>
-        {dia ? 'Editar día' : 'Nuevo día'} <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', fontSize: 20 }}>×</button>
-      </div>
-      <div style={{ marginBottom: 14 }}>
-        <label style={labelStyle}>Fecha</label>
-        <input type="date" value={fecha} onChange={e => setFecha(e.target.value)} style={inputStyle} />
-      </div>
-      <div style={{ marginBottom: 14 }}>
-        <label style={labelStyle}>{porHora ? 'Rate por hora (€)' : 'Rate por día (€)'}</label>
-        <input type="number" value={rate} onChange={e => setRate(e.target.value)} placeholder="0" style={inputStyle} />
-      </div>
-      {porHora && (
-        <>
-          <div style={{ marginBottom: 14 }}>
-            <label style={labelStyle}>Horas trabajadas</label>
-            <input type="number" value={hrs} onChange={e => setHrs(e.target.value)} placeholder="0" style={inputStyle} />
+      <div className="modal__head"><h2>{dia ? 'Editar día' : 'Nuevo día'}</h2><button type="button" className="modal__x" onClick={onClose} aria-label="Cerrar">×</button></div>
+      <div className="modal__campos">
+        <div className="field">
+          <label className="caps" htmlFor="nd-fecha">Fecha</label>
+          <input id="nd-fecha" type="date" value={fecha} onChange={e => setFecha(e.target.value)} />
+        </div>
+        <div className="field">
+          <label className="caps" htmlFor="nd-rate">{porHora ? 'Rate por hora (€)' : 'Rate por día (€)'}</label>
+          <input id="nd-rate" type="number" value={rate} onChange={e => setRate(e.target.value)} placeholder="0" />
+        </div>
+        {porHora && (
+          <div className="modal__par">
+            <div className="field">
+              <label className="caps" htmlFor="nd-hrs">Horas trabajadas</label>
+              <input id="nd-hrs" type="number" value={hrs} onChange={e => setHrs(e.target.value)} placeholder="0" />
+            </div>
+            <div className="field">
+              <label className="caps" htmlFor="nd-sb">Stand by hrs</label>
+              <input id="nd-sb" type="number" value={standby} onChange={e => setStandby(e.target.value)} placeholder="0" />
+            </div>
           </div>
-          <div style={{ marginBottom: 14 }}>
-            <label style={labelStyle}>Stand by hrs</label>
-            <input type="number" value={standby} onChange={e => setStandby(e.target.value)} placeholder="0" style={inputStyle} />
-          </div>
-        </>
-      )}
-      <div style={{ marginBottom: 14 }}>
-        <label style={labelStyle}>Status</label>
-        <select value={status} onChange={e => setStatus(e.target.value)} style={inputStyle}>
-          <option value="pendiente">Pendiente</option>
-          <option value="en_progreso">En progreso</option>
-          <option value="hecho">Hecho</option>
-        </select>
+        )}
+        <div className="field">
+          <label className="caps" htmlFor="nd-status">Status</label>
+          <select id="nd-status" value={status} onChange={e => setStatus(e.target.value)}>
+            <option value="pendiente">Pendiente</option>
+            <option value="en_progreso">En progreso</option>
+            <option value="hecho">Hecho</option>
+          </select>
+          <Chevron />
+        </div>
       </div>
-      <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
-        <button onClick={onClose} style={cancelBtnStyle}>Cancelar</button>
-        <button onClick={submit} style={confirmBtnStyle}>{dia ? 'Guardar' : 'Agregar'}</button>
+      <div className="modal__foot">
+        <button type="button" className="copy caps" onClick={onClose}>Cancelar</button>
+        <button type="button" className="pill pill--sm" onClick={submit}>{dia ? 'Guardar' : 'Agregar'}</button>
       </div>
     </>
   )
 }
-
