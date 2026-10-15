@@ -549,6 +549,56 @@ a.d__btn { color: inherit; text-decoration: none; }
 .field input.archivo { font-size: 13px; color: var(--muted); padding: 8px 0 10px; }
 .field input.archivo::file-selector-button { font: inherit; margin-right: 12px; padding: 6px 12px; border: 1px dashed var(--dim); border-radius: 99px; background: none; color: var(--muted); cursor: pointer; }
 
+/* Impuestos: lo que hay que apartar arriba, solo; debajo, de dónde sale cada modelo */
+.imp .label .seg { flex: none; }
+.imp .label > span:first-child { white-space: nowrap; }
+.gestor { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px 24px; flex-wrap: wrap; }
+.gestor__t { display: inline-flex; align-items: center; gap: 9px; color: var(--muted); font-size: 14.5px; padding-bottom: 10px; }
+.gestor__campos { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; width: min(100%, 300px); }
+.imp input[type="number"] { appearance: textfield; -moz-appearance: textfield; }
+.imp input[type="number"]::-webkit-inner-spin-button, .imp input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.imp__cuota { max-width: 220px; }
+/* Desglose de cada modelo: una fila por paso, separadas por aire; una sola línea antes del resultado */
+.calc { list-style: none; display: flex; flex-direction: column; }
+.cr { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 16px; padding: 9px 0; }
+.cr__main { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.cr__n { font-size: 16px; letter-spacing: -.01em; color: var(--muted); }
+.cr__s { display: inline-flex; align-items: center; gap: 8px; color: var(--dim); }
+.cr .num { font-size: 14px; text-align: right; color: var(--muted); }
+.cr--sub .cr__n, .cr--sub .num { color: var(--text); }
+.cr--tot { margin-top: 8px; padding-top: 14px; }
+.cr--tot .cr__n { color: var(--text); font-weight: 500; }
+.cr--tot .num { color: var(--text); font-size: 16px; }
+/* Por trimestre: una barra fina por trimestre; lo que falta presentar, rayado; lo que está en curso, discontinuo */
+.qs { list-style: none; display: flex; flex-direction: column; }
+.qb { width: 100%; display: grid; grid-template-columns: 30px minmax(0, 1fr) 104px; align-items: center; gap: 16px; padding: 8px 0;
+  border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.qb__k { color: var(--dim); transition: color .2s; }
+.qb.is-on .qb__k { color: var(--text); }
+.qb__t { height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.qb__f { display: block; height: 100%; width: calc(var(--w) * 100%); border-radius: 2px; background: var(--text); transform-origin: left;
+  animation: fill 1.1s var(--ease) both; animation-delay: calc(300ms + var(--i) * 90ms); }
+.qb__f.is-p { background: repeating-linear-gradient(-45deg, var(--muted) 0 1px, transparent 1px 3px); box-shadow: inset 0 0 0 1px var(--muted); }
+.qb__f.is-e { background: transparent; border: 1px dashed var(--dim); }
+.qb .num { font-size: 13.5px; text-align: right; color: var(--muted); transition: color .2s; }
+.qb.is-on .num { color: var(--text); }
+.sw--e { background: transparent; border: 1px dashed var(--dim); }
+.imp .legend { flex-wrap: wrap; gap: 8px 18px; }
+@media (hover: hover) and (pointer: fine) { .qb:hover .qb__k, .qb:hover .num { color: var(--text); } }
+/* ZIP del trimestre: nombre, una línea con lo que lleva y los botones; al desplegar, sus ventas y compras */
+.zip { display: flex; justify-content: space-between; align-items: center; gap: 14px 24px; flex-wrap: wrap; }
+.zip__main { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.zip__n { font-size: 16px; letter-spacing: -.01em; }
+.zip__s { color: var(--dim); }
+.zip__acts { display: inline-flex; align-items: center; gap: 22px; }
+.ln { list-style: none; display: flex; flex-direction: column; animation: rise .5s var(--ease) both; }
+.ln li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: baseline; padding: 6px 0; font-size: 14px; }
+.ln__m { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ln__t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ln__s { color: var(--dim); }
+.ln .num { font-size: 13.5px; color: var(--muted); }
+.imp__nota { max-width: 64ch; line-height: 1.6; }
+
 /* Diálogos: campos de una sola línea y los botones de la web */
 .modal__head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 26px; }
 .modal__head h2 { font-size: 18px; font-weight: 500; letter-spacing: -.01em; }
@@ -587,6 +637,11 @@ a.d__btn { color: inherit; text-decoration: none; }
   .filt { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: -6px -22px; padding: 6px 22px; }
   .filt::-webkit-scrollbar { display: none; }
   .filt > * { flex: none; }  /* 10 + 10 + 10 + 24 − 16: el hueco del punto y del botón de borrar */
+  .gestor__campos { width: 100%; }
+  .cr, .ln li { gap: 4px 12px; }
+  .qb { grid-template-columns: 26px minmax(0, 1fr) auto; gap: 12px; }
+  .zip { flex-direction: column; align-items: stretch; }
+  .zip__acts { justify-content: space-between; }
 }
 
 /* ---- Buttons (pantallas antiguas, con el aspecto de .ghost y .pill) ---- */
@@ -657,7 +712,7 @@ span.pill { font-size: 10px; padding: 3px 8px; border-radius: 20px; font-weight:
   .ghost:hover { border-color: var(--dim); background: var(--hover); }
   .ghost:hover .arr, .cta:hover .arr { transform: translateX(3px); }
   .chip:hover span { border-color: var(--dim); color: var(--text); }
-  .seg button:hover { color: var(--text); }
+  .seg button:not([aria-pressed="true"]):hover { color: var(--text); }
   .copy:hover { color: var(--text); }
   .focus:hover > :not(:hover) { opacity: .32; }
   .tick:hover { border-color: var(--green); color: var(--green); }
