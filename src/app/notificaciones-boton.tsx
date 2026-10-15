@@ -95,6 +95,8 @@ export default function NotificacionesBoton({ onIr }: { onIr?: (tab: string) => 
     setPanel(false)
     const tab = n.url ? new URL(n.url, window.location.origin).searchParams.get('tab') : null
     if (tab) onIr?.(tab)
+    // Avisos que abren otra página del hub (p. ej. la ficha de un lead).
+    else if (n.url?.startsWith('/')) window.location.href = n.url
   }
 
   const eliminar = (id: number) => {
@@ -129,7 +131,7 @@ export default function NotificacionesBoton({ onIr }: { onIr?: (tab: string) => 
           <div style={{ position: 'fixed', top: 72, right: 16, width: 'min(360px, calc(100vw - 32px))', maxHeight: 'min(480px, calc(100vh - 100px))', display: 'flex', flexDirection: 'column', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, boxShadow: '0 12px 40px rgba(0,0,0,.45)', zIndex: 901, overflow: 'hidden' }}>
             <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)', fontSize: 13, fontWeight: 600 }}>Notificaciones</div>
             <div style={{ overflowY: 'auto', flex: 1 }}>
-              {lista.length === 0 && <div style={{ padding: '24px 14px', fontSize: 12.5, color: 'var(--text3)', textAlign: 'center' }}>Aún no hay notificaciones. Aquí aparecerá cada cobro que se vincule a una factura.</div>}
+              {lista.length === 0 && <div style={{ padding: '24px 14px', fontSize: 12.5, color: 'var(--text3)', textAlign: 'center' }}>Aún no hay notificaciones. Aquí aparecerá cada cobro que se vincule a una factura y cada lead nuevo.</div>}
               {lista.map(n => (
                 <div key={n.id} style={{ display: 'flex', alignItems: 'flex-start', background: n.leida ? 'transparent' : 'var(--surface2)', borderBottom: '1px solid var(--border)' }}>
                 <button onClick={() => ir(n)} style={{ display: 'flex', gap: 10, flex: 1, minWidth: 0, textAlign: 'left', padding: '11px 0 11px 14px', background: 'none', border: 'none', cursor: n.url ? 'pointer' : 'default', fontFamily: 'inherit', color: 'inherit' }}>

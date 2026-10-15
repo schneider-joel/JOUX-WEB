@@ -8,6 +8,7 @@ import { EstadoBancos, Menu, Reloj, TemaBoton } from './marco'
 import ImpuestosTab, { proximoPago, claveReal, type Reales } from './impuestos-tab'
 import CuentasCard from './cuentas-card'
 import MarcaCard from './marca-card'
+import LeadsCard from './leads-card'
 import { totalACobrar, desglose, desgloseFactura } from '@/lib/importes'
 import MarcaTab, { type AccionesAgencia } from './marca-tab'
 import { DEMO_FACTURAS, DEMO_MARCAS, DEMO_PROYECTOS, aProyectoAgencia, facturaSueltaAAgencia, demoMarcasActivo, esAgencia, porOrden, type Marca } from '@/lib/marcas'
@@ -595,6 +596,8 @@ export default function Home() {
                 <span className="cta__b">€{fmt2(pago.total)}{flecha}</span>
               </button>
             )}
+
+            {!demoMarcas && <LeadsCard />}
 
             <section className="block" aria-label="Por cobrar">
               <p className="label caps"><span>Por cobrar</span><i className="rule" /><button type="button" className="label__m copy" onClick={() => setTab('facturas')}>Facturas →</button></p>

@@ -881,6 +881,26 @@ span.pill { font-size: 10px; padding: 3px 8px; border-radius: 20px; font-weight:
   .row.muted:hover { opacity: 1; }
 }
 
+/* ---- Pipeline y ficha de lead (páginas propias, sin menú) ---- */
+a.chip { text-decoration: none; }
+.pipe__lead { color: inherit; text-decoration: none; }
+.pipe__head, .pipe { width: 100%; max-width: 724px; margin-left: auto; margin-right: auto; }
+.pipe { display: flex; flex-direction: column; gap: 48px; }
+.pipe__col .fila__t, .pipe__col .fila__s { white-space: normal; }
+/* En pantallas anchas, columnas de verdad (con scroll horizontal si no caben) */
+@media (min-width: 1100px) {
+  .pipe__head, .pipe { max-width: none; }
+  .pipe { flex-direction: row; gap: 28px; overflow-x: auto; padding-bottom: 12px; }
+  .pipe__col { flex: 0 0 220px; }
+  .pipe__col .fila__t { font-size: 15px; }
+}
+.lead__head { width: 100%; max-width: 724px; margin-left: auto; margin-right: auto; }
+.lead__msg { white-space: pre-wrap; color: var(--muted); font-size: 15px; line-height: 1.55; overflow-wrap: anywhere; }
+.lead__meta div { grid-template-columns: 110px minmax(0, 1fr); }
+.lead__meta dd { overflow-wrap: anywhere; }
+.lead__meta a { color: var(--text); }
+@media (hover: hover) and (pointer: fine) { .pipe__lead:hover .fila__t { color: var(--text); } }
+
 /* Chip activo: después del hover para que gane con la misma especificidad */
 .chip input:checked + span, .chip[aria-current="page"] span, .chip[aria-pressed="true"] span { background: var(--text); color: var(--bg); border-color: var(--text); }
 .chip input:checked + span b, .chip[aria-current="page"] span b, .chip[aria-pressed="true"] span b { color: inherit; opacity: .55; }

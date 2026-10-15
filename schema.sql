@@ -749,3 +749,53 @@ BEGIN
   RETURN f;
 END $$;
 REVOKE EXECUTE ON FUNCTION crear_factura_pago(INT, SMALLINT) FROM PUBLIC, anon, authenticated;
+
+-- MIGRACIÓN: automatización, fase 1 (2026-10-15, solo aditiva): leads y eventos. Ver ../automatizacion.md.
+-- El resto del esquema del documento (mensajes, revisiones, plantillas, columnas de proyectos) llega en fases siguientes.
+
+-- 1. Leads de todas las marcas.
+CREATE TABLE IF NOT EXISTS leads (
+  id            BIGSERIAL PRIMARY KEY,
+  marca         TEXT NOT NULL REFERENCES marcas(key),
+  origen        TEXT NOT NULL,              -- p. ej. 'arkevostudio.com/es/planes/estudio'
+  id_externo    TEXT,                       -- id en la fuente (clave KV, id de Formspree…) para no duplicar
+  estado        TEXT NOT NULL DEFAULT 'nuevo'
+                CHECK (estado IN ('nuevo','borrador','respondido','conversacion','propuesta',
+                                  'ganado','perdido','spam')),
+  nombre        TEXT,
+  email         TEXT NOT NULL,
+  empresa       TEXT,
+  telefono      TEXT,
+  pais          TEXT,                       -- ISO-2 si se conoce
+  idioma        TEXT NOT NULL DEFAULT 'es' CHECK (idioma IN ('es','en')),
+  interes       JSONB NOT NULL DEFAULT '{}',-- {plan, diseno, precio, moneda, project_type, days…}
+  mensaje       TEXT,
+  campos        JSONB NOT NULL DEFAULT '{}',-- el formulario completo, tal cual llegó
+  adjuntos      JSONB NOT NULL DEFAULT '[]',-- [{nombre, url, bytes, caduca}]
+  consentimiento BOOLEAN NOT NULL DEFAULT false,
+  resumen_ia    TEXT,                       -- 1–2 frases: qué quiere y qué falta saber
+  categoria_ia  TEXT,                       -- 'precio','plazos','encargo','spam','otro'…
+  proyecto_id   INT REFERENCES proyectos(id),-- al pasar a 'ganado'
+  gmail_hilo    TEXT,                       -- threadId de Gmail de la conversación
+  ultimo_contacto TIMESTAMPTZ,
+  recibido_en   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS leads_externo_unico ON leads (origen, id_externo) WHERE id_externo IS NOT NULL;
+CREATE INDEX IF NOT EXISTS leads_estado ON leads (estado, recibido_en DESC);
+ALTER TABLE leads ENABLE ROW LEVEL SECURITY;
+
+-- 3. Línea de tiempo: todo lo que pasa con un lead o un proyecto (también lo que avisan Pitchview y arkevo-revision).
+CREATE TABLE IF NOT EXISTS eventos (
+  id          BIGSERIAL PRIMARY KEY,
+  lead_id     BIGINT REFERENCES leads(id) ON DELETE CASCADE,
+  proyecto_id INT REFERENCES proyectos(id),
+  tipo        TEXT NOT NULL,                -- 'lead.nuevo', 'lead.estado', 'revision.ronda_abierta'…
+  fuente      TEXT NOT NULL,                -- 'joux-hub', 'thepitchlab', 'arkevo', 'pitchview'…
+  datos       JSONB NOT NULL DEFAULT '{}',
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS eventos_proyecto ON eventos (proyecto_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS eventos_lead ON eventos (lead_id, created_at DESC);
+ALTER TABLE eventos ENABLE ROW LEVEL SECURITY;
