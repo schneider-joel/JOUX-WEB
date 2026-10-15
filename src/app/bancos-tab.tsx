@@ -9,7 +9,10 @@ type Saldo = { balance_type: string; name?: string; balance_amount: { amount: st
 type CuentaBanco = { uid: string; session_id: string; aspsp: string; nombre: string | null; iban: string | null; moneda: string | null; cuenta_id: number | null; tipo_saldo: string | null; saldos: Saldo[] | null; actualizado: string | null }
 type Aspsp = { name: string; country: string; logo?: string; maximum_consent_validity?: number }
 
-const eur = (n: number, moneda = 'EUR') => new Intl.NumberFormat('es-ES', { style: 'currency', currency: moneda || 'EUR' }).format(n)
+// Con el símbolo delante y punto de miles siempre, como el resto del hub (mismas cifras y decimales).
+const SIMBOLO: Record<string, string> = { EUR: '€', USD: '$', GBP: '£' }
+const eur = (n: number, moneda = 'EUR') => (n < 0 ? '−' : '') + (SIMBOLO[moneda || 'EUR'] ?? `${moneda} `) +
+  new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: 'always' } as unknown as Intl.NumberFormatOptions).format(Math.abs(n))
 const hace = (d: string) => {
   const min = Math.round((Date.now() - new Date(d).getTime()) / 60000)
   return min < 60 ? `hace ${min} min` : min < 1440 ? `hace ${Math.round(min / 60)} h` : `hace ${Math.round(min / 1440)} días`
@@ -17,8 +20,8 @@ const hace = (d: string) => {
 const NOMBRES_SALDO: Record<string, string> = { ITAV: 'disponible', CLAV: 'disponible', XPCD: 'previsto', CLBD: 'contable', ITBD: 'contable (intradía)', OPBD: 'apertura' }
 const DESTACADOS = /bbva|revolut|wise/i
 
-const btn: React.CSSProperties = { background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 7, padding: '5px 10px', color: 'var(--text2)', fontSize: 12, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }
-const campo: React.CSSProperties = { background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 7, padding: '5px 8px', color: 'var(--text)', fontSize: 12, fontFamily: 'Inter, sans-serif', outline: 'none' }
+const Chevron = () => <svg className="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6.2 8 10l4-3.8" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" /></svg>
+const IconoSync = () => <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M12.6 6.3A4.8 4.8 0 0 0 3.7 5.2M3.4 9.7a4.8 4.8 0 0 0 8.9 1.1" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /><path d="M3.4 2.7v2.8h2.8M12.6 13.3v-2.8H9.8" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
 
 export default function BancosTab({ cuentas, mensaje, reload }: { cuentas: Cuenta[]; mensaje: { ok?: boolean; error?: string } | null; reload: () => void }) {
   const [sesiones, setSesiones] = useState<Sesion[]>([])
@@ -74,99 +77,113 @@ export default function BancosTab({ cuentas, mensaje, reload }: { cuentas: Cuent
   const filtrados = (aspsps || []).filter(a => a.name.toLowerCase().includes(buscar.toLowerCase()))
     .sort((a, b) => Number(DESTACADOS.test(b.name)) - Number(DESTACADOS.test(a.name)) || a.name.localeCompare(b.name))
 
+  // Como la web: los bancos conectados, una fila por banco que se despliega en sus cuentas; debajo, los movimientos.
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      {mensaje?.ok && <div className="card" style={{ borderColor: 'var(--green)', color: 'var(--green)', fontSize: 13 }}>Banco conectado. Ya puedes elegir qué cuenta del hub actualiza cada una.</div>}
-      {mensaje?.error && <div className="card" style={{ borderColor: 'var(--red)', color: 'var(--red)', fontSize: 13 }}>No se pudo conectar: {mensaje.error}</div>}
-
-      <div className="card">
-        <div className="card-head">
-          <div>
-            <div className="card-title">Bancos conectados</div>
-            <div className="card-kicker" style={{ marginTop: 2 }}>Open banking de solo lectura · se sincroniza solo cada mañana</div>
-          </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {sesiones.length > 0 && <button className="btn" onClick={sincronizar}>Sincronizar ahora</button>}
-            <button className="btn btn-primary" onClick={abrirConectar}>Conectar banco</button>
-          </div>
+    <div className="col">
+      <section className="block" aria-label="Bancos conectados">
+        <p className="label caps"><span>Bancos conectados</span><i className="rule" /></p>
+        {mensaje?.ok && <p className="nota ok">Banco conectado. Ya puedes elegir qué cuenta del hub actualiza cada una.</p>}
+        {mensaje?.error && <p className="nota error">No se pudo conectar: {mensaje.error}</p>}
+        <div className="acciones">
+          {sesiones.length > 0 && <button type="button" className="pill pill--sm" onClick={sincronizar}><IconoSync />Sincronizar ahora</button>}
+          <button type="button" className={sesiones.length > 0 ? 'ghost' : 'pill pill--sm'} onClick={abrirConectar}>Conectar banco</button>
         </div>
-        {estado && <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 10 }}>{estado}</div>}
+        <p className="nota" aria-live="polite">{estado || 'Open banking de solo lectura · se sincroniza solo cada mañana'}</p>
 
         {aspsps && (
-          <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 12, marginBottom: 14 }}>
-            <input value={buscar} onChange={e => setBuscar(e.target.value)} placeholder="Buscar banco (BBVA, Revolut, Wise…)" style={{ ...campo, width: '100%', padding: '8px 10px', marginBottom: 10 }} autoFocus />
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 8, maxHeight: 260, overflowY: 'auto' }}>
+          <div className="picker">
+            <div className="field">
+              <label className="caps" htmlFor="b-buscar">Buscar banco</label>
+              <input id="b-buscar" value={buscar} onChange={e => setBuscar(e.target.value)} placeholder="BBVA, Revolut, Wise…" autoFocus />
+            </div>
+            <div className="picker__lista chips__row">
               {filtrados.map(a => (
-                <button key={a.name} onClick={() => conectar(a)} style={{ ...btn, display: 'flex', alignItems: 'center', gap: 8, padding: 8, textAlign: 'left' }}>
-                  {a.logo && <img src={a.logo} alt="" width={20} height={20} style={{ borderRadius: 4, background: '#fff' }} />}
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.name}</span>
+                <button key={a.name} type="button" className="chip" onClick={() => conectar(a)}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <span>{a.logo && <img src={a.logo} alt="" width={16} height={16} className="picker__logo" />}{a.name}</span>
                 </button>
               ))}
-              {filtrados.length === 0 && <div style={{ fontSize: 12, color: 'var(--text3)' }}>Ningún banco coincide.</div>}
+              {filtrados.length === 0 && <p className="nota">Ningún banco coincide.</p>}
             </div>
           </div>
         )}
 
         {!cargando && sesiones.length === 0 && !aspsps && (
-          <div style={{ fontSize: 12.5, color: 'var(--text3)', lineHeight: 1.6 }}>
-            Todavía no hay bancos conectados. Pulsa <b>Conectar banco</b>, elige el banco y autoriza el acceso desde su app. El permiso dura hasta 180 días; después hay que renovarlo.
-          </div>
+          <p className="empty">Todavía no hay bancos conectados. Pulsa <b>Conectar banco</b>, elige el banco y autoriza el acceso desde su app. El permiso dura hasta 180 días; después hay que renovarlo.</p>
         )}
 
-        {sesiones.map(s => {
-          const dias = s.valid_until ? Math.ceil((new Date(s.valid_until).getTime() - Date.now()) / 864e5) : null
-          const propias = cuentasBanco.filter(c => c.session_id === s.session_id)
-          return (
-            <div key={s.session_id} style={{ borderTop: '1px solid var(--border)', padding: '12px 0' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <div>
-                  <div style={{ fontSize: 14, fontWeight: 500 }}>{s.aspsp}</div>
-                  <div style={{ fontSize: 11, color: dias !== null && dias < 14 ? 'var(--amber)' : 'var(--text3)' }}>
-                    {dias === null ? '' : dias <= 0 ? 'Permiso vencido · renuévalo' : `Permiso válido ${dias} días más`}
-                    {s.ultimo_sync ? ` · sincronizado ${hace(s.ultimo_sync)}` : ''}
-                  </div>
-                  {s.ultimo_error && <div style={{ fontSize: 11, color: 'var(--red)' }}>{s.ultimo_error}</div>}
-                </div>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  {dias !== null && dias < 14 && <button style={btn} onClick={abrirConectar}>Renovar</button>}
-                  <button style={btn} onClick={() => desconectar(s)}>Desconectar</button>
-                </div>
-              </div>
-              {propias.map(c => {
-                const saldos = c.saldos || []
-                return (
-                  <div key={c.uid} style={{ marginTop: 10, padding: '10px 12px', background: 'var(--surface2)', borderRadius: 9 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-                      <div style={{ fontSize: 12.5 }}>{c.nombre || 'Cuenta'} {c.iban && <span style={{ color: 'var(--text3)' }}>· {c.iban.replace(/(.{4})/g, '$1 ').trim()}</span>}</div>
-                      <div style={{ fontSize: 11.5, color: 'var(--text2)' }} className="mono">
-                        {saldos.map(sd => `${NOMBRES_SALDO[sd.balance_type] || sd.balance_type} ${eur(Number(sd.balance_amount.amount), sd.balance_amount.currency)}`).join(' · ') || 'Sin saldos todavía'}
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8, flexWrap: 'wrap', fontSize: 11.5, color: 'var(--text3)' }}>
-                      Actualiza en el hub
-                      <select value={c.cuenta_id ?? ''} onChange={e => vincular(c, { cuenta_id: e.target.value ? Number(e.target.value) : null })} style={campo}>
-                        <option value="">No actualizar</option>
-                        {cuentas.map(x => <option key={x.id} value={x.id}>{x.padre_id ? `${cuentas.find(p => p.id === x.padre_id)?.nombre} · ${x.nombre}` : x.tipo === 'operativa' && cuentas.some(h => h.padre_id === x.id) ? `${x.nombre} · disponible` : x.nombre}</option>)}
-                      </select>
-                      {saldos.length > 1 && (
-                        <>
-                          con el saldo
-                          <select value={c.tipo_saldo ?? ''} onChange={e => vincular(c, { tipo_saldo: e.target.value || null })} style={campo}>
-                            <option value="">Automático (disponible)</option>
-                            {saldos.map(sd => <option key={sd.balance_type} value={sd.balance_type}>{NOMBRES_SALDO[sd.balance_type] || sd.balance_type}</option>)}
-                          </select>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )
-        })}
-      </div>
+        {sesiones.length > 0 && (
+          <ul className="projs focus">
+            {sesiones.map(s => (
+              <FilaBanco key={s.session_id} s={s} propias={cuentasBanco.filter(c => c.session_id === s.session_id)} cuentas={cuentas}
+                onRenovar={abrirConectar} onDesconectar={() => desconectar(s)} onVincular={vincular} />
+            ))}
+          </ul>
+        )}
+      </section>
 
       <MovimientosCard cuentasBanco={cuentasBanco} version={version} onCambio={reload} />
     </div>
+  )
+}
+
+// Un banco: su nombre, una línea con el permiso y la última lectura, y el punto de estado (rojo si la
+// última lectura falló, ámbar si el permiso caduca pronto). Al desplegar: sus cuentas y a qué cuenta del hub van.
+function FilaBanco({ s, propias, cuentas, onRenovar, onDesconectar, onVincular }: {
+  s: Sesion; propias: CuentaBanco[]; cuentas: Cuenta[]
+  onRenovar: () => void; onDesconectar: () => void; onVincular: (c: CuentaBanco, patch: Partial<CuentaBanco>) => void
+}) {
+  const [abierta, setAbierta] = useState(false)
+  const dias = s.valid_until ? Math.ceil((new Date(s.valid_until).getTime() - Date.now()) / 864e5) : null
+  const caduca = dias !== null && dias < 14
+  const [estado, punto] = s.ultimo_error ? [`Error: ${s.ultimo_error}`, 'dot--bad'] : caduca ? ['El permiso caduca pronto', 'dot--wait'] : ['Al día', 'dot--ok']
+  return (
+    <li className={`p${abierta ? ' is-open' : ''}`}>
+      <button type="button" className="p__head p__head--banco" aria-expanded={abierta} onClick={() => setAbierta(!abierta)}>
+        <span className="fa__t">{s.aspsp}</span>
+        <span className="p__s caps">
+          <span className={caduca ? 'aviso' : undefined}>{dias === null ? '' : dias <= 0 ? 'Permiso vencido · renuévalo' : `Permiso válido ${dias} días más`}</span>
+          {s.ultimo_sync ? ` · sincronizado ${hace(s.ultimo_sync)}` : ''}
+        </span>
+        <span className="st" title={estado}><i className={`dot ${punto}`} aria-hidden="true" /><span className="sr">{estado}</span></span>
+        <Chevron />
+      </button>
+      {abierta && (
+        <div className="p__body">
+          {s.ultimo_error && <p className="nota error">{s.ultimo_error}</p>}
+          {propias.map(c => {
+            const saldos = c.saldos || []
+            return (
+              <div key={c.uid} className="cb">
+                <p className="cb__n">{c.nombre || 'Cuenta'} {c.iban && <span className="caps">· {c.iban.replace(/(.{4})/g, '$1 ').trim()}</span>}</p>
+                <p className="cb__saldos mono">
+                  {saldos.map(sd => `${NOMBRES_SALDO[sd.balance_type] || sd.balance_type} ${eur(Number(sd.balance_amount.amount), sd.balance_amount.currency)}`).join(' · ') || 'Sin saldos todavía'}
+                </p>
+                <div className="p__meta caps">
+                  <label className="p__campo">Actualiza en el hub
+                    <select value={c.cuenta_id ?? ''} onChange={e => onVincular(c, { cuenta_id: e.target.value ? Number(e.target.value) : null })}>
+                      <option value="">No actualizar</option>
+                      {cuentas.map(x => <option key={x.id} value={x.id}>{x.padre_id ? `${cuentas.find(p => p.id === x.padre_id)?.nombre} · ${x.nombre}` : x.tipo === 'operativa' && cuentas.some(h => h.padre_id === x.id) ? `${x.nombre} · disponible` : x.nombre}</option>)}
+                    </select>
+                  </label>
+                  {saldos.length > 1 && (
+                    <label className="p__campo">con el saldo
+                      <select value={c.tipo_saldo ?? ''} onChange={e => onVincular(c, { tipo_saldo: e.target.value || null })}>
+                        <option value="">Automático (disponible)</option>
+                        {saldos.map(sd => <option key={sd.balance_type} value={sd.balance_type}>{NOMBRES_SALDO[sd.balance_type] || sd.balance_type}</option>)}
+                      </select>
+                    </label>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+          <div className="p__foot">
+            {caduca ? <button type="button" className="ghost" onClick={onRenovar}>Renovar</button> : <span />}
+            <span className="foot__r"><button type="button" className="copy caps borrar" onClick={onDesconectar}>Desconectar</button></span>
+          </div>
+        </div>
+      )}
+    </li>
   )
 }

@@ -534,7 +534,7 @@ export default function Home() {
         activa={seccionActiva.id} onAbrir={id => { const s = secciones.find(x => x.id === id); if (s) abrirSeccion(s) }} />
 
       {/* Las pantallas ya migradas van en la columna de la maqueta (724 px) */}
-      <main className={`main${tab === 'dashboard' || tab === 'facturas' || tab.startsWith('ts:') || tab.startsWith('mk:') ? ' main--col' : ''}`}>
+      <main className={`main${tab === 'dashboard' || tab === 'facturas' || tab === 'bancos' || tab.startsWith('ts:') || tab.startsWith('mk:') ? ' main--col' : ''}`}>
         <header className="page-header">
           <div className="page-header__txt">
             <h1 className="page-title">{titulo}</h1>
