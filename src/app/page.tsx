@@ -783,6 +783,8 @@ export default function Home() {
         )}
         {marcaTsActiva && gruposMarcaTs.length > 0 && (
           <div className="col">
+            <ResumenTreatments marca={marcaTsActiva.key} proyectos={proyectosMarcaTs} facturas={facturas} dias={dias} clientesFiscales={clientesFiscales}
+              marcaDeFactura={f => f.marca || (() => { const p = proyectos.find(x => x.id === f.proyecto_id); return p ? marcaTsDe(p) : '' })()} />
             {/* Un bloque por cliente o grupo, cada uno con su link; con un solo grupo, el nombre ya está en el título */}
             {gruposMarcaTs.map(g => (
               <TimesheetTab key={g.key} grupo={g} etiqueta={gruposMarcaTs.length > 1 ? g.label : 'Proyectos'} proyectos={proyectosMarcaTs} dias={dias} facturas={facturas} clientesFiscales={clientesFiscales} reload={loadData} />
@@ -1026,6 +1028,38 @@ function FilaFactura({ f, trim, fueraDeOrden, href, onCobrar, onBorrar }: { f: F
         </div>
       )}
     </li>
+  )
+}
+
+// Resumen de una pestaña de Treatments, como el de Webs: lo cobrado del año en grande, lo pendiente al lado, una línea fina
+// (cobrado, pendiente, por facturar) y lo que falta facturar. Cobrado y pendiente siguen la regla de «Por marca» del Overview
+// (año en curso, sin los registros internos, importe a cobrar); por facturar suma los proyectos activos y completados,
+// con IVA y retención si el cliente es de España (el mismo importe que su fila).
+function ResumenTreatments({ marca, proyectos, facturas, dias, clientesFiscales, marcaDeFactura }: {
+  marca: string, proyectos: Proyecto[], facturas: Factura[], dias: DiaTrabajado[], clientesFiscales: ClienteFiscal[], marcaDeFactura: (f: Factura) => string
+}) {
+  const anio = new Date().getFullYear()
+  let cobrado = 0, pendiente = 0, porFacturar = 0
+  for (const f of facturas) {
+    if (f.fiscal === false || !f.fecha || Number(f.fecha.slice(0, 4)) !== anio || marcaDeFactura(f) !== marca) continue
+    if (f.estado === 'cobrada') cobrado += totalACobrar(f); else pendiente += totalACobrar(f)
+  }
+  for (const p of proyectos) {
+    if (p.status === 'facturado') continue
+    const base = dias.filter(d => d.proyecto_id === p.id).reduce((s, d) => s + Number(d.total_day), 0)
+    porFacturar += desglose(base, clientesFiscales.find(c => c.cliente === p.cliente)?.pais === 'ES')?.total ?? base
+  }
+  const segmentos = ([[cobrado, 'var(--green)'], [pendiente, 'var(--amber)'], [porFacturar, 'var(--dim)']] as const).filter(([v]) => v > 0)
+  return (
+    <section className="block" aria-label="Resumen">
+      <p className="label caps"><span>Cobrado</span><i className="rule" /><span className="label__m">{anio}</span></p>
+      <div className="hero">
+        <p className="big">€{fmt(cobrado)}</p>
+        <p className="delta caps"><span>€{fmt(pendiente)}</span><span>pendiente</span></p>
+      </div>
+      <div className="stack" aria-hidden="true">{segmentos.map(([v, c], k) => <i key={k} style={{ flex: v, background: c }} />)}</div>
+      <dl className="split"><div><dt className="caps">Por facturar</dt><dd><span className="num">€{fmt(porFacturar)}</span></dd></div></dl>
+    </section>
   )
 }
 
