@@ -18,7 +18,7 @@ Panel financiero personal de Joel, autónomo en España: facturación, timesheet
 - RLS activo en todas las tablas. El navegador nunca habla con Supabase directamente:
   - Cliente: `src/lib/supabase.ts` es un shim con la misma API que supabase-js que llama a `/api/db`, protegido por la cookie `joux_auth` (= `APP_PASSWORD`).
   - Servidor: `supabaseServer` (`src/lib/supabase-server.ts`) con la service role key.
-- `src/middleware.ts` exige la cookie salvo en rutas públicas: `/ab|th|t|c/<token>` (links públicos), `/invoice/`, `/login`, `/api/login`, `/api/bancos/cron` (valida `CRON_SECRET`), `/api/compartidos` (valida su token), iconos, `/sw.js`, `/manifest.webmanifest`.
+- `src/middleware.ts` exige la cookie salvo en rutas públicas: `/ab|th|t|c/<token>` (links públicos), `/invoice/`, `/login`, `/api/login`, `/api/bancos/cron` (valida `CRON_SECRET`), `/api/intake/lead` (valida `INTAKE_KEY_*`), `/api/compartidos` (valida su token), iconos, `/sw.js`, `/manifest.webmanifest`.
 - Secretos solo en `.env.local` / Vercel. Nunca los imprimas ni los pegues en el chat. La clave privada de Enable Banking es `<appId>.pem` en la raíz (ignorada por git). Las variables de Vercel no coinciden con las de `.env.local` (p. ej. `APP_PASSWORD`).
 - **`schema.sql` es un registro de migraciones**, no el esquema actual: la definición vigente de una función o tabla es la **última** que aparece. Las migraciones se aplican con el MCP de Supabase (`apply_migration`, proyecto `zgcihtipzgihvwyccery`) y se añaden al final de `schema.sql`.
 
@@ -54,6 +54,7 @@ Panel financiero personal de Joel, autónomo en España: facturación, timesheet
   - Un proyecto de precio cerrado no puede pasar a «facturado» (constraint `proyectos_cerrado_sin_facturado`): al salir de ese estado, el trigger borraría sus facturas pendientes. No tocar el trigger `crear_factura_desde_proyecto` ni los treatments.
   - «Ingresos por marca» (Overview, por `orden`) usa `facturas.marca` o, si está vacía (las que crea el trigger), la de su proyecto. «Nuevo proyecto» (timesheet) etiqueta `ab` para Ambushed/BoldMove y `pitchlab` para el resto. Framer quedó sin marca (ya no se usa).
   - **Todas las facturas** se emiten como Joel Schneider Mena · joel@joelschneider.io (`configuracion.emisor_*`, se lee al abrir la factura, también las antiguas).
+- **Leads** (`leads`, `eventos`; `src/lib/leads.ts`; plan en `../automatizacion.md`): las webs mandan cada formulario a `POST /api/intake/lead` con una clave por fuente (`INTAKE_KEY_THEPITCHLAB` → `pitchlab`, `INTAKE_KEY_ARKEVO` → `arkevo`, `INTAKE_KEY_PERSONAL` → `custom`). Idempotente por `(origen, id_externo)`. Cada lead nuevo crea el evento `lead.nuevo`, una notificación y un push. Tarjeta «Leads» en Overview → `/pipeline` (columnas por estado, filtro `?marca=`) → `/leads/[id]` (cambio de estado a mano). Las páginas y rutas de servidor que leen con supabase-js llevan `fetchCache = 'force-no-store'`: si no, Next guarda las respuestas y salen datos viejos.
 - **Modo privado** (`modo-privado.tsx`): tapa los importes del texto ya pintado. No depende de los formateadores.
 
 ## Convenciones
