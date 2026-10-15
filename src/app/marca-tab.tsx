@@ -7,14 +7,19 @@ import { ETIQUETA_PAGO, siguienteNumero, type Marca, type PaisFiscal, type Proye
 // Pestaña de una agencia (marca de precio cerrado): una fila por cliente con su web, el precio
 // y los dos pagos. Cada «Facturar pago N» crea su propia factura (número correlativo, IVA y
 // retención según el país) con crear_factura_pago() en la base de datos. En demo todo pasa en memoria.
-const eur = (n: number) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', useGrouping: 'always' } as Intl.NumberFormatOptions).format(n)
-// Sin céntimos cuando no hay (990 €, no 990,00 €): la tabla respira más.
-const eurCorto = (n: number) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', useGrouping: 'always', minimumFractionDigits: Number.isInteger(n) ? 0 : 2 } as Intl.NumberFormatOptions).format(n)
+// Con el € delante, como el resto del hub (mismas cifras y decimales que antes).
+// El signo va delante del €: −€180,00.
+const eur = (n: number) => (n < 0 ? '−' : '') + '€' + new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: 'always' } as unknown as Intl.NumberFormatOptions).format(Math.abs(n))
+// Sin céntimos cuando no hay (€990, no €990,00): la lista respira más.
+const eurCorto = (n: number) => (n < 0 ? '−' : '') + '€' + new Intl.NumberFormat('es-ES', { minimumFractionDigits: Number.isInteger(n) ? 0 : 2, maximumFractionDigits: 2, useGrouping: 'always' } as unknown as Intl.NumberFormatOptions).format(Math.abs(n))
 const PAIS_TXT: Record<PaisFiscal, string> = { ES: 'España · IVA 21 % − retención 15 %', UE: 'UE · sin IVA', EXT: 'Fuera de la UE · sin IVA' }
 const paisTxt = (p: PaisFiscal | null) => p ? PAIS_TXT[p] : 'Sin datos fiscales'
 const hoy = () => new Date().toISOString().slice(0, 10)
 const fmtFecha = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })
-const COLOR = { cobrada: 'var(--green)', pendiente: 'var(--amber)', sin_facturar: 'var(--text3)' }
+// Estado de cada pago con su punto: verde cobrado, ámbar pendiente, vacío sin facturar.
+const PUNTO = { cobrada: 'dot--ok', pendiente: 'dot--wait', sin_facturar: 'dot--off' }
+const VOZ = { cobrada: 'cobrado', pendiente: 'pendiente', sin_facturar: 'sin facturar' }
+const Chevron = () => <svg className="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6.2 8 10l4-3.8" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" /></svg>
 
 // Lo que paga el cliente por una base (con IVA y retención si es de España).
 const total = (base: number, pais: PaisFiscal | null) => desglose(base, pais === 'ES')?.total ?? base
@@ -107,68 +112,34 @@ export default function MarcaTab({ marca, proyectos: iniciales, numerosExistente
   }
 
   const ordenados = [...proyectos].sort((a, b) => a.cliente.localeCompare(b.cliente))
+  // Cobrado, pendiente y por facturar, en una línea fina (la de Patrimonio en el Overview).
+  const segmentos = ([[tot.cobrado, 'var(--green)'], [tot.pendiente, 'var(--amber)'], [tot.porFacturar, 'var(--dim)']] as const).filter(([v]) => v > 0)
 
+  // Como la web: lo cobrado en grande y una fila por web que se despliega en sus dos pagos.
   return (
-    <div>
-      <div className="agencia-resumen">
-        {([['Cobrado', tot.cobrado, 'var(--green)'], ['Pendiente', tot.pendiente, 'var(--amber)'], ['Por facturar', tot.porFacturar, 'var(--text2)']] as const).map(([l, v, c]) => (
-          <div key={l}>
-            <div className="agencia-resumen-etq"><i style={{ background: c }} />{l}</div>
-            <div className="mono agencia-resumen-num">{eurCorto(Math.round(v))}</div>
-          </div>
-        ))}
-      </div>
-
-      <div className="card">
-        <div className="card-head">
-          <div className="card-title">Clientes <span style={{ color: 'var(--text3)', fontWeight: 400 }}>· {new Set(proyectos.map(p => p.cliente)).size}</span></div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            {demo && <span className="mono" title="Datos de ejemplo: no se escribe nada en la base de datos" style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, background: 'var(--amber-dim)', color: 'var(--amber)' }}>DEMO</span>}
-            <button className="btn" onClick={() => setNuevo(true)} style={{ whiteSpace: 'nowrap' }}>+ Cliente</button>
-          </div>
+    <div className="col">
+      <section className="block" aria-label={`Resumen de ${marca.nombre}`}>
+        <p className="label caps"><span>Cobrado</span><i className="rule" />{demo && <span className="label__m aviso" title="Datos de ejemplo: no se escribe nada en la base de datos">Demo</span>}</p>
+        <div className="hero">
+          <p className="big">{eurCorto(Math.round(tot.cobrado))}</p>
+          <p className="delta caps"><span>{eurCorto(Math.round(tot.pendiente))}</span><span>pendiente</span></p>
         </div>
-        {aviso && <div style={{ fontSize: 12, color: 'var(--text3)', margin: '-6px 0 10px' }}>{aviso}</div>}
+        <div className="stack" aria-hidden="true">{segmentos.map(([v, c], k) => <i key={k} style={{ flex: v, background: c }} />)}</div>
+        <dl className="split"><div><dt className="caps">Por facturar</dt><dd><span className="num">{eurCorto(Math.round(tot.porFacturar))}</span></dd></div></dl>
+      </section>
 
-        <div className="agencia-fila agencia-cabecera">
-          <div>Cliente</div><div style={{ textAlign: 'right' }}>Precio</div><div>Al empezar</div><div>Al publicar</div>
-        </div>
-        {ordenados.length === 0 && <div className="chart-empty">Todavía no hay clientes en {marca.nombre}.</div>}
-        {ordenados.map(p => (
-          <div key={p.id} className="agencia-fila">
-            <div style={{ minWidth: 0 }}>
-              <div className="agencia-cliente">{p.cliente}</div>
-              {/^[^\s/]+\.[a-z]{2,}$/i.test(p.web)
-                ? <a className="agencia-web" href={`https://${p.web}`} target="_blank" rel="noopener noreferrer">{p.web}</a>
-                : <span className="agencia-web">{p.web}</span>}
-            </div>
-            <div className="mono agencia-precio">{eurCorto(p.precio)}</div>
-            {p.unica ? (
-              <a className="agencia-pago agencia-pago-unica" href={p.unica.facturaId ? `/invoice/${p.unica.facturaId}` : undefined} target="_blank" rel="noopener noreferrer">
-                <span className="agencia-pago-etq">Factura única</span>
-                <span className="mono agencia-pago-num"><i style={{ background: COLOR[p.unica.estado] }} />{eurCorto(total(p.unica.importe, p.pais))}</span>
-                <span className="agencia-pago-sub">{p.unica.numero} · <span style={{ color: COLOR[p.unica.estado] }}>{p.unica.estado}</span> · factura única</span>
-              </a>
-            ) : ([0, 1] as const).map(i => {
-              const pago = p.pagos[i]
-              const bloqueado = i === 1 && p.pagos[0].estado === 'sin_facturar'
-              const facturada = pago.estado !== 'sin_facturar'
-              return (
-                <button key={i} className="agencia-pago" disabled={bloqueado}
-                  onClick={() => facturada ? setViendo({ p, i }) : setFacturando({ p, i })}>
-                  <span className="agencia-pago-etq">{i ? 'Al publicar' : 'Al empezar'}</span>
-                  <span className="mono agencia-pago-num" style={{ color: facturada ? 'var(--text)' : 'var(--text3)' }}>
-                    <i style={{ background: COLOR[pago.estado], opacity: facturada ? 1 : 0.35 }} />{eurCorto(total(p.precio / 2, p.pais))}
-                  </span>
-                  <span className="agencia-pago-sub">
-                    {facturada ? <>{pago.numero} · <span style={{ color: COLOR[pago.estado] }}>{pago.estado}</span></>
-                      : bloqueado ? 'tras el primer pago' : <span style={{ color: 'var(--accent-bright)' }}>Facturar →</span>}
-                  </span>
-                </button>
-              )
-            })}
-          </div>
-        ))}
-      </div>
+      <section className="block" aria-label={`Webs de ${marca.nombre}`}>
+        <p className="label caps">
+          <span>Clientes · {new Set(proyectos.map(p => p.cliente)).size}</span><i className="rule" />
+          <button type="button" className="label__m copy" onClick={() => setNuevo(true)}>+ Cliente</button>
+        </p>
+        {aviso && <p className="nota">{aviso}</p>}
+        {ordenados.length === 0 ? <p className="empty">Todavía no hay clientes en {marca.nombre}.</p> : (
+          <ul className="projs focus">
+            {ordenados.map(p => <FilaWeb key={p.id} p={p} onFacturar={i => setFacturando({ p, i })} onVer={i => setViendo({ p, i })} />)}
+          </ul>
+        )}
+      </section>
 
       {facturando && (
         <div className="modal-bg" onClick={() => setFacturando(null)}>
@@ -195,6 +166,81 @@ export default function MarcaTab({ marca, proyectos: iniciales, numerosExistente
   )
 }
 
+// Una web: cliente, su dominio debajo (y el aviso si faltan datos fiscales), precio base y una barra
+// de dos mitades, una por pago. Al desplegar, los dos pagos; cada uno abre su diálogo de siempre.
+function FilaWeb({ p, onFacturar, onVer }: { p: ProyectoAgencia; onFacturar: (i: 0 | 1) => void; onVer: (i: 0 | 1) => void }) {
+  const [abierta, setAbierta] = useState(false)
+  // El siguiente pago que se puede facturar (el segundo, solo después del primero).
+  const facturable = p.unica ? -1 : p.pagos[0].estado === 'sin_facturar' ? 0 : p.pagos[1].estado === 'sin_facturar' ? 1 : -1
+  const estadoTxt = p.unica ? `Factura única ${VOZ[p.unica.estado]}`
+    : p.pagos.map((x, i) => `Pago ${i + 1} ${i === facturable ? 'por facturar' : VOZ[x.estado]}`).join(' · ')
+  const mitades = p.unica ? [p.unica.estado] : p.pagos.map(x => x.estado)
+  const esWeb = /^[^\s/]+\.[a-z]{2,}$/i.test(p.web)
+  const pendientes = p.unica ? [] : ([0, 1] as const).filter(i => p.pagos[i].estado === 'pendiente')
+  return (
+    <li className={`p${abierta ? ' is-open' : ''}`}>
+      <button type="button" className="p__head p__head--web" aria-expanded={abierta} onClick={() => setAbierta(!abierta)}>
+        <span className="p__main">
+          <span className="p__n">{p.cliente}</span>
+          <span className="p__s caps">{p.web}{!p.pais && <> · <span className="aviso">Sin datos fiscales</span></>}</span>
+        </span>
+        <span className="p__v num" title="Precio base, sin IVA">{eurCorto(p.precio)}</span>
+        <span className="half" title={estadoTxt}>
+          {mitades.map((e, i) => <i key={i} className={`is-${e}${i === facturable ? ' is-facturar' : ''}`} />)}
+          <span className="sr">{estadoTxt}</span>
+        </span>
+        <Chevron />
+      </button>
+      {abierta && (
+        <div className="p__body">
+          <ul className="dias">
+            {p.unica ? (
+              <li className="d">
+                {(() => {
+                  const u = p.unica
+                  const contenido = <>
+                    <span className="d__f caps">Única</span>
+                    <span className="d__q">{u.numero} · {u.estado} · factura única</span>
+                    <span className="num">{eurCorto(total(u.importe, p.pais))}</span>
+                    <span className="d__st" title={u.estado}><i className={`dot ${PUNTO[u.estado]}`} aria-hidden="true" /><span className="sr">{u.estado}</span></span>
+                  </>
+                  return u.facturaId
+                    ? <a className="d__btn" href={`/invoice/${u.facturaId}`} target="_blank" rel="noopener noreferrer" title="Ver factura">{contenido}</a>
+                    : <span className="d__fila">{contenido}</span>
+                })()}
+              </li>
+            ) : ([0, 1] as const).map(i => {
+              const pago = p.pagos[i]
+              const bloqueado = i === 1 && p.pagos[0].estado === 'sin_facturar'
+              const facturada = pago.estado !== 'sin_facturar'
+              return (
+                <li key={i} className="d">
+                  <button type="button" className="d__btn" disabled={bloqueado} onClick={() => facturada ? onVer(i) : onFacturar(i)}>
+                    <span className="d__f caps">Pago {i + 1}</span>
+                    <span className="d__q">{i ? 'Al publicar' : 'Al empezar'} · {facturada ? `${pago.numero} · ${pago.estado}` : bloqueado ? 'tras el primer pago' : 'Facturar →'}</span>
+                    <span className={`num${facturada ? '' : ' dim'}`}>{eurCorto(total(p.precio / 2, p.pais))}</span>
+                    <span className="d__st" title={VOZ[pago.estado]}><i className={`dot ${PUNTO[pago.estado]}`} aria-hidden="true" /><span className="sr">{VOZ[pago.estado]}</span></span>
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+          <div className="p__foot">
+            <span className="caps dim">
+              {[p.plan && `Plan ${p.plan}`, paisTxt(p.pais)].filter(Boolean).join(' · ')}
+              {esWeb && <> · <a className="copy" href={`https://${p.web}`} target="_blank" rel="noopener noreferrer">{p.web} ↗</a></>}
+            </span>
+            <span className="foot__r">
+              {pendientes.map(i => <button key={i} type="button" className="ghost" onClick={() => onVer(i)}>Marcar pago {i + 1} cobrado</button>)}
+              {facturable >= 0 && <button type="button" className="pill pill--sm" onClick={() => onFacturar(facturable as 0 | 1)}>Facturar pago {facturable + 1}</button>}
+            </span>
+          </div>
+        </div>
+      )}
+    </li>
+  )
+}
+
 // Un pago ya facturado: sus datos, y marcarlo como cobrado.
 function ModalPago({ marca, p, i, demo, onCobrada, onClose }: Sel & { marca: Marca; demo: boolean; onCobrada: () => Promise<string | null>; onClose: () => void }) {
   const pago = p.pagos[i]
@@ -207,30 +253,26 @@ function ModalPago({ marca, p, i, demo, onCobrada, onClose }: Sel & { marca: Mar
     ['Emitida', pago.fecha ? fmtFecha(pago.fecha) : '—'],
     ['Fiscal', paisTxt(p.pais)],
   ]
+  // Campos en lista, sin cajas; el total, tras la única línea.
   return (
     <>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, fontSize: 16, fontWeight: 500 }}>
-        <span className="mono">{pago.numero}</span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span className={`pill ${pago.estado === 'cobrada' ? 'pill-green' : 'pill-amber'}`}>{pago.estado}</span>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', fontSize: 20 }}>×</button>
-        </span>
+      <div className="modal__head">
+        <h2 className="mono">{pago.numero}</h2>
+        <span className="modal__estado caps"><i className={`dot ${PUNTO[pago.estado]}`} aria-hidden="true" />{pago.estado}<button type="button" className="modal__x" onClick={onClose} aria-label="Cerrar">×</button></span>
       </div>
-      {filas.map(([k, v]) => (
-        <div key={k} style={{ display: 'grid', gridTemplateColumns: '84px 1fr', gap: 10, fontSize: 13, padding: '6px 0' }}>
-          <span style={{ color: 'var(--text3)' }}>{k}</span><span>{v}</span>
-        </div>
-      ))}
-      <div className="mono" style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, fontWeight: 500, borderTop: '1px solid var(--border)', marginTop: 10, paddingTop: 12 }}>
-        <span>A cobrar</span><span>{eur(d?.total ?? p.precio / 2)}</span>
-      </div>
-      {demo && <div style={{ fontSize: 11.5, color: 'var(--amber)', marginTop: 14 }}>Demo: no se escribe nada.</div>}
-      {error && <div style={{ fontSize: 12, color: 'var(--red)', marginTop: 14 }}>{error}</div>}
-      <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
+      <dl className="meta meta--modal">
+        {filas.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}
+      </dl>
+      <dl className="desg">
+        <div className="desg__t"><dt>A cobrar</dt><dd className="num">{eur(d?.total ?? p.precio / 2)}</dd></div>
+      </dl>
+      {demo && <p className="nota aviso modal__nota">Demo: no se escribe nada.</p>}
+      {error && <p className="nota error modal__nota">{error}</p>}
+      <div className="modal__foot">
         {pago.facturaId
-          ? <a className="btn" href={`/invoice/${pago.facturaId}`} target="_blank" rel="noopener noreferrer">Ver factura</a>
-          : <button className="btn" disabled title="En la demo no hay factura real" style={{ opacity: 0.5 }}>Ver factura</button>}
-        {pago.estado === 'pendiente' && <button className="btn btn-primary" disabled={ocupado} style={{ flex: 1, justifyContent: 'center' }}
+          ? <a className="copy caps" href={`/invoice/${pago.facturaId}`} target="_blank" rel="noopener noreferrer">Ver factura →</a>
+          : <button type="button" className="copy caps" disabled title="En la demo no hay factura real">Ver factura</button>}
+        {pago.estado === 'pendiente' && <button type="button" className="pill pill--sm" disabled={ocupado}
           onClick={async () => { setOcupado(true); const e = await onCobrada(); setOcupado(false); if (e) setError(e) }}>{ocupado ? 'Guardando…' : 'Marcar como cobrada'}</button>}
       </div>
     </>
@@ -256,27 +298,23 @@ function ModalFacturarPago({ marca, p, i, numero, demo, onConfirmar, onClose }: 
   ]
   return (
     <>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, fontSize: 16, fontWeight: 500 }}>
-        Facturar pago {i + 1} <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', fontSize: 20 }}>×</button>
-      </div>
-      {filas.map(([k, v]) => (
-        <div key={k} style={{ display: 'grid', gridTemplateColumns: '84px 1fr', gap: 10, fontSize: 13, padding: '6px 0' }}>
-          <span style={{ color: 'var(--text3)' }}>{k}</span><span className={k === 'Número' || k === 'Marca' ? 'mono' : ''}>{v}</span>
-        </div>
-      ))}
-      <div style={{ borderTop: '1px solid var(--border)', marginTop: 10, paddingTop: 10 }}>
+      <div className="modal__head"><h2>Facturar pago {i + 1}</h2><button type="button" className="modal__x" onClick={onClose} aria-label="Cerrar">×</button></div>
+      <dl className="meta meta--modal">
+        {filas.map(([k, v]) => <div key={k}><dt>{k}</dt><dd className={k === 'Número' || k === 'Marca' ? 'mono' : ''}>{v}</dd></div>)}
+      </dl>
+      <dl className="desg">
         {(d ? [['Base', d.base], ['IVA 21 %', d.iva], ['Retención 15 %', -d.ret]] : [['Base', base]]).map(([k, v]) => (
-          <div key={k as string} className="mono" style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, color: 'var(--text2)', padding: '3px 0' }}><span>{k}</span><span>{eur(v as number)}</span></div>
+          <div key={k as string}><dt>{k}</dt><dd className="num">{eur(v as number)}</dd></div>
         ))}
-        <div className="mono" style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, fontWeight: 500, padding: '6px 0 0' }}><span>A cobrar</span><span>{eur(d?.total ?? base)}</span></div>
-      </div>
-      {demo && <div style={{ fontSize: 11.5, color: 'var(--amber)', marginTop: 14 }}>Demo: al confirmar no se escribe nada.</div>}
-      {!demo && !bloqueo && <div style={{ fontSize: 11.5, color: 'var(--text3)', marginTop: 14 }}>Se crea de verdad como factura pendiente. El número definitivo lo asigna la base de datos.</div>}
-      {bloqueo && <div style={{ fontSize: 12, color: 'var(--amber)', marginTop: 14 }}>{bloqueo}</div>}
-      {error && <div style={{ fontSize: 12, color: 'var(--red)', marginTop: 14 }}>{error}</div>}
-      <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
-        <button className="btn" onClick={onClose}>Cancelar</button>
-        <button className="btn btn-primary" disabled={!!bloqueo || ocupado} style={{ flex: 1, justifyContent: 'center', opacity: bloqueo ? 0.5 : 1 }}
+        <div className="desg__t"><dt>A cobrar</dt><dd className="num">{eur(d?.total ?? base)}</dd></div>
+      </dl>
+      {demo && <p className="nota aviso modal__nota">Demo: al confirmar no se escribe nada.</p>}
+      {!demo && !bloqueo && <p className="nota modal__nota">Se crea de verdad como factura pendiente. El número definitivo lo asigna la base de datos.</p>}
+      {bloqueo && <p className="nota aviso modal__nota">{bloqueo}</p>}
+      {error && <p className="nota error modal__nota">{error}</p>}
+      <div className="modal__foot">
+        <button type="button" className="copy caps" onClick={onClose}>Cancelar</button>
+        <button type="button" className="pill pill--sm" disabled={!!bloqueo || ocupado}
           onClick={async () => { setOcupado(true); const e = await onConfirmar(numero); setOcupado(false); if (e) setError(e) }}>
           {ocupado ? 'Creando…' : `Crear factura${demo ? ` ${numero}` : ''}`}
         </button>
@@ -296,44 +334,47 @@ function ModalNuevoCliente({ marca, clientes, demo, onAdd, onClose }: { marca: M
   const [paisManual, setPaisManual] = useState<PaisFiscal | ''>('')
   const pais = (paisManual || fiscal?.pais || 'ES') as PaisFiscal
   const listo = cliente.trim() && web.trim() && Number(precio) > 0
-  const input = { width: '100%', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 7, padding: '9px 12px', color: 'var(--text)', fontSize: 13, fontFamily: 'Inter, sans-serif', outline: 'none' }
-  const label = { display: 'block' as const, fontSize: 12, color: 'var(--text2)', marginBottom: 6 }
   return (
     <>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, fontSize: 16, fontWeight: 500 }}>
-        Nuevo cliente · {marca.nombre} <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', fontSize: 20 }}>×</button>
+      <div className="modal__head"><h2>Nuevo cliente · {marca.nombre}</h2><button type="button" className="modal__x" onClick={onClose} aria-label="Cerrar">×</button></div>
+      <div className="modal__campos">
+        <div className="field">
+          <label className="caps" htmlFor="nc-cliente">Cliente fiscal</label>
+          <input id="nc-cliente" list="clientes-fiscales-agencia" value={cliente} onChange={e => setCliente(e.target.value)} placeholder="Nombre fiscal (de Clientes)" />
+          <datalist id="clientes-fiscales-agencia">{clientes.map(c => <option key={c.cliente} value={c.cliente} />)}</datalist>
+          {cliente && !fiscal && <p className="nota aviso field__nota">No está en Clientes: guarda sus datos fiscales antes de facturar (Facturación › Clientes).</p>}
+        </div>
+        <div className="field">
+          <label className="caps" htmlFor="nc-web">Web</label>
+          <input id="nc-web" value={web} onChange={e => setWeb(e.target.value.replace(/^https?:\/\//, ''))} placeholder="estudio.es" />
+        </div>
+        <div className="modal__par">
+          <div className="field">
+            <label className="caps" htmlFor="nc-plan">Plan</label>
+            <input id="nc-plan" list={`planes-${marca.key}`} value={plan} onChange={e => setPlan(e.target.value)} placeholder="Opcional" />
+            {marca.key === 'arkevo' && <datalist id={`planes-${marca.key}`}>{['Essential', 'Studio', 'Signature'].map(x => <option key={x} value={x} />)}</datalist>}
+          </div>
+          <div className="field">
+            <label className="caps" htmlFor="nc-precio">Precio (base, sin IVA)</label>
+            <input id="nc-precio" type="number" inputMode="decimal" value={precio} onChange={e => setPrecio(e.target.value)} placeholder="990" />
+          </div>
+        </div>
+        {demo && <div className="field">
+          <label className="caps" htmlFor="nc-pais">País fiscal</label>
+          <select id="nc-pais" value={paisManual || pais} onChange={e => setPaisManual(e.target.value as PaisFiscal)}>
+            <option value="ES">España · IVA 21 % − retención 15 %</option><option value="UE">UE · sin IVA</option><option value="EXT">Fuera de la UE · sin IVA</option>
+          </select>
+          <Chevron />
+          {fiscal?.pais && !paisManual && <p className="nota field__nota">Tomado de su ficha en Clientes.</p>}
+        </div>}
       </div>
-      <div style={{ marginBottom: 14 }}>
-        <label style={label}>Cliente fiscal</label>
-        <input list="clientes-fiscales-agencia" value={cliente} onChange={e => setCliente(e.target.value)} placeholder="Nombre fiscal (de Clientes)" style={input} />
-        <datalist id="clientes-fiscales-agencia">{clientes.map(c => <option key={c.cliente} value={c.cliente} />)}</datalist>
-        {cliente && !fiscal && <div style={{ fontSize: 10.5, color: 'var(--amber)', marginTop: 4 }}>No está en Clientes: guarda sus datos fiscales antes de facturar (Facturación › Clientes).</div>}
-      </div>
-      <div style={{ marginBottom: 14 }}>
-        <label style={label}>Web</label>
-        <input value={web} onChange={e => setWeb(e.target.value.replace(/^https?:\/\//, ''))} placeholder="estudio.es" style={input} />
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
-        <div><label style={label}>Plan</label>
-          <input list={`planes-${marca.key}`} value={plan} onChange={e => setPlan(e.target.value)} placeholder="Opcional" style={input} />
-          {marca.key === 'arkevo' && <datalist id={`planes-${marca.key}`}>{['Essential', 'Studio', 'Signature'].map(x => <option key={x} value={x} />)}</datalist>}</div>
-        <div><label style={label}>Precio (base, sin IVA)</label>
-          <input type="number" inputMode="decimal" value={precio} onChange={e => setPrecio(e.target.value)} placeholder="990" style={input} /></div>
-      </div>
-      {demo && <div style={{ marginBottom: 14 }}>
-        <label style={label}>País fiscal</label>
-        <select value={paisManual || pais} onChange={e => setPaisManual(e.target.value as PaisFiscal)} style={input}>
-          <option value="ES">España · IVA 21 % − retención 15 %</option><option value="UE">UE · sin IVA</option><option value="EXT">Fuera de la UE · sin IVA</option>
-        </select>
-        {fiscal?.pais && !paisManual && <div style={{ fontSize: 10.5, color: 'var(--text3)', marginTop: 4 }}>Tomado de su ficha en Clientes.</div>}
-      </div>}
-      {!demo && fiscal?.pais && <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 10 }}>{PAIS_TXT[fiscal.pais]} (de su ficha en Clientes)</div>}
-      {Number(precio) > 0 && <div className="mono" style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 10 }}>Dos pagos de {eur(Number(precio) / 2)} base · {eur(total(Number(precio) / 2, pais))} a cobrar cada uno</div>}
-      {demo && <div style={{ fontSize: 11.5, color: 'var(--amber)', marginBottom: 6 }}>Demo: se añade solo en pantalla.</div>}
-      {error && <div style={{ fontSize: 12, color: 'var(--red)', marginBottom: 6 }}>{error}</div>}
-      <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
-        <button className="btn" onClick={onClose}>Cancelar</button>
-        <button className="btn btn-primary" disabled={!listo || ocupado} style={{ flex: 1, justifyContent: 'center', opacity: listo ? 1 : 0.5 }}
+      {!demo && fiscal?.pais && <p className="nota modal__nota">{PAIS_TXT[fiscal.pais]} (de su ficha en Clientes)</p>}
+      {Number(precio) > 0 && <p className="nota mono modal__nota">Dos pagos de {eur(Number(precio) / 2)} base · {eur(total(Number(precio) / 2, pais))} a cobrar cada uno</p>}
+      {demo && <p className="nota aviso modal__nota">Demo: se añade solo en pantalla.</p>}
+      {error && <p className="nota error modal__nota">{error}</p>}
+      <div className="modal__foot">
+        <button type="button" className="copy caps" onClick={onClose}>Cancelar</button>
+        <button type="button" className="pill pill--sm" disabled={!listo || ocupado}
           onClick={async () => {
             if (!listo) return
             setOcupado(true)
