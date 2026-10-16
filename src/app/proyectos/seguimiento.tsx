@@ -132,7 +132,11 @@ export default function Seguimiento({ proyectos, marcas }: { proyectos: Proyecto
                       </ol>
                     )}
                     {p.emails.length > 0 && (
-                      <ol>{p.emails.map((e, i) => <li key={i}><span className="caps dim">{fecha(e.fecha)}</span> ✉ {NOMBRE_EMAIL[e.plantilla] || e.plantilla}</li>)}</ol>
+                      <ol>{p.emails.map((e, i) => (
+                        <li key={i} className={e.error ? 'aviso' : undefined} title={e.error || undefined}>
+                          <span className="caps dim">{fecha(e.fecha)}</span> ✉ {NOMBRE_EMAIL[e.plantilla] || e.plantilla}{e.error && <> · {e.error}</>}
+                        </li>
+                      ))}</ol>
                     )}
                     <span className="trk__acc">
                       {p.fase && [EMAIL_AL_ENTRAR[p.fase], EMAIL_RECORDATORIO[p.fase]].filter((c): c is string => !!c).map(c => (

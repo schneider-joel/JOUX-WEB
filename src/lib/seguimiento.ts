@@ -26,7 +26,7 @@ export type ProyectoSeguimiento = {
   desde: string                 // cuándo entró en la fase actual (o se creó)
   lead_id: number | null
   historial: { fase: FaseProyecto; fecha: string }[]  // cambios de fase, del más antiguo al más reciente
-  emails: { plantilla: string; fecha: string }[]      // emails enviados al cliente
+  emails: { plantilla: string; fecha: string; error: string | null }[]  // emails enviados al cliente; error = rebotado, spam…
 }
 
 export const diasDesde = (iso: string) => Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86400000))

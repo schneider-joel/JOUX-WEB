@@ -18,7 +18,11 @@ export default async function ProyectosPage() {
     .or('status.eq.activo,fase.not.is.null').in('marca', (marcas || []).map(m => m.key)).order('created_at', { ascending: false })
   const ids = (proyectos || []).map(p => p.id)
   const { data: eventos } = ids.length
-    ? await sb.from('eventos').select('proyecto_id, tipo, datos, created_at').in('proyecto_id', ids).in('tipo', ['proyecto.fase', 'lead.ganado', 'mensaje.enviado']).order('created_at')
+    ? await sb.from('eventos').select('proyecto_id, tipo, datos, created_at').in('proyecto_id', ids).in('tipo', ['proyecto.fase', 'lead.ganado']).order('created_at')
+    : { data: [] }
+  // Los emails salen de `mensajes` (no de los eventos) para saber si Resend avisó luego de un rebote.
+  const { data: mensajes } = ids.length
+    ? await sb.from('mensajes').select('proyecto_id, plantilla, estado, error, enviado_en').in('proyecto_id', ids).eq('direccion', 'saliente').not('enviado_en', 'is', null).order('enviado_en')
     : { data: [] }
 
   const lista: ProyectoSeguimiento[] = (proyectos || []).map(p => {
@@ -26,8 +30,8 @@ export default async function ProyectosPage() {
     const historial = propios
       .map(e => ({ fase: e.tipo === 'lead.ganado' ? 'confirmado' : (e.datos as { a?: unknown })?.a, fecha: e.created_at as string }))
       .filter((h): h is ProyectoSeguimiento['historial'][number] => esFaseProyecto(h.fase))
-    const emails = propios.filter(e => e.tipo === 'mensaje.enviado')
-      .map(e => ({ plantilla: String((e.datos as { plantilla?: unknown })?.plantilla || ''), fecha: e.created_at as string }))
+    const emails = (mensajes || []).filter(m => m.proyecto_id === p.id)
+      .map(m => ({ plantilla: m.plantilla || '', fecha: m.enviado_en as string, error: m.estado === 'error' ? m.error || 'No entregado' : null }))
     const ultimo = [...historial].reverse().find(h => h.fase === p.fase)
     return {
       id: p.id, nombre: p.nombre, cliente: p.cliente, marca: p.marca, lead_id: p.lead_id,
