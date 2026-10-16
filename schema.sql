@@ -1099,3 +1099,33 @@ If it works for you, I''ll put together a fixed-price proposal for the full webs
 Best,
 Joel · Arkevo', 'gmail', false)
 ON CONFLICT (clave, marca, idioma) DO NOTHING;
+
+-- MIGRACIÓN: ronda de ajustes de la prueba gratis (2026-10-16). «Pedir ajustes al agente» en la ficha
+-- crea `prueba.ajustes` (una por lead); el agente responde con `prueba.lista` ronda 2. El índice único
+-- pasa de «un prueba.lista por lead» a «uno por lead y ronda» (los antiguos, sin ronda, cuentan como 1).
+CREATE UNIQUE INDEX IF NOT EXISTS eventos_prueba_lista_ronda ON eventos (lead_id, (COALESCE(datos->>'ronda', '1'))) WHERE tipo = 'prueba.lista';
+DROP INDEX IF EXISTS eventos_prueba_lista_unica;
+CREATE UNIQUE INDEX IF NOT EXISTS eventos_prueba_ajustes_unica ON eventos (lead_id) WHERE tipo = 'prueba.ajustes';
+-- {{cambios}} = la lista que manda el agente («- …» por línea); si no manda ninguna, la línea desaparece.
+INSERT INTO plantillas (clave, marca, idioma, remitente, asunto, cuerpo, canal, auto) VALUES
+  ('prueba.ajustada', 'arkevo', 'es', 'Arkevo <hola@arkevostudio.com>', 'Tu portada en {{diseno}} · con los ajustes', 'Hola, {{nombre}}:
+
+Ya está la portada con los ajustes, en el mismo enlace: {{url}}
+
+{{cambios}}
+
+Si os encaja, te preparo la propuesta cerrada para la web completa.
+
+Un saludo,
+Joel · Arkevo', 'gmail', false),
+  ('prueba.ajustada', 'arkevo', 'en', 'Arkevo <hello@arkevostudio.com>', 'Your homepage in {{diseno}} · with the tweaks', 'Hi {{nombre}},
+
+Your homepage is updated with the tweaks, on the same link: {{url}}
+
+{{cambios}}
+
+If it works for you, I''ll put together a fixed-price proposal for the full website.
+
+Best,
+Joel · Arkevo', 'gmail', false)
+ON CONFLICT (clave, marca, idioma) DO NOTHING;

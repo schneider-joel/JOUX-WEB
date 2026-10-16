@@ -20,8 +20,8 @@ const NOMBRE_CATEGORIA: Record<string, string> = {
 export default async function AjustesPage() {
   const [autonomia, { data: plantillas }, { data: marcas }, { data: enviados }, { data: resumen }] = await Promise.all([
     leerAutonomia(),
-    // prueba.lista no lleva interruptor: ese email lo manda siempre Joel desde la ficha del lead.
-    sb.from('plantillas').select('clave, marca, idioma, auto').neq('clave', 'prueba.lista').order('marca'),
+    // prueba.lista y prueba.ajustada no llevan interruptor: esos emails los manda siempre Joel desde la ficha del lead.
+    sb.from('plantillas').select('clave, marca, idioma, auto').not('clave', 'in', '(prueba.lista,prueba.ajustada)').order('marca'),
     sb.from('marcas').select('key, nombre, orden').order('orden'),
     sb.from('mensajes').select('lead_id, proyecto_id, plantilla, categoria_ia, generado_por, asunto, cuerpo, asunto_original, cuerpo_original, auto')
       .eq('direccion', 'saliente').not('enviado_en', 'is', null).limit(5000),

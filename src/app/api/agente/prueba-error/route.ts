@@ -12,7 +12,7 @@ export const fetchCache = 'force-no-store'
 const json = (body: unknown, status: number) => NextResponse.json(body, { status })
 
 // El agente no pudo montar la prueba (fotos inservibles, falta el logo…): evento `prueba.error` y push.
-// El lead sale de /api/agente/pruebas-pendientes hasta que el cliente mande material nuevo.
+// El lead sale de /api/agente/pruebas-pendientes hasta que haya un encargo nuevo (material o ajustes).
 export async function POST(req: NextRequest) {
   if (!fuenteDeClave(req.headers.get('authorization'), CLAVE_AGENTE)) return json({ error: 'no_autorizado' }, 401)
   const b = await cuerpoAgente(req)
@@ -22,11 +22,12 @@ export async function POST(req: NextRequest) {
   if (!leadId) return json({ error: 'lead_invalido', campo: 'lead_id' }, 400)
   const motivo = typeof b.motivo === 'string' ? b.motivo.trim().slice(0, 1000) : ''
   if (!motivo) return json({ error: 'motivo_invalido', campo: 'motivo' }, 400)
+  if (b.ronda != null && b.ronda !== 1 && b.ronda !== 2) return json({ error: 'ronda_invalida', campo: 'ronda' }, 400)
 
   try {
     const { data: lead } = await sb.from('leads').select('id, nombre, empresa, email').eq('id', leadId).maybeSingle()
     if (!lead) return json({ error: 'lead_desconocido' }, 404)
-    await sb.from('eventos').insert({ lead_id: lead.id, tipo: 'prueba.error', fuente: 'agente-prueba', datos: { motivo } })
+    await sb.from('eventos').insert({ lead_id: lead.id, tipo: 'prueba.error', fuente: 'agente-prueba', datos: { motivo, ...(b.ronda ? { ronda: b.ronda } : {}) } })
     await notificar({
       titulo: `No se pudo montar la prueba de ${estudioDelLead(lead)}`,
       cuerpo: motivo.slice(0, 140),

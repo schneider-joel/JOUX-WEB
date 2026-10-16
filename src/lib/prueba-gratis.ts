@@ -111,27 +111,49 @@ export async function avisarMaterial(lead: LeadMaterial, fotos: number, mensajeI
   return true
 }
 
+// ── Rondas ───────────────────────────────────────────────────────────────────
+
+// Ronda 1 = la prueba; ronda 2 = la única ronda de ajustes (proceso-cliente.md §2). Los eventos
+// `prueba.lista` antiguos no llevan ronda: son la 1.
+export const MAX_RONDA = 2
+export const rondaDe = (datos: Record<string, unknown> | null | undefined) => Number(datos?.ronda) === 2 ? 2 : 1
+export const plantillaRonda = (ronda: number) => ronda === 2 ? 'prueba.ajustada' : 'prueba.lista'
+
 // ── Estado de la prueba (ficha del lead) ─────────────────────────────────────
+
+type EventoPrueba = { tipo: string; datos: Record<string, unknown>; created_at: string }
+type Lista = { fecha: string; url: string | null; diseno: string | null }
 
 export type EstadoPrueba = {
   material: string | null                 // fecha del último material.recibido
-  lista: { fecha: string; url: string | null; diseno: string | null } | null
-  error: { fecha: string; motivo: string } | null  // solo si es posterior al último material
+  lista: Lista | null                     // ronda 1
   enviada: string | null                  // fecha en que salió el email prueba.lista
+  ajustes: { fecha: string; peticion: string } | null  // Joel pidió la ronda de ajustes
+  ajustada: Lista | null                  // ronda 2
+  ajustadaEnviada: string | null          // fecha en que salió el email prueba.ajustada
+  error: { fecha: string; motivo: string } | null  // solo si es lo último que pasó y no hay versión posterior
 }
 
 export function estadoPrueba(
-  eventos: { tipo: string; datos: Record<string, unknown>; created_at: string }[],
+  eventos: EventoPrueba[],
   mensajes: { plantilla?: string | null; estado: string; enviado_en: string | null }[],
 ): EstadoPrueba | null {
-  const ultimo = (tipo: string) => eventos.filter(e => e.tipo === tipo).sort((a, b) => b.created_at.localeCompare(a.created_at))[0]
-  const material = ultimo('material.recibido'), lista = ultimo('prueba.lista'), error = ultimo('prueba.error')
+  const ultimo = (tipo: string, ronda?: number) => eventos.filter(e => e.tipo === tipo && (ronda == null || rondaDe(e.datos) === ronda)).sort((a, b) => b.created_at.localeCompare(a.created_at))[0]
+  const material = ultimo('material.recibido'), error = ultimo('prueba.error'), ajustes = ultimo('prueba.ajustes')
+  const lista = ultimo('prueba.lista', 1), ajustada = ultimo('prueba.lista', 2)
   if (!material && !lista && !error) return null
-  const enviado = mensajes.find(m => m.plantilla === 'prueba.lista' && m.estado === 'enviado')
+  const comoLista = (e?: EventoPrueba): Lista | null => e ? { fecha: e.created_at, url: typeof e.datos.url === 'string' ? e.datos.url : null, diseno: typeof e.datos.diseno === 'string' ? e.datos.diseno : null } : null
+  const enviado = (plantilla: string) => mensajes.find(m => m.plantilla === plantilla && m.estado === 'enviado')?.enviado_en ?? null
+  // El error cuenta si es posterior a lo que el agente tenía que hacer (material o ajustes) y no llegó versión después.
+  const encargo = ajustes || material
+  const pendiente = ajustes ? !ajustada : !lista
   return {
     material: material?.created_at ?? null,
-    lista: lista ? { fecha: lista.created_at, url: typeof lista.datos.url === 'string' ? lista.datos.url : null, diseno: typeof lista.datos.diseno === 'string' ? lista.datos.diseno : null } : null,
-    error: error && !lista && (!material || error.created_at > material.created_at) ? { fecha: error.created_at, motivo: String(error.datos.motivo ?? '') } : null,
-    enviada: enviado ? enviado.enviado_en : null,
+    lista: comoLista(lista),
+    enviada: enviado('prueba.lista'),
+    ajustes: ajustes ? { fecha: ajustes.created_at, peticion: String(ajustes.datos.peticion ?? '') } : null,
+    ajustada: comoLista(ajustada),
+    ajustadaEnviada: enviado('prueba.ajustada'),
+    error: error && pendiente && (!encargo || error.created_at > encargo.created_at) ? { fecha: error.created_at, motivo: String(error.datos.motivo ?? '') } : null,
   }
 }

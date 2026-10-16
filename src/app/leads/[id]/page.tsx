@@ -8,6 +8,7 @@ import AccionesLead from './ganado'
 import FacturarPago1 from './facturar-pago'
 import Respuesta, { type Borrador } from './respuesta'
 import EmailHilo from './email-hilo'
+import PedirAjustes from './pedir-ajustes'
 import { estadoPrueba, urlsFirmadas, type AdjuntoMensaje } from '@/lib/prueba-gratis'
 
 export const dynamic = 'force-dynamic'
@@ -32,7 +33,8 @@ function textoEvento(e: Evento) {
   if (e.tipo === 'ia.borrador') return `Borrador de IA${e.datos.motivo === 'regenerar' ? ' (regenerado)' : e.datos.motivo === 'respuesta' ? ' para su respuesta' : ''}${e.datos.categoria ? ` · ${valor(e.datos.categoria)}` : ''}`
   if (e.tipo === 'mensaje.descartado') return 'Borrador descartado'
   if (e.tipo === 'material.recibido') return `Material para la prueba gratis${e.datos.fotos ? ` · ${valor(e.datos.fotos)} fotos` : ''}${e.datos.diseno ? ` · ${valor(e.datos.diseno)}` : ''}`
-  if (e.tipo === 'prueba.lista') return `Prueba gratis lista${e.datos.diseno ? ` en ${valor(e.datos.diseno)}` : ''}`
+  if (e.tipo === 'prueba.lista') return `${Number(e.datos.ronda) === 2 ? 'Prueba gratis con ajustes lista' : 'Prueba gratis lista'}${e.datos.diseno ? ` en ${valor(e.datos.diseno)}` : ''}`
+  if (e.tipo === 'prueba.ajustes') return `Ajustes pedidos al agente: ${valor(e.datos.peticion)}`
   if (e.tipo === 'prueba.error') return `El agente no pudo montar la prueba: ${valor(e.datos.motivo)}`
   if (e.tipo === 'proyecto.fase') return `Fase del proyecto: ${esFaseProyecto(e.datos.de) ? ETIQUETA_FASE[e.datos.de] : '—'} → ${esFaseProyecto(e.datos.a) ? ETIQUETA_FASE[e.datos.a] : valor(e.datos.a)}`
   return e.tipo
@@ -71,6 +73,10 @@ export default async function LeadPage({ params }: { params: { id: string } }) {
   const firmadas = await urlsFirmadas(adjuntosMsg.map(a => a.ruta))
   const adjuntosDe = (id: number) => adjuntosMsg.flatMap((a, i) => a.mensaje === id ? [{ nombre: a.nombre, url: firmadas[i], peso: peso(a.bytes) }] : [])
   const prueba = estadoPrueba((eventos || []) as Evento[], msgs)
+  // Para «Pedir ajustes»: la última respuesta del cliente después de publicar la prueba, como punto de partida.
+  const respuestaPrueba = prueba?.lista ? msgs.find(m => m.direccion === 'entrante' && (m.enviado_en || m.created_at) > prueba.lista!.fecha) ?? null : null
+  const paso = (hecho: boolean, texto: React.ReactNode, aviso = false) => <li className={aviso ? 'prueba__paso--aviso' : hecho ? 'prueba__paso--hecho' : undefined}>{texto}</li>
+  const enlace = (l: { url: string | null; diseno: string | null }, texto: string) => l.url ? <a href={l.url} target="_blank" rel="noopener noreferrer">{texto}{l.diseno ? ` · ${l.diseno}` : ''}</a> : texto
   // El borrador vivo (o el que falló al enviar) va al editor; el resto, al hilo.
   const borrador = msgs.find(m => m.direccion === 'saliente' && (m.estado === 'borrador' || m.estado === 'error')) || null
   // Hilo: mensajes enviados y recibidos + eventos (sin los de envío/recepción, que ya son el propio mensaje), lo último arriba.
@@ -113,18 +119,25 @@ export default async function LeadPage({ params }: { params: { id: string } }) {
           <section className="block" aria-label="Prueba gratis">
             <p className="label caps"><span>Prueba gratis</span><i className="rule" /></p>
             <ol className="prueba caps">
-              <li className={prueba.material ? 'prueba__paso--hecho' : undefined}>Material{prueba.material ? ` · ${fechaHora(prueba.material)}` : ''}</li>
-              {prueba.error ? (
-                <li className="prueba__paso--aviso">No se pudo montar · {fechaHora(prueba.error.fecha)}</li>
-              ) : (
-                <li className={prueba.lista ? 'prueba__paso--hecho' : undefined}>
-                  {prueba.lista?.url ? <a href={prueba.lista.url} target="_blank" rel="noopener noreferrer">Prueba lista{prueba.lista.diseno ? ` · ${prueba.lista.diseno}` : ''}</a> : 'Prueba lista'}
-                </li>
-              )}
-              <li className={prueba.enviada ? 'prueba__paso--hecho' : undefined}>Enviada{prueba.enviada ? ` · ${fechaHora(prueba.enviada)}` : ''}</li>
+              {paso(!!prueba.material, `Material${prueba.material ? ` · ${fechaHora(prueba.material)}` : ''}`)}
+              {prueba.error && !prueba.ajustes
+                ? paso(false, `No se pudo montar · ${fechaHora(prueba.error.fecha)}`, true)
+                : paso(!!prueba.lista, prueba.lista ? enlace(prueba.lista, 'Prueba lista') : 'Prueba lista')}
+              {paso(!!prueba.enviada, `Enviada${prueba.enviada ? ` · ${fechaHora(prueba.enviada)}` : ''}`)}
+              {prueba.ajustes && <>
+                {paso(true, `Ajustes pedidos · ${fechaHora(prueba.ajustes.fecha)}`)}
+                {prueba.error
+                  ? paso(false, `No se pudo ajustar · ${fechaHora(prueba.error.fecha)}`, true)
+                  : paso(!!prueba.ajustada, prueba.ajustada ? enlace(prueba.ajustada, 'Ajustes listos') : 'Ajustes listos')}
+                {paso(!!prueba.ajustadaEnviada, `Enviada${prueba.ajustadaEnviada ? ` · ${fechaHora(prueba.ajustadaEnviada)}` : ''}`)}
+              </>}
             </ol>
             {prueba.error && <p className="nota aviso">{prueba.error.motivo}</p>}
-            {prueba.lista && !prueba.enviada && <p className="nota">El email con el enlace está abajo, en «Respuesta». Revísalo y envíalo.</p>}
+            {((prueba.lista && !prueba.enviada) || (prueba.ajustada && !prueba.ajustadaEnviada)) && <p className="nota">El email con el enlace está abajo, en «Respuesta». Revísalo y envíalo.</p>}
+            {prueba.ajustes && !prueba.ajustada && !prueba.error && <p className="nota" style={{ whiteSpace: 'pre-wrap' }}>El agente tiene los ajustes:{'\n'}{prueba.ajustes.peticion}</p>}
+            {prueba.lista && prueba.enviada && !prueba.ajustes && (
+              <PedirAjustes leadId={lead.id} sugerencia={respuestaPrueba?.cuerpo || ''} mensajeId={respuestaPrueba?.id ?? null} />
+            )}
           </section>
         )}
 
