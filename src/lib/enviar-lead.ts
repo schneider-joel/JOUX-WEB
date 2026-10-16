@@ -31,7 +31,7 @@ export async function enviarMensajeLead(id: number, desde: ('borrador' | 'aproba
     const estado = ['nuevo', 'borrador', 'conversacion'].includes(lead.estado) ? 'respondido' : lead.estado
     await sb.from('leads').update({ gmail_hilo: lead.gmail_hilo || r.hilo, estado, ultimo_contacto: ahora, updated_at: ahora }).eq('id', lead.id)
     await sb.from('eventos').insert([
-      { lead_id: lead.id, tipo: 'mensaje.enviado', fuente: 'joux-hub', datos: { mensaje_id: id, de: remitente, para: m.para, asunto } },
+      { lead_id: lead.id, tipo: 'mensaje.enviado', fuente: 'joux-hub', datos: { mensaje_id: id, de: remitente, para: m.para, asunto, ...(m.auto ? { auto: true } : {}) } },
       ...(estado !== lead.estado ? [{ lead_id: lead.id, tipo: 'lead.estado', fuente: 'joux-hub', datos: { de: lead.estado, a: estado } }] : []),
     ])
     return { ok: true }

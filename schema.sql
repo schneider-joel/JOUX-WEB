@@ -1056,3 +1056,13 @@ CREATE TABLE IF NOT EXISTS revisiones (
   UNIQUE (proyecto_id, ronda)
 );
 ALTER TABLE revisiones ENABLE ROW LEVEL SECURITY;
+
+-- MIGRACIÓN: fase 5, autonomía gradual (2026-10-16, solo aditiva). Para medir cuántos borradores salen
+-- sin tocar se guarda lo que se generó (IA o plantilla rellenada) y la categoría de la IA; `auto` marca
+-- lo que salió sin aprobación. Los interruptores van en configuracion: 'auto_pausa' ('true'/'false'),
+-- 'auto_respuestas_ia' ({"arkevo": ["precio"], …}) y 'resumen_diario_fecha' (AAAA-MM-DD); las plantillas,
+-- en plantillas.auto. Sin filas = todo apagado.
+ALTER TABLE mensajes ADD COLUMN IF NOT EXISTS asunto_original TEXT;
+ALTER TABLE mensajes ADD COLUMN IF NOT EXISTS cuerpo_original TEXT;
+ALTER TABLE mensajes ADD COLUMN IF NOT EXISTS categoria_ia TEXT;
+ALTER TABLE mensajes ADD COLUMN IF NOT EXISTS auto BOOLEAN NOT NULL DEFAULT false;

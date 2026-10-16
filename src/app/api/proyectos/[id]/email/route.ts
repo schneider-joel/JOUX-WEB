@@ -48,7 +48,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   }
 
   const destino = para.trim()
-  const envio = await enviarEmailProyecto({ proyectoId: d.p.id, leadId: d.p.lead_id, clave, remitente: d.t.remitente, para: destino, asunto: asunto.trim(), cuerpo, mensajeId })
+  const envio = await enviarEmailProyecto({ proyectoId: d.p.id, leadId: d.p.lead_id, clave, remitente: d.t.remitente, para: destino, asunto: asunto.trim(), cuerpo, mensajeId, original: { asunto: d.asunto, cuerpo: d.cuerpo } })
   if (envio.error) return NextResponse.json({ error: `No se envió: ${envio.error}` }, { status: 502 })
   if (!d.p.contacto_email) await sb.from('proyectos').update({ contacto_email: destino }).eq('id', d.p.id)
   return NextResponse.json({ ok: true })

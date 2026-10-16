@@ -22,7 +22,7 @@ export default async function ProyectosPage() {
     : { data: [] }
   // Los emails salen de `mensajes` (no de los eventos) para saber si Resend avisó luego de un rebote.
   const { data: mensajes } = ids.length
-    ? await sb.from('mensajes').select('proyecto_id, plantilla, estado, error, enviado_en').in('proyecto_id', ids).eq('direccion', 'saliente').not('enviado_en', 'is', null).order('enviado_en')
+    ? await sb.from('mensajes').select('proyecto_id, plantilla, estado, error, enviado_en, auto').in('proyecto_id', ids).eq('direccion', 'saliente').not('enviado_en', 'is', null).order('enviado_en')
     : { data: [] }
   const { data: borradores } = ids.length
     ? await sb.from('mensajes').select('id, proyecto_id, plantilla, error').in('proyecto_id', ids).eq('estado', 'borrador').order('created_at')
@@ -37,7 +37,7 @@ export default async function ProyectosPage() {
       .map(e => ({ fase: e.tipo === 'lead.ganado' ? 'confirmado' : (e.datos as { a?: unknown })?.a, fecha: e.created_at as string }))
       .filter((h): h is ProyectoSeguimiento['historial'][number] => esFaseProyecto(h.fase))
     const emails = (mensajes || []).filter(m => m.proyecto_id === p.id)
-      .map(m => ({ plantilla: m.plantilla || '', fecha: m.enviado_en as string, error: m.estado === 'error' ? m.error || 'No entregado' : null }))
+      .map(m => ({ plantilla: m.plantilla || '', fecha: m.enviado_en as string, error: m.estado === 'error' ? m.error || 'No entregado' : null, auto: !!m.auto }))
     const ultimo = [...historial].reverse().find(h => h.fase === p.fase)
     return {
       id: p.id, nombre: p.nombre, cliente: p.cliente, marca: p.marca, lead_id: p.lead_id,

@@ -150,7 +150,7 @@ export default function Seguimiento({ proyectos, marcas }: { proyectos: Proyecto
                     {p.emails.length > 0 && (
                       <ol>{p.emails.map((e, i) => (
                         <li key={i} className={e.error ? 'aviso' : undefined} title={e.error || undefined}>
-                          <span className="caps dim">{fecha(e.fecha)}</span> ✉ {NOMBRE_EMAIL[e.plantilla] || e.plantilla}{e.error && <> · {e.error}</>}
+                          <span className="caps dim">{fecha(e.fecha)}</span> ✉ {NOMBRE_EMAIL[e.plantilla] || e.plantilla}{e.auto && <> · enviado automáticamente</>}{e.error &&<> · {e.error}</>}
                         </li>
                       ))}</ol>
                     )}

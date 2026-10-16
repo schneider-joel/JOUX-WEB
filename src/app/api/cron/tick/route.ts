@@ -8,6 +8,7 @@ import { enviarMensajeLead } from '@/lib/enviar-lead'
 import { enviarEmail } from '@/lib/resend'
 import { notificar } from '@/lib/push'
 import { prepararEmailProyecto } from '@/lib/emails-proyecto'
+import { resumenDiario } from '@/lib/resumen'
 
 export const dynamic = 'force-dynamic'
 // supabase-js usa fetch: sin esto, Next guarda sus respuestas en el Data Cache y la lista sale vieja.
@@ -159,7 +160,7 @@ async function recordatoriosRevision() {
     const dias = Math.floor((Date.now() - new Date(r.abierta_en).getTime()) / 864e5)
     await notificar({
       titulo: `Revisión sin comentarios · ${p.cliente} · ${p.nombre}`,
-      cuerpo: `Ronda ${r.ronda} abierta hace ${dias} días.${email && 'borrador' in email ? ' Recordatorio preparado para enviar.' : email && 'enviado' in email ? ' Recordatorio enviado.' : ''}`,
+      cuerpo: `Ronda ${r.ronda} abierta hace ${dias} días.${email && 'borrador' in email ? ' Recordatorio preparado para enviar.' : email && 'enviado' in email ? ' Recordatorio enviado automáticamente.' : ''}`,
       url: esWeb ? '/proyectos' : '/',
       etiqueta: `proyecto-${p.id}`,
     }).catch(e => console.error('tick push', e?.message))
@@ -175,5 +176,7 @@ export async function POST(req: NextRequest) {
   try { resultado.gmail = await leerGmail() } catch (e: any) { console.error('tick gmail', e?.message); resultado.gmail = { error: e?.message || 'error' } }
   try { resultado.envios = await enviarAprobados() } catch (e: any) { console.error('tick envios', e?.message); resultado.envios = { error: e?.message || 'error' } }
   try { resultado.recordatorios = await recordatoriosRevision() } catch (e: any) { console.error('tick recordatorios', e?.message); resultado.recordatorios = { error: e?.message || 'error' } }
+  // Al final: así el resumen ya cuenta las respuestas y recordatorios de este mismo tick.
+  try { resultado.resumen = await resumenDiario() } catch (e: any) { console.error('tick resumen', e?.message); resultado.resumen = { error: e?.message || 'error' } }
   return NextResponse.json(resultado)
 }

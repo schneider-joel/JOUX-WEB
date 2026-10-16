@@ -2,6 +2,7 @@
 import { supabaseServer as sb } from '@/lib/supabase-server'
 import { pendientes, rellenar } from '@/lib/emails'
 import { enviarEmail } from '@/lib/resend'
+import { enviosPausados } from '@/lib/autonomia'
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -35,17 +36,23 @@ export async function plantillaProyecto(id: number | string, clave: string, extr
 export async function enviarEmailProyecto(m: {
   proyectoId: number; leadId?: number | null; clave: string; remitente: string; para: string; asunto: string; cuerpo: string
   mensajeId?: number; fuente?: string
+  // La plantilla rellenada antes de que Joel la toque (para la métrica de ajustes) y si salió sin aprobación.
+  original?: { asunto: string; cuerpo: string }; auto?: boolean
 }) {
   const envio = await enviarEmail({ de: m.remitente, para: m.para, asunto: m.asunto, texto: m.cuerpo })
   // Un borrador que no sale vuelve a borrador (con el motivo) para reintentarlo desde /proyectos.
   const fila = {
     estado: envio.error ? (m.mensajeId ? 'borrador' : 'error') : 'enviado', remitente: m.remitente, para: m.para, asunto: m.asunto, cuerpo: m.cuerpo,
     canal: 'resend', id_proveedor: envio.id || null, error: envio.error || null, enviado_en: envio.error ? null : new Date().toISOString(),
+    ...(m.auto ? { auto: true } : {}),
   }
   if (m.mensajeId) await sb.from('mensajes').update(fila).eq('id', m.mensajeId)
-  else await sb.from('mensajes').insert({ ...fila, proyecto_id: m.proyectoId, direccion: 'saliente', plantilla: m.clave, generado_por: 'plantilla' })
+  else await sb.from('mensajes').insert({
+    ...fila, proyecto_id: m.proyectoId, direccion: 'saliente', plantilla: m.clave, generado_por: 'plantilla',
+    asunto_original: m.original?.asunto ?? null, cuerpo_original: m.original?.cuerpo ?? null,
+  })
   if (envio.error) return { error: envio.error }
-  await sb.from('eventos').insert({ proyecto_id: m.proyectoId, lead_id: m.leadId ?? null, tipo: 'mensaje.enviado', fuente: m.fuente || 'joux-hub', datos: { plantilla: m.clave, para: m.para, asunto: m.asunto } })
+  await sb.from('eventos').insert({ proyecto_id: m.proyectoId, lead_id: m.leadId ?? null, tipo: 'mensaje.enviado', fuente: m.fuente || 'joux-hub', datos: { plantilla: m.clave, para: m.para, asunto: m.asunto, ...(m.auto ? { auto: true } : {}) } })
   return { ok: true }
 }
 
@@ -57,14 +64,18 @@ export async function prepararEmailProyecto(proyectoId: number, clave: string, e
   if ('error' in d) return { omitido: d.error }
   const para = d.p.contacto_email?.trim() || ''
   const completo = EMAIL.test(para) && pendientes(d.asunto + d.cuerpo).length === 0
-  if (d.t.auto && completo) {
-    const r = await enviarEmailProyecto({ proyectoId, leadId: d.p.lead_id, clave, remitente: d.t.remitente, para, asunto: d.asunto, cuerpo: d.cuerpo, fuente })
+  const original = { asunto: d.asunto, cuerpo: d.cuerpo }
+  // La pausa de emergencia de /ajustes convierte cualquier envío automático en borrador.
+  // El push lo da quien llama (intake/evento, tick) con su propio texto.
+  if (d.t.auto && completo && !(await enviosPausados())) {
+    const r = await enviarEmailProyecto({ proyectoId, leadId: d.p.lead_id, clave, remitente: d.t.remitente, para, asunto: d.asunto, cuerpo: d.cuerpo, fuente, original, auto: true })
     return r.error ? { error: r.error } : { enviado: true }
   }
   await sb.from('mensajes').update({ estado: 'descartado' }).eq('proyecto_id', proyectoId).eq('plantilla', clave).eq('estado', 'borrador')
   const { data, error } = await sb.from('mensajes').insert({
     proyecto_id: proyectoId, direccion: 'saliente', estado: 'borrador', plantilla: clave, generado_por: 'plantilla',
     remitente: d.t.remitente, para, asunto: d.asunto, cuerpo: d.cuerpo, canal: 'resend',
+    asunto_original: original.asunto, cuerpo_original: original.cuerpo,
   }).select('id').single()
   if (error) return { error: error.message }
   return { borrador: data.id as number }

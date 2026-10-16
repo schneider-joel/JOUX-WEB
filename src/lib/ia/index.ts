@@ -3,12 +3,15 @@ import path from 'path'
 import Anthropic from '@anthropic-ai/sdk'
 import { supabaseServer as sb } from '@/lib/supabase-server'
 import { remitenteLead } from '@/lib/remitentes'
+import { respuestaAutomatica } from '@/lib/autonomia'
+import { enviarMensajeLead } from '@/lib/enviar-lead'
+import { notificar } from '@/lib/push'
 
-// Borradores de IA para los leads (automatizacion.md, «La IA»). La IA redacta y Joel aprueba: aquí
-// nunca se envía nada. Cada borrador queda en `mensajes` (estado «borrador», generado_por «ia»).
+// Borradores de IA para los leads (automatizacion.md, «La IA»). La IA redacta y Joel aprueba; solo sale
+// solo si Joel activó esa categoría para la marca en /ajustes (fase 5) y no hay pausa ni marcas [[Joel:. Cada borrador queda en `mensajes` (estado «borrador», generado_por «ia»).
 const MODELO = 'claude-opus-5-5'
 export const CATEGORIAS = ['precio', 'plazos', 'encargo', 'informacion', 'material', 'spam', 'otro'] as const
-const MARCAS_CON_IA = ['arkevo', 'pitchlab', 'custom']
+export const MARCAS_CON_IA = ['arkevo', 'pitchlab', 'custom']
 
 const cliente = () => new Anthropic({ timeout: 55_000, maxRetries: 1 })
 
@@ -111,9 +114,11 @@ export async function generarBorrador(leadId: number, motivo: Motivo): Promise<{
 
   let mensajeId: number | null = null
   if (salida.categoria !== 'spam' && salida.cuerpo.trim()) {
+    const asunto = salida.asunto.trim().slice(0, 300), cuerpo = revisar(lead.marca, salida)
+    // El original y la categoría se guardan para medir cuántos salen sin tocar (ajustes de autonomía).
     const { data: m, error } = await sb.from('mensajes').insert({
       lead_id: leadId, direccion: 'saliente', estado: 'borrador', generado_por: 'ia', canal: 'gmail',
-      remitente, para: lead.email, asunto: salida.asunto.trim().slice(0, 300), cuerpo: revisar(lead.marca, salida),
+      remitente, para: lead.email, asunto, cuerpo, asunto_original: asunto, cuerpo_original: cuerpo, categoria_ia: salida.categoria,
     }).select('id').single()
     if (error) return { ok: false, error: error.message }
     mensajeId = m.id
@@ -126,6 +131,23 @@ export async function generarBorrador(leadId: number, motivo: Motivo): Promise<{
   if (mensajeId && lead.estado === 'nuevo') {
     await sb.from('leads').update({ estado: 'borrador' }).eq('id', leadId).eq('estado', 'nuevo')
     await sb.from('eventos').insert({ lead_id: leadId, tipo: 'lead.estado', fuente: 'joux-hub', datos: { de: 'nuevo', a: 'borrador' } })
+  }
+  // Regenerar lo pide Joel desde la ficha: ahí nunca sale nada solo.
+  if (mensajeId && motivo !== 'regenerar' && await respuestaAutomatica(lead.marca, salida.categoria, revisar(lead.marca, salida), salida.alertas)) {
+    await sb.from('mensajes').update({ auto: true }).eq('id', mensajeId)
+    const r = await enviarMensajeLead(mensajeId, ['borrador'])
+    if (!r.ok) {
+      // Si no sale, se queda como un mensaje normal (con su error) para que Joel lo vea en la ficha.
+      await sb.from('mensajes').update({ auto: false }).eq('id', mensajeId)
+      console.error('ia auto', leadId, r.error)
+    } else {
+      await notificar({
+        titulo: `Respondido automáticamente · ${lead.nombre || lead.email}`,
+        cuerpo: `Categoría «${salida.categoria}». ${salida.resumen}`.slice(0, 160),
+        url: `/leads/${leadId}`,
+        etiqueta: `lead-${leadId}`,
+      }).catch(e => console.error('ia auto push', e?.message))
+    }
   }
   return { ok: true, mensajeId }
 }

@@ -26,7 +26,7 @@ export type ProyectoSeguimiento = {
   desde: string                 // cuándo entró en la fase actual (o se creó)
   lead_id: number | null
   historial: { fase: FaseProyecto; fecha: string }[]  // cambios de fase, del más antiguo al más reciente
-  emails: { plantilla: string; fecha: string; error: string | null }[]  // emails enviados al cliente; error = rebotado, spam…
+  emails: { plantilla: string; fecha: string; error: string | null; auto: boolean }[]  // emails enviados al cliente; error = rebotado, spam…; auto = sin aprobación
   ref_entrega: string | null    // slug de arkevo-revision o carpeta de Pitchview (para sus avisos)
   rondas: { ronda: string; estado: 'abierta' | 'comentada' | 'cerrada'; comentarios: number; abierta_en: string; url: string }[]
   borradores: { id: number; plantilla: string; error: string | null }[]  // emails preparados por un aviso o el cron, sin enviar

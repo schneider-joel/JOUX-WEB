@@ -52,7 +52,7 @@ export default async function LeadPage({ params }: { params: { id: string } }) {
 
   const [{ data: eventos }, { data: mensajes }, { data: marca }, { data: clientes }, { data: proyecto }, { data: pago1 }] = await Promise.all([
     sb.from('eventos').select('id, tipo, fuente, datos, created_at').eq('lead_id', lead.id).order('created_at', { ascending: false }),
-    sb.from('mensajes').select('id, direccion, estado, generado_por, remitente, para, asunto, cuerpo, error, enviado_en, created_at').eq('lead_id', lead.id).order('created_at', { ascending: false }),
+    sb.from('mensajes').select('id, direccion, estado, generado_por, remitente, para, asunto, cuerpo, error, enviado_en, created_at, auto').eq('lead_id', lead.id).order('created_at', { ascending: false }),
     sb.from('marcas').select('key, nombre, modo').eq('key', lead.marca).maybeSingle(),
     sb.from('clientes_fiscales').select('cliente, identificador, direccion, pais').order('cliente'),
     lead.proyecto_id ? sb.from('proyectos').select('id, nombre, cliente, fase, precio_cerrado').eq('id', lead.proyecto_id).maybeSingle() : Promise.resolve({ data: null }),
@@ -148,7 +148,7 @@ export default async function LeadPage({ params }: { params: { id: string } }) {
                   const partes = de.match(/^\s*"?(.*?)"?\s*<([^>]+)>\s*$/)
                   return (
                     <EmailHilo key={x.clave} entrante={entrante} abierto={x.clave === ultimoEmail}
-                      etiqueta={entrante ? 'Recibido' : x.m.generado_por === 'joel' ? 'Enviado · editado' : 'Enviado'}
+                      etiqueta={entrante ? 'Recibido' : x.m.auto ? 'Enviado automáticamente' : x.m.generado_por === 'joel' ? 'Enviado · editado' : 'Enviado'}
                       quien={partes?.[1] || de} direccion={partes ? partes[2] : null}
                       fecha={fechaHora(x.fecha)} asunto={x.m.asunto} cuerpo={x.m.cuerpo} />
                   )

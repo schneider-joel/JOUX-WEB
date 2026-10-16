@@ -853,6 +853,7 @@ export default function Home() {
         <span>Valencia <Reloj />{lastUpdated && <><span className="sep">/</span>Datos {lastUpdated}</>}</span>
         <span className="frame__r">
           <button type="button" className="tgl hit" onClick={() => loadData()} title="Volver a cargar los datos"><Icon.refresh />Actualizar</button>
+          <a href="/ajustes" className="tgl hit" title="Resumen diario y envíos automáticos">Ajustes</a>
           <ModoPrivado />
           <TemaBoton />
         </span>

@@ -1008,3 +1008,14 @@ button.fila--btn { width: 100%; background: none; border: 0; padding: 0; font: i
 .hilo__evtxt { display: flex; flex-direction: column; gap: 2px; font-size: 13px; color: var(--muted); min-width: 0; }
 .hilo__evfecha { font-size: 10px; color: var(--dim); }
 .hilo__alerta { font-size: 12px; color: var(--amber); overflow-wrap: anywhere; }
+
+/* ---- Ajustes (fase 5): grupos por marca e interruptores ---- */
+.ajustes { width: 100%; max-width: 724px; margin-left: auto; margin-right: auto; }
+div.ajustes { display: flex; flex-direction: column; gap: 48px; }
+.ajustes__grupo { margin-top: 20px; }
+.ajustes__grupo > .caps { margin-bottom: 4px; }
+.ajustes__grupo .fila { padding: 10px 0; }
+.ajustes__grupo .fila__s { white-space: normal; }
+.ajustes__grupo .chip { flex: none; }
+.ajustes__grupo .chip:disabled { opacity: .5; cursor: default; }
+.ajustes__pausa { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; margin-top: 12px; }

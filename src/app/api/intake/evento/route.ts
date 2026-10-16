@@ -97,7 +97,7 @@ export async function POST(req: NextRequest) {
         const r = await prepararEmailProyecto(p.id, 'revision.lista', { ronda, url: url! }, fuente.fuente)
         if ('error' in r) console.error('intake/evento email', r.error)
         if ('borrador' in r) await avisar(`Ronda ${ronda} abierta · ${quien}`, 'Email «Revisión lista» preparado: revísalo y envíalo.')
-        if ('enviado' in r) await avisar(`Ronda ${ronda} abierta · ${quien}`, 'Email «Revisión lista» enviado al cliente.')
+        if ('enviado' in r) await avisar(`Ronda ${ronda} abierta · ${quien}`, 'Email «Revisión lista» enviado automáticamente al cliente.')
       }
       return json({ id: nueva.id, estado: nueva.estado }, 201)
     }
@@ -138,7 +138,7 @@ export async function POST(req: NextRequest) {
     if (esWeb) {
       const r = await prepararEmailProyecto(p.id, 'entrega.final', { url: url || undefined }, fuente.fuente)
       if ('error' in r) console.error('intake/evento email', r.error)
-      await avisar(`Entrega final · ${quien}`, `${'enviado' in r ? 'Email de entrega enviado' : 'Email de entrega preparado'}. Factura el pago 2 desde Webs.`)
+      await avisar(`Entrega final · ${quien}`, `${'enviado' in r ? 'Email de entrega enviado automáticamente' : 'Email de entrega preparado'}. Factura el pago 2 desde Webs.`)
     } else {
       await avisar(`Entrega final · ${quien}`, 'El cliente ya tiene la entrega final.')
     }
