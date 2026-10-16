@@ -983,3 +983,24 @@ button.fila--btn { width: 100%; background: none; border: 0; padding: 0; font: i
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* Conversación de un lead: cada email es una tarjeta; los eventos, líneas pequeñas entre ellas. */
+.hilo { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.hilo__email { border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 10px; background: var(--surface); }
+.hilo__email--entrante { border-color: rgba(232, 176, 75, .3); background: rgba(232, 176, 75, .05); }
+.hilo__email + .hilo__email { margin-top: 6px; }
+.hilo__cab { display: flex; justify-content: space-between; align-items: baseline; gap: 8px 16px; flex-wrap: wrap; }
+.hilo__quien { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; font-size: 14px; color: var(--text); min-width: 0; }
+.hilo__tipo { font-size: 11px; color: var(--dim); }
+.hilo__tipo--entrante { color: var(--amber); }
+.hilo__dir { font-size: 13px; color: var(--dim); overflow-wrap: anywhere; }
+.hilo__fecha { font-size: 11px; color: var(--dim); white-space: nowrap; }
+.hilo__asunto { font-size: 16px; font-weight: 500; color: var(--text); margin: 0; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+.hilo__cuerpo { margin: 0; }
+.hilo__cuerpo--corto { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.hilo__mas { align-self: flex-start; font-size: 11px; }
+.hilo__evento { display: flex; gap: 12px; align-items: flex-start; padding: 6px 18px; }
+.hilo__punto { flex: none; width: 5px; height: 5px; margin-top: 7px; border-radius: 99px; background: var(--dim); opacity: .6; }
+.hilo__evtxt { display: flex; flex-direction: column; gap: 2px; font-size: 13px; color: var(--muted); min-width: 0; }
+.hilo__evfecha { font-size: 10px; color: var(--dim); }
+.hilo__alerta { font-size: 12px; color: var(--amber); overflow-wrap: anywhere; }

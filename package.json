@@ -9,8 +9,10 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.135.0",
     "@sparticuz/chromium": "^153.0.0",
     "@supabase/supabase-js": "^2.45.0",
+    "@vercel/functions": "^3.10.1",
     "jszip": "^3.10.2",
     "next": "14.2.5",
     "puppeteer-core": "^25.12.0",

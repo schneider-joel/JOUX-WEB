@@ -5,10 +5,10 @@ export const dynamic = 'force-dynamic'
 // supabase-js usa fetch: sin esto, Next guarda sus respuestas en el Data Cache y la lista sale vieja.
 export const fetchCache = 'force-no-store'
 
-// Tarjeta «Leads» del Overview: los nuevos sin atender (protegido por el cookie del hub).
+// Tarjeta «Leads» del Overview: los que esperan a Joel (nuevos, con borrador listo o que han respondido).
 export async function GET() {
   const [{ data, error }, { data: marcas }] = await Promise.all([
-    sb.from('leads').select('id, marca, nombre, email, empresa, recibido_en').eq('estado', 'nuevo').order('recibido_en', { ascending: false }).limit(50),
+    sb.from('leads').select('id, marca, estado, nombre, email, empresa, recibido_en, ultimo_contacto').in('estado', ['nuevo', 'borrador', 'conversacion']).order('recibido_en', { ascending: false }).limit(50),
     sb.from('marcas').select('key, nombre'),
   ])
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
