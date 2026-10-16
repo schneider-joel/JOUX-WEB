@@ -1035,3 +1035,8 @@ One more thing: would you write two or three lines about how it went? It really 
 
 Joel Schneider', 'resend', false)
 ON CONFLICT (clave, marca, idioma) DO NOTHING;
+
+-- MIGRACIÓN: automatización fase 2 (2026-10-16, solo aditiva). mensajes y plantillas ya existen (fase 4).
+-- Cada mensaje de Gmail (o envío de Resend) se guarda una sola vez: el tick se puede repetir sin duplicar.
+-- El último historyId leído de Gmail va en configuracion (clave 'gmail_history_id'); lo escribe el tick.
+CREATE UNIQUE INDEX IF NOT EXISTS mensajes_proveedor_unico ON mensajes (canal, id_proveedor) WHERE id_proveedor IS NOT NULL;

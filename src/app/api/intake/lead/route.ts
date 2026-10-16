@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createHash, timingSafeEqual } from 'crypto'
 import { supabaseServer as sb } from '@/lib/supabase-server'
+import { waitUntil } from '@vercel/functions'
 import { notificar } from '@/lib/push'
+import { generarBorrador } from '@/lib/ia'
 
 export const dynamic = 'force-dynamic'
 // supabase-js usa fetch: sin esto, Next guarda sus respuestas en el Data Cache y la lista sale vieja.
 export const fetchCache = 'force-no-store'
+// El borrador de IA se genera después de responder, dentro de la misma función.
+export const maxDuration = 60
 
 // Entrada de leads desde las webs (Workers de Cloudflare), de servidor a servidor. Pública en el
 // middleware: se protege con una clave por fuente (Bearer) y cada clave solo escribe en sus marcas.
@@ -146,6 +150,9 @@ export async function POST(req: NextRequest) {
   } catch (e: any) {
     console.error('intake/lead aviso', e?.message)
   }
+
+  // Borrador de IA en segundo plano: la fuente ya tiene su 201 y no espera a la IA.
+  waitUntil(generarBorrador(lead.id, 'nuevo').then(r => { if (!r.ok) console.error('intake/lead ia', r.error) }).catch(e => console.error('intake/lead ia', e?.message)))
 
   return json({ id: lead.id, estado: lead.estado }, 201)
 }

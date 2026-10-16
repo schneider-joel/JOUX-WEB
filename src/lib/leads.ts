@@ -13,6 +13,13 @@ export type Lead = {
   nombre: string | null; email: string; empresa: string | null; telefono: string | null; pais: string | null
   idioma: 'es' | 'en'; interes: Record<string, unknown>; mensaje: string | null; campos: Record<string, unknown>
   adjuntos: Adjunto[]; consentimiento: boolean; proyecto_id: number | null; recibido_en: string; created_at: string; updated_at: string
+  resumen_ia: string | null; categoria_ia: string | null; gmail_hilo: string | null; ultimo_contacto: string | null
+}
+
+// Mensajes de un lead (tabla `mensajes`): entrantes de Gmail, borradores y enviados.
+export type Mensaje = {
+  id: number; direccion: 'entrante' | 'saliente'; estado: string; generado_por: string | null; remitente: string | null; para: string
+  asunto: string | null; cuerpo: string; error: string | null; enviado_en: string | null; created_at: string
 }
 // Fase de seguimiento de un proyecto (proyectos.fase). No toca `status` ni dispara facturas.
 export const FASES_PROYECTO = ['confirmado', 'material', 'en_curso', 'revision', 'cambios', 'entregado', 'cerrado'] as const

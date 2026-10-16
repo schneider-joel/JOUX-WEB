@@ -1,10 +1,12 @@
 import Link from 'next/link'
 import { supabaseServer as sb } from '@/lib/supabase-server'
-import { ETIQUETA_ESTADO, ETIQUETA_FASE, esEstadoLead, esFaseProyecto, fechaHora, hace, type Evento, type Lead } from '@/lib/leads'
+import { ETIQUETA_ESTADO, ETIQUETA_FASE, esEstadoLead, esFaseProyecto, fechaHora, hace, type Evento, type Lead, type Mensaje } from '@/lib/leads'
+import { remitenteLead } from '@/lib/remitentes'
 import type { ClienteFiscal } from '@/lib/ganado'
 import CambiarEstado from './cambiar-estado'
 import AccionesLead from './ganado'
 import FacturarPago1 from './facturar-pago'
+import Respuesta, { type Borrador } from './respuesta'
 
 export const dynamic = 'force-dynamic'
 // supabase-js usa fetch: sin esto, Next guarda sus respuestas en el Data Cache y la lista sale vieja.
@@ -25,6 +27,8 @@ function textoEvento(e: Evento) {
   }
   if (e.tipo === 'lead.ganado') return `Ganado: ${valor(e.datos.cliente)}${e.datos.cliente_nuevo ? ' (cliente nuevo)' : ''}${e.datos.tarifa_dia ? ` · €${valor(e.datos.tarifa_dia)}/día` : ''}`
   if (e.tipo === 'lead.perdido') return `Perdido${e.datos.motivo ? `: ${valor(e.datos.motivo)}` : ''}`
+  if (e.tipo === 'ia.borrador') return `Borrador de IA${e.datos.motivo === 'regenerar' ? ' (regenerado)' : e.datos.motivo === 'respuesta' ? ' para su respuesta' : ''}${e.datos.categoria ? ` · ${valor(e.datos.categoria)}` : ''}${Array.isArray(e.datos.alertas) && e.datos.alertas.length ? ` · ⚠ ${e.datos.alertas.join(' · ')}` : ''}`
+  if (e.tipo === 'mensaje.descartado') return 'Borrador descartado'
   if (e.tipo === 'proyecto.fase') return `Fase del proyecto: ${esFaseProyecto(e.datos.de) ? ETIQUETA_FASE[e.datos.de] : '—'} → ${esFaseProyecto(e.datos.a) ? ETIQUETA_FASE[e.datos.a] : valor(e.datos.a)}`
   return e.tipo
 }
@@ -45,8 +49,9 @@ export default async function LeadPage({ params }: { params: { id: string } }) {
   )
   if (!lead) return marco(<p className="empty">Este lead no existe.</p>)
 
-  const [{ data: eventos }, { data: marca }, { data: clientes }, { data: proyecto }, { data: pago1 }] = await Promise.all([
+  const [{ data: eventos }, { data: mensajes }, { data: marca }, { data: clientes }, { data: proyecto }, { data: pago1 }] = await Promise.all([
     sb.from('eventos').select('id, tipo, fuente, datos, created_at').eq('lead_id', lead.id).order('created_at', { ascending: false }),
+    sb.from('mensajes').select('id, direccion, estado, generado_por, remitente, para, asunto, cuerpo, error, enviado_en, created_at').eq('lead_id', lead.id).order('created_at', { ascending: false }),
     sb.from('marcas').select('key, nombre, modo').eq('key', lead.marca).maybeSingle(),
     sb.from('clientes_fiscales').select('cliente, identificador, direccion, pais').order('cliente'),
     lead.proyecto_id ? sb.from('proyectos').select('id, nombre, cliente, fase, precio_cerrado').eq('id', lead.proyecto_id).maybeSingle() : Promise.resolve({ data: null }),
@@ -55,6 +60,14 @@ export default async function LeadPage({ params }: { params: { id: string } }) {
   const paisProyecto = proyecto ? (clientes || []).find(c => c.cliente === proyecto.cliente)?.pais ?? null : null
   const interes = Object.entries(lead.interes || {}).filter(([, v]) => v != null && v !== '')
   const campos = Object.entries(lead.campos || {})
+  const msgs = (mensajes || []) as Mensaje[]
+  // El borrador vivo (o el que falló al enviar) va al editor; el resto, al hilo.
+  const borrador = msgs.find(m => m.direccion === 'saliente' && (m.estado === 'borrador' || m.estado === 'error')) || null
+  // Hilo: mensajes enviados y recibidos + eventos (sin los de envío/recepción, que ya son el propio mensaje), lo último arriba.
+  const hilo = [
+    ...msgs.filter(m => m.estado === 'enviado' || m.estado === 'recibido').map(m => ({ clave: `m${m.id}`, fecha: m.enviado_en || m.created_at, m })),
+    ...((eventos || []) as Evento[]).filter(e => e.tipo !== 'mensaje.enviado' && e.tipo !== 'mensaje.recibido').map(e => ({ clave: `e${e.id}`, fecha: e.created_at, e })),
+  ].sort((a, b) => b.fecha.localeCompare(a.fecha))
 
   return marco(
     <>
@@ -84,19 +97,6 @@ export default async function LeadPage({ params }: { params: { id: string } }) {
           <AccionesLead lead={lead} marca={marca} clientes={(clientes || []) as ClienteFiscal[]} />
         )}
 
-        <section className="block" aria-label="Contacto">
-          <p className="label caps"><span>Contacto</span><i className="rule" /></p>
-          <dl className="meta lead__meta">
-            <div><dt>Email</dt><dd><a href={`mailto:${lead.email}`}>{lead.email}</a></dd></div>
-            {lead.empresa && <div><dt>Empresa</dt><dd>{lead.empresa}</dd></div>}
-            {lead.telefono && <div><dt>Teléfono</dt><dd><a href={`tel:${lead.telefono.replace(/[^\d+]/g, '')}`}>{lead.telefono}</a></dd></div>}
-            {lead.pais && <div><dt>País</dt><dd>{lead.pais}</dd></div>}
-            <div><dt>Idioma</dt><dd>{lead.idioma === 'en' ? 'Inglés' : 'Español'}</dd></div>
-            <div><dt>Origen</dt><dd>{lead.origen}</dd></div>
-            <div><dt>Recibido</dt><dd>{fechaHora(lead.recibido_en)}</dd></div>
-            <div><dt>Privacidad</dt><dd className={lead.consentimiento ? undefined : 'aviso'}>{lead.consentimiento ? 'Aceptada' : 'Sin consentimiento'}</dd></div>
-          </dl>
-        </section>
 
         {(lead.mensaje || interes.length > 0) && (
           <section className="block" aria-label="Qué quiere">
@@ -131,20 +131,47 @@ export default async function LeadPage({ params }: { params: { id: string } }) {
           </section>
         )}
 
-        <section className="block" aria-label="Línea de tiempo">
-          <p className="label caps"><span>Línea de tiempo</span><i className="rule" /></p>
-          {!eventos?.length ? <p className="nota">Sin eventos.</p> : (
+        <Respuesta leadId={lead.id} borrador={borrador as Borrador | null} remitente={remitenteLead(lead.marca, lead.idioma)}
+          conIa={['arkevo', 'pitchlab', 'custom'].includes(lead.marca)} resumen={lead.resumen_ia} categoria={lead.categoria_ia} />
+
+        <section className="block" aria-label="Conversación">
+          <p className="label caps"><span>Conversación</span><i className="rule" /></p>
+          {!hilo.length ? <p className="nota">Sin eventos.</p> : (
             <ul className="list">
-              {(eventos as Evento[]).map(e => (
-                <li key={e.id} className="fila">
+              {hilo.map(x => 'm' in x ? (
+                <li key={x.clave} className="fila hilo__msg">
                   <span className="fila__main">
-                    <span className="fila__t" style={{ fontSize: 15 }}>{textoEvento(e)}</span>
-                    <span className="fila__s caps">{fechaHora(e.created_at)} · {e.fuente}</span>
+                    <span className={`fila__s caps${x.m.direccion === 'entrante' ? ' hilo__entrante' : ''}`}>
+                      {x.m.direccion === 'entrante' ? 'Recibido' : x.m.generado_por === 'joel' ? 'Enviado por Joel' : 'Enviado'} · {fechaHora(x.fecha)} · {x.m.direccion === 'entrante' ? x.m.remitente : x.m.remitente || x.m.para}
+                    </span>
+                    {x.m.asunto && <span className="fila__t" style={{ fontSize: 15 }}>{x.m.asunto}</span>}
+                    <span className="lead__msg">{x.m.cuerpo}</span>
+                  </span>
+                </li>
+              ) : (
+                <li key={x.clave} className="fila">
+                  <span className="fila__main">
+                    <span className="fila__t" style={{ fontSize: 15 }}>{textoEvento(x.e)}</span>
+                    <span className="fila__s caps">{fechaHora(x.e.created_at)} · {x.e.fuente}</span>
                   </span>
                 </li>
               ))}
             </ul>
           )}
+        </section>
+
+        <section className="block" aria-label="Contacto">
+          <p className="label caps"><span>Contacto</span><i className="rule" /></p>
+          <dl className="meta lead__meta">
+            <div><dt>Email</dt><dd><a href={`mailto:${lead.email}`}>{lead.email}</a></dd></div>
+            {lead.empresa && <div><dt>Empresa</dt><dd>{lead.empresa}</dd></div>}
+            {lead.telefono && <div><dt>Teléfono</dt><dd><a href={`tel:${lead.telefono.replace(/[^\d+]/g, '')}`}>{lead.telefono}</a></dd></div>}
+            {lead.pais && <div><dt>País</dt><dd>{lead.pais}</dd></div>}
+            <div><dt>Idioma</dt><dd>{lead.idioma === 'en' ? 'Inglés' : 'Español'}</dd></div>
+            <div><dt>Origen</dt><dd>{lead.origen}</dd></div>
+            <div><dt>Recibido</dt><dd>{fechaHora(lead.recibido_en)}</dd></div>
+            <div><dt>Privacidad</dt><dd className={lead.consentimiento ? undefined : 'aviso'}>{lead.consentimiento ? 'Aceptada' : 'Sin consentimiento'}</dd></div>
+          </dl>
         </section>
 
         {campos.length > 0 && (
