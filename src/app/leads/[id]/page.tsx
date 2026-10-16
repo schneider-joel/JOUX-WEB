@@ -7,6 +7,7 @@ import CambiarEstado from './cambiar-estado'
 import AccionesLead from './ganado'
 import FacturarPago1 from './facturar-pago'
 import Respuesta, { type Borrador } from './respuesta'
+import EmailHilo from './email-hilo'
 
 export const dynamic = 'force-dynamic'
 // supabase-js usa fetch: sin esto, Next guarda sus respuestas en el Data Cache y la lista sale vieja.
@@ -27,7 +28,7 @@ function textoEvento(e: Evento) {
   }
   if (e.tipo === 'lead.ganado') return `Ganado: ${valor(e.datos.cliente)}${e.datos.cliente_nuevo ? ' (cliente nuevo)' : ''}${e.datos.tarifa_dia ? ` · €${valor(e.datos.tarifa_dia)}/día` : ''}`
   if (e.tipo === 'lead.perdido') return `Perdido${e.datos.motivo ? `: ${valor(e.datos.motivo)}` : ''}`
-  if (e.tipo === 'ia.borrador') return `Borrador de IA${e.datos.motivo === 'regenerar' ? ' (regenerado)' : e.datos.motivo === 'respuesta' ? ' para su respuesta' : ''}${e.datos.categoria ? ` · ${valor(e.datos.categoria)}` : ''}${Array.isArray(e.datos.alertas) && e.datos.alertas.length ? ` · ⚠ ${e.datos.alertas.join(' · ')}` : ''}`
+  if (e.tipo === 'ia.borrador') return `Borrador de IA${e.datos.motivo === 'regenerar' ? ' (regenerado)' : e.datos.motivo === 'respuesta' ? ' para su respuesta' : ''}${e.datos.categoria ? ` · ${valor(e.datos.categoria)}` : ''}`
   if (e.tipo === 'mensaje.descartado') return 'Borrador descartado'
   if (e.tipo === 'proyecto.fase') return `Fase del proyecto: ${esFaseProyecto(e.datos.de) ? ETIQUETA_FASE[e.datos.de] : '—'} → ${esFaseProyecto(e.datos.a) ? ETIQUETA_FASE[e.datos.a] : valor(e.datos.a)}`
   return e.tipo
@@ -68,6 +69,7 @@ export default async function LeadPage({ params }: { params: { id: string } }) {
     ...msgs.filter(m => m.estado === 'enviado' || m.estado === 'recibido').map(m => ({ clave: `m${m.id}`, fecha: m.enviado_en || m.created_at, m })),
     ...((eventos || []) as Evento[]).filter(e => e.tipo !== 'mensaje.enviado' && e.tipo !== 'mensaje.recibido').map(e => ({ clave: `e${e.id}`, fecha: e.created_at, e })),
   ].sort((a, b) => b.fecha.localeCompare(a.fecha))
+  const ultimoEmail = hilo.find(x => 'm' in x)?.clave
 
   return marco(
     <>
@@ -137,25 +139,32 @@ export default async function LeadPage({ params }: { params: { id: string } }) {
         <section className="block" aria-label="Conversación">
           <p className="label caps"><span>Conversación</span><i className="rule" /></p>
           {!hilo.length ? <p className="nota">Sin eventos.</p> : (
-            <ul className="list">
-              {hilo.map(x => 'm' in x ? (
-                <li key={x.clave} className="fila hilo__msg">
-                  <span className="fila__main">
-                    <span className={`fila__s caps${x.m.direccion === 'entrante' ? ' hilo__entrante' : ''}`}>
-                      {x.m.direccion === 'entrante' ? 'Recibido' : x.m.generado_por === 'joel' ? 'Enviado por Joel' : 'Enviado'} · {fechaHora(x.fecha)} · {x.m.direccion === 'entrante' ? x.m.remitente : x.m.remitente || x.m.para}
+            <ul className="hilo">
+              {hilo.map(x => {
+                if ('m' in x) {
+                  const entrante = x.m.direccion === 'entrante'
+                  // «Nombre <email>» → nombre en grande, email aparte.
+                  const de = (entrante ? x.m.remitente : x.m.remitente || x.m.para) || ''
+                  const partes = de.match(/^\s*"?(.*?)"?\s*<([^>]+)>\s*$/)
+                  return (
+                    <EmailHilo key={x.clave} entrante={entrante} abierto={x.clave === ultimoEmail}
+                      etiqueta={entrante ? 'Recibido' : x.m.generado_por === 'joel' ? 'Enviado · editado' : 'Enviado'}
+                      quien={partes?.[1] || de} direccion={partes ? partes[2] : null}
+                      fecha={fechaHora(x.fecha)} asunto={x.m.asunto} cuerpo={x.m.cuerpo} />
+                  )
+                }
+                const alertas = Array.isArray(x.e.datos.alertas) ? (x.e.datos.alertas as unknown[]).map(String) : []
+                return (
+                  <li key={x.clave} className="hilo__evento">
+                    <i className="hilo__punto" aria-hidden="true" />
+                    <span className="hilo__evtxt">
+                      <span>{textoEvento(x.e)}</span>
+                      <span className="hilo__evfecha caps">{fechaHora(x.e.created_at)} · {x.e.fuente}</span>
+                      {alertas.map((a, i) => <span key={i} className="hilo__alerta">⚠ {a}</span>)}
                     </span>
-                    {x.m.asunto && <span className="fila__t" style={{ fontSize: 15 }}>{x.m.asunto}</span>}
-                    <span className="lead__msg">{x.m.cuerpo}</span>
-                  </span>
-                </li>
-              ) : (
-                <li key={x.clave} className="fila">
-                  <span className="fila__main">
-                    <span className="fila__t" style={{ fontSize: 15 }}>{textoEvento(x.e)}</span>
-                    <span className="fila__s caps">{fechaHora(x.e.created_at)} · {x.e.fuente}</span>
-                  </span>
-                </li>
-              ))}
+                  </li>
+                )
+              })}
             </ul>
           )}
         </section>
