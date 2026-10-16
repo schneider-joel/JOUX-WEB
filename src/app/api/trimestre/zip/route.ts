@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import JSZip from 'jszip'
 import { supabaseServer } from '@/lib/supabase-server'
+import { lanzarChrome } from '@/lib/pdf'
 
 export const maxDuration = 60
 export const dynamic = 'force-dynamic'
@@ -10,15 +11,6 @@ const IVA = 0.21
 const RETENCION = 0.15
 const limpio = (s: string) => s.replace(/[\/\\:*?"<>|#]/g, '').replace(/\s+/g, ' ').trim()
 const num = (n: number) => n.toFixed(2).replace('.', ',')
-
-async function lanzarChrome() {
-  const puppeteer = (await import('puppeteer-core')).default
-  if (process.env.VERCEL) {
-    const chromium = (await import('@sparticuz/chromium')).default
-    return puppeteer.launch({ args: chromium.args, executablePath: await chromium.executablePath(), headless: 'shell' })
-  }
-  return puppeteer.launch({ executablePath: process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true })
-}
 
 // ZIP con todas las facturas de venta del trimestre (PDF original si es una
 // factura histórica ya declarada; si no, impresa con la plantilla de JOUX Hub),

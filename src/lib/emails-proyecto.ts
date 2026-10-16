@@ -10,7 +10,7 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 export const numeroRonda = (ronda: string) => Number(ronda.replace(/\D/g, '')) || ronda
 
 // Plantilla de un proyecto ya rellenada. Sin `url` se deja {{url}} para que Joel lo pegue.
-export async function plantillaProyecto(id: number | string, clave: string, extra: { ronda?: string; url?: string } = {}) {
+export async function plantillaProyecto(id: number | string, clave: string, extra: { ronda?: string; url?: string; vars?: Record<string, string | null> } = {}) {
   const { data: p } = await sb.from('proyectos').select('id, nombre, cliente, marca, web, idioma, contacto_email, contacto_nombre, lead_id, drive_url').eq('id', id).maybeSingle()
   if (!p) return { error: 'No existe', status: 404 } as const
   const { data: marca } = await sb.from('marcas').select('modo').eq('key', p.marca ?? '').maybeSingle()
@@ -28,7 +28,7 @@ export async function plantillaProyecto(id: number | string, clave: string, extr
     const { count } = await sb.from('mensajes').select('id', { count: 'exact', head: true }).eq('proyecto_id', p.id).eq('plantilla', 'revision.lista').eq('estado', 'enviado')
     ronda = clave === 'revision.lista' ? (count || 0) + 1 : Math.max(1, count || 0)
   }
-  const vars = { nombre: (p.contacto_nombre || p.cliente).split(' ')[0], web: p.web || p.cliente, ronda, url: extra.url, drive_url: p.drive_url }
+  const vars = { nombre: (p.contacto_nombre || p.cliente).split(' ')[0], web: p.web || p.cliente, ronda, url: extra.url, drive_url: p.drive_url, ...extra.vars }
   return { p, t, asunto: rellenar(t.asunto, vars), cuerpo: rellenar(t.cuerpo, vars) }
 }
 

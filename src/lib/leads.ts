@@ -13,6 +13,7 @@ export type Lead = {
   nombre: string | null; email: string; empresa: string | null; telefono: string | null; pais: string | null
   idioma: 'es' | 'en'; interes: Record<string, unknown>; mensaje: string | null; campos: Record<string, unknown>
   adjuntos: Adjunto[]; consentimiento: boolean; proyecto_id: number | null; recibido_en: string; created_at: string; updated_at: string
+  prueba?: boolean  // prueba de Joel como cliente: su proyecto factura sin validez fiscal
   resumen_ia: string | null; categoria_ia: string | null; gmail_hilo: string | null; ultimo_contacto: string | null
 }
 

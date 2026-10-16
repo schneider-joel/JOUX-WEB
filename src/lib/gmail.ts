@@ -53,7 +53,7 @@ const conNombre = (s: string) => {
   return m ? `${m[1] ? `${cabecera(m[1].replace(/"/g, ''))} ` : ''}<${m[2]}>` : s
 }
 
-export type Envio = { de: string; para: string; asunto: string; texto: string; html: string; hilo?: string | null }
+export type Envio = { de: string; para: string; asunto: string; texto: string; html: string; hilo?: string | null; adjuntos?: { nombre: string; tipo: string; datos: Buffer }[] }
 
 // Alias de «Enviar como» verificados. Si el From no es uno de ellos, Gmail lo cambia por joel@ sin
 // avisar (y en The Pitch Lab eso destaparía el nombre), así que se corta antes de enviar.
@@ -79,12 +79,16 @@ export async function enviarGmail(m: Envio): Promise<{ id: string; hilo: string 
     referencias = [cab('References'), enRespuestaA].filter(Boolean).join(' ') || null
   }
   const frontera = `joux-${Date.now().toString(36)}`
+  // Con adjuntos: multipart/mixed con el texto (alternative) dentro y cada archivo en base64.
+  const mixta = m.adjuntos?.length ? `${frontera}-m` : null
+  const base64 = (b: Buffer) => b.toString('base64').replace(/.{76}/g, '$&\r\n')
   const mime = [
     `From: ${conNombre(m.de)}`,
     `To: ${m.para}`,
     `Subject: ${cabecera(m.asunto)}`,
     ...(enRespuestaA ? [`In-Reply-To: ${enRespuestaA}`, `References: ${referencias}`] : []),
     'MIME-Version: 1.0',
+    ...(mixta ? [`Content-Type: multipart/mixed; boundary="${mixta}"`, '', `--${mixta}`] : []),
     `Content-Type: multipart/alternative; boundary="${frontera}"`,
     '',
     `--${frontera}`,
@@ -98,6 +102,15 @@ export async function enviarGmail(m: Envio): Promise<{ id: string; hilo: string 
     '',
     Buffer.from(m.html).toString('base64'),
     `--${frontera}--`,
+    ...(m.adjuntos || []).flatMap(a => [
+      `--${mixta}`,
+      `Content-Type: ${a.tipo}; name="${cabecera(a.nombre)}"`,
+      `Content-Disposition: attachment; filename="${cabecera(a.nombre)}"`,
+      'Content-Transfer-Encoding: base64',
+      '',
+      base64(a.datos),
+    ]),
+    ...(mixta ? [`--${mixta}--`] : []),
   ].join('\r\n')
   const j = await gmail('/messages/send', { method: 'POST', body: JSON.stringify({ raw: b64url(mime), ...(m.hilo ? { threadId: m.hilo } : {}) }) })
   return { id: j.id, hilo: j.threadId }

@@ -20,13 +20,13 @@ export const QUE_ENLACE: Record<string, string> = {
 
 // Sustituye {{variable}}; las que no tienen valor se dejan tal cual para que se vean antes de enviar.
 // {{#v}}…{{/v}} solo sale si `v` tiene valor y {{^v}}…{{/v}} solo si no (p. ej. el párrafo de la
-// carpeta de Drive). Un bloque vacío no deja líneas en blanco de más.
+// carpeta de Drive); se pueden anidar con claves distintas. Un bloque vacío no deja líneas en blanco de más.
 export const rellenar = (texto: string, vars: Record<string, string | number | null | undefined>) => {
   const tiene = (k: string) => vars[k] != null && vars[k] !== ''
-  return texto
-    .replace(/\{\{([#^])(\w+)\}\}([\s\S]*?)\{\{\/\2\}\}/g, (_, signo, k, dentro) => (signo === '#') === tiene(k) ? dentro : '')
-    .replace(/\n{3,}/g, '\n\n')
-    .replace(/\{\{(\w+)\}\}/g, (m, k) => tiene(k) ? String(vars[k]) : m)
+  // Se repite para resolver bloques dentro de bloques ({{#factura_numero}}…{{#factura_url}}…).
+  let t = texto, antes = ''
+  while (t !== antes) { antes = t; t = t.replace(/\{\{([#^])(\w+)\}\}([\s\S]*?)\{\{\/\2\}\}/g, (_, signo, k, dentro) => (signo === '#') === tiene(k) ? dentro : '') }
+  return t.replace(/\n{3,}/g, '\n\n').replace(/\{\{(\w+)\}\}/g, (m, k) => tiene(k) ? String(vars[k]) : m)
 }
 
 export const pendientes = (texto: string) => Array.from(new Set(texto.match(/\{\{\w+\}\}/g) || []))

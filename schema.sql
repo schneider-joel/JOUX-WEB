@@ -1285,3 +1285,60 @@ If you don't have a Google account, just reply to this email with a WeTransfer l
 If it's easier to start with less and add the rest later, that works too.
 
 Joel Schneider$t$ WHERE clave = 'material.recordatorio' AND marca = 'custom' AND idioma = 'en';
+
+-- MIGRACIÓN: bienvenida con factura al aceptar + modo de prueba (2026-10-17).
+-- Un lead marcado `prueba` (la prueba de Joel como cliente, #15) pasa `prueba` a su proyecto. Las facturas de un
+-- proyecto de prueba salen con fiscal = false, número «PRUEBA-<proyecto>-<pago>» (no cuenta para F-AAAA-N,
+-- así que siguiente_numero_factura() no avanza ni se toca configuracion.ultimo_numero_factura) y el concepto
+-- empieza por «PRUEBA · sin validez fiscal». Conciliar ignora las facturas con fiscal = false.
+ALTER TABLE leads     ADD COLUMN IF NOT EXISTS prueba boolean NOT NULL DEFAULT false;
+ALTER TABLE proyectos ADD COLUMN IF NOT EXISTS prueba boolean NOT NULL DEFAULT false;
+UPDATE leads SET prueba = true WHERE id = 15;
+
+-- crear_factura_pago: igual que la versión vigente, más la rama de prueba (versión vigente desde hoy).
+CREATE OR REPLACE FUNCTION crear_factura_pago(p_proyecto INT, p_pago SMALLINT)
+RETURNS facturas LANGUAGE plpgsql AS $$
+DECLARE pr proyectos; m marcas; v_pais TEXT; v_base NUMERIC(10,2); v_numero TEXT; f facturas;
+BEGIN
+  IF p_pago NOT IN (1, 2) THEN RAISE EXCEPTION 'El pago tiene que ser 1 o 2'; END IF;
+  SELECT * INTO pr FROM proyectos WHERE id = p_proyecto FOR UPDATE;
+  IF pr.id IS NULL OR pr.precio_cerrado IS NULL THEN RAISE EXCEPTION 'El proyecto % no es de precio cerrado', p_proyecto; END IF;
+  SELECT * INTO m FROM marcas WHERE key = pr.marca;
+  IF m.modo IS DISTINCT FROM 'cerrado' THEN RAISE EXCEPTION 'La marca % no es de precio cerrado', pr.marca; END IF;
+  IF p_pago = 2 AND NOT EXISTS (SELECT 1 FROM facturas WHERE proyecto_id = pr.id AND pago = 1) THEN
+    RAISE EXCEPTION 'Primero hay que facturar el pago 1'; END IF;
+  SELECT pais INTO v_pais FROM clientes_fiscales WHERE cliente = pr.cliente;
+  IF NOT FOUND OR v_pais IS NULL THEN RAISE EXCEPTION 'Faltan los datos fiscales de %', pr.cliente; END IF;
+  IF v_pais = 'UE' THEN RAISE EXCEPTION 'Cliente de la UE: sin alta en el ROI, consúltalo con el gestor antes de facturar'; END IF;
+  v_base := CASE WHEN p_pago = 1 THEN round(pr.precio_cerrado / 2, 2) ELSE pr.precio_cerrado - round(pr.precio_cerrado / 2, 2) END;
+  -- La prueba nunca llama a siguiente_numero_factura(): la numeración real queda intacta.
+  IF pr.prueba THEN v_numero := 'PRUEBA-' || pr.id || '-' || p_pago;
+  ELSE v_numero := siguiente_numero_factura(); END IF;
+  INSERT INTO facturas (cliente, descripcion, importe, fecha, fecha_vencimiento, estado, origen, proyecto_id,
+                        numero, tipo_factura, idioma, marca, pago, fiscal)
+  VALUES (pr.cliente,
+          concat_ws(' · ', CASE WHEN pr.prueba THEN 'PRUEBA · sin validez fiscal' END, m.nombre,
+                    concat_ws(' ', 'Web', nullif(pr.plan, ''), '(' || pr.web || ')'),
+                    CASE p_pago WHEN 1 THEN '50 % al empezar' ELSE '50 % al publicar' END),
+          v_base, CURRENT_DATE, CURRENT_DATE + 30, 'pendiente', 'manual', pr.id,
+          v_numero,
+          CASE WHEN v_pais = 'ES' THEN 'dentro_ue' ELSE 'fuera_ue' END,
+          CASE WHEN v_pais = 'ES' THEN 'es' ELSE 'en' END,
+          m.key, p_pago, NOT pr.prueba)
+  RETURNING * INTO f;
+  RETURN f;
+END $$;
+REVOKE EXECUTE ON FUNCTION crear_factura_pago(INT, SMALLINT) FROM PUBLIC, anon, authenticated;
+
+-- Bienvenida: párrafo de la factura del pago 1, solo si va adjunta ({{factura_numero}}); {{factura_url}}
+-- solo aparece si no se pudo generar el PDF (enlace a la factura pública).
+UPDATE plantillas SET cuerpo = replace(cuerpo, 'El plazo empieza a contar',
+  $t${{#factura_numero}}Te adjunto la factura del primer pago (50 %), {{factura_numero}}, por {{factura_total}}. Los datos para la transferencia están en la propia factura.{{#factura_url}} Si no ves el adjunto, la tienes aquí: {{factura_url}}{{/factura_url}}{{/factura_numero}}
+
+El plazo empieza a contar$t$)
+WHERE clave = 'proyecto.bienvenida' AND idioma = 'es' AND marca IN ('arkevo', 'custom') AND cuerpo NOT LIKE '%{{#factura_numero}}%';
+UPDATE plantillas SET cuerpo = replace(cuerpo, 'The timeline starts',
+  $t${{#factura_numero}}I've attached the invoice for the first payment (50%), {{factura_numero}}, for {{factura_total}}. The bank details for the transfer are on the invoice.{{#factura_url}} If you can't see the attachment, it's here: {{factura_url}}{{/factura_url}}{{/factura_numero}}
+
+The timeline starts$t$)
+WHERE clave = 'proyecto.bienvenida' AND idioma = 'en' AND marca IN ('arkevo', 'custom') AND cuerpo NOT LIKE '%{{#factura_numero}}%';

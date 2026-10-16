@@ -238,6 +238,12 @@ export default function InvoiceEditor({
         )}
 
         <article className="sheet" lang={idioma}>
+          {/* Facturas de un proyecto de prueba (crear_factura_pago con proyectos.prueba): que nadie las tome por buenas */}
+          {factura.fiscal === false && factura.numero?.startsWith('PRUEBA-') && (
+            <p style={{ margin: '0 0 24px', padding: '10px 14px', border: '2px solid #c0392b', color: '#c0392b', fontWeight: 700, letterSpacing: '.08em', textAlign: 'center', textTransform: 'uppercase' }}>
+              {idioma === 'es' ? 'Prueba · sin validez fiscal' : 'Test · not a valid invoice'}
+            </p>
+          )}
           <div className="sh__top">
             <span className="sh__name">{emisor.nombre}</span>
             <div className="sh__kind">

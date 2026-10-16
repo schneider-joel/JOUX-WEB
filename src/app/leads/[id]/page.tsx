@@ -5,7 +5,7 @@ import { remitenteLead } from '@/lib/remitentes'
 import type { ClienteFiscal } from '@/lib/ganado'
 import CambiarEstado from './cambiar-estado'
 import AccionesLead from './ganado'
-import FacturarPago1 from './facturar-pago'
+import Bienvenida from './bienvenida'
 import DriveCarpeta from '@/app/proyectos/drive-carpeta'
 import { SUBCARPETAS } from '@/lib/drive-carpetas'
 import Respuesta, { type Borrador } from './respuesta'
@@ -40,6 +40,7 @@ function textoEvento(e: Evento) {
   if (e.tipo === 'prueba.error') return `El agente no pudo montar la prueba: ${valor(e.datos.motivo)}`
   if (e.tipo === 'drive.creada') return `Carpeta de Drive compartida con ${valor(e.datos.compartida_con)}`
   if (e.tipo === 'material.subido') return `Ha subido ${valor(e.datos.n)} archivo${Number(e.datos.n) === 1 ? '' : 's'} a Drive`
+  if (e.tipo === 'factura.emitida') return `Factura ${valor(e.datos.numero)} emitida (pago ${valor(e.datos.pago)})${e.datos.prueba ? ' · prueba, sin validez fiscal' : ''}`
   if (e.tipo === 'proyecto.fase') return `Fase del proyecto: ${esFaseProyecto(e.datos.de) ? ETIQUETA_FASE[e.datos.de] : '—'} → ${esFaseProyecto(e.datos.a) ? ETIQUETA_FASE[e.datos.a] : valor(e.datos.a)}`
   return e.tipo
 }
@@ -65,13 +66,13 @@ export default async function LeadPage({ params }: { params: { id: string } }) {
     sb.from('mensajes').select('id, direccion, estado, generado_por, remitente, para, asunto, cuerpo, error, enviado_en, created_at, auto, plantilla, adjuntos').eq('lead_id', lead.id).order('created_at', { ascending: false }),
     sb.from('marcas').select('key, nombre, modo').eq('key', lead.marca).maybeSingle(),
     sb.from('clientes_fiscales').select('cliente, identificador, direccion, pais').order('cliente'),
-    lead.proyecto_id ? sb.from('proyectos').select('id, nombre, cliente, marca, fase, precio_cerrado, drive_url, drive_error').eq('id', lead.proyecto_id).maybeSingle() : Promise.resolve({ data: null }),
+    lead.proyecto_id ? sb.from('proyectos').select('id, nombre, cliente, marca, fase, precio_cerrado, prueba, drive_url, drive_error').eq('id', lead.proyecto_id).maybeSingle() : Promise.resolve({ data: null }),
     lead.proyecto_id ? sb.from('facturas').select('id, numero').eq('proyecto_id', lead.proyecto_id).eq('pago', 1).maybeSingle() : Promise.resolve({ data: null }),
   ])
-  const paisProyecto = proyecto ? (clientes || []).find(c => c.cliente === proyecto.cliente)?.pais ?? null : null
   const interes = Object.entries(lead.interes || {}).filter(([, v]) => v != null && v !== '')
   const campos = Object.entries(lead.campos || {})
   const msgs = (mensajes || []) as Mensaje[]
+  const bienvenidaEnviada = msgs.some(m => m.plantilla === 'proyecto.bienvenida' && m.estado === 'enviado')
   // Adjuntos de las respuestas (bucket privado `leads`): enlaces firmados de 1 h, pedidos de una vez.
   const adjuntosMsg = msgs.flatMap(m => (m.adjuntos || []).map(a => ({ ...a, mensaje: m.id })))
   const firmadas = await urlsFirmadas(adjuntosMsg.map(a => a.ruta))
@@ -111,9 +112,9 @@ export default async function LeadPage({ params }: { params: { id: string } }) {
               {pago1 && <div><dt>Pago 1</dt><dd><a href={`/invoice/${pago1.id}`} target="_blank" rel="noopener noreferrer">{pago1.numero || 'Factura'}</a></dd></div>}
               {(proyecto.drive_url || SUBCARPETAS[proyecto.marca || '']) && <div><dt>Material</dt><dd><DriveCarpeta proyectoId={proyecto.id} url={proyecto.drive_url} error={proyecto.drive_error} /></dd></div>}
             </dl>
-            {marca?.modo === 'cerrado' && proyecto.precio_cerrado != null && !pago1 && (
-              <FacturarPago1 proyectoId={proyecto.id} precio={Number(proyecto.precio_cerrado)} pais={paisProyecto} />
-            )}
+            {proyecto.prueba && <p className="nota aviso caps">Proyecto de prueba · sus facturas no tienen validez fiscal</p>}
+            {/* Webs: bienvenida + carpeta de Drive + factura del pago 1 en un solo email, con vista previa */}
+            {marca?.modo === 'cerrado' && !bienvenidaEnviada && <Bienvenida proyectoId={proyecto.id} />}
           </section>
         ) : marca && (
           <AccionesLead lead={lead} marca={marca} clientes={(clientes || []) as ClienteFiscal[]} />

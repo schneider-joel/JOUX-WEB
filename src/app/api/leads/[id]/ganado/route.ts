@@ -16,7 +16,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const form = await req.json().catch(() => null) as FormGanado | null
   if (!form || typeof form.cliente !== 'string') return NextResponse.json({ error: 'Datos inválidos' }, { status: 400 })
 
-  const { data: lead } = await sb.from('leads').select('id, marca, estado, nombre, email, empresa, pais, idioma, interes, proyecto_id').eq('id', params.id).maybeSingle()
+  const { data: lead } = await sb.from('leads').select('id, marca, estado, nombre, email, empresa, pais, idioma, interes, proyecto_id, prueba').eq('id', params.id).maybeSingle()
   if (!lead) return NextResponse.json({ error: 'No existe' }, { status: 404 })
   if (lead.proyecto_id) return NextResponse.json({ error: 'Este lead ya tiene proyecto' }, { status: 409 })
   const { data: marca } = await sb.from('marcas').select('key, nombre, modo').eq('key', lead.marca).maybeSingle()

@@ -20,7 +20,7 @@ export type FormGanado = {
   tarifa_dia: number | null    // solo treatments por día: va al evento, proyectos no tiene columna
 }
 
-type LeadGanado = Pick<Lead, 'id' | 'nombre' | 'email' | 'empresa' | 'pais' | 'idioma' | 'interes'>
+type LeadGanado = Pick<Lead, 'id' | 'nombre' | 'email' | 'empresa' | 'pais' | 'idioma' | 'interes' | 'prueba'>
 type MarcaGanado = Pick<Marca, 'key' | 'nombre' | 'modo'>
 
 const UE_ISO = new Set(['AT', 'BE', 'BG', 'CY', 'CZ', 'DE', 'DK', 'EE', 'FI', 'FR', 'GR', 'HR', 'HU', 'IE', 'IT', 'LT', 'LU', 'LV', 'MT', 'NL', 'PL', 'PT', 'RO', 'SE', 'SI', 'SK'])
@@ -78,6 +78,8 @@ export function filasGanado(lead: LeadGanado, marca: MarcaGanado, f: FormGanado)
     // Solo las webs se siguen por etapas (/proyectos); los treatments van por su timesheet.
     fase: web ? 'confirmado' : null, lead_id: lead.id,
     contacto_email: lead.email, contacto_nombre: lead.nombre?.trim() || null, idioma: lead.idioma,
+    // Un lead de prueba (leads.prueba) da un proyecto de prueba: sus facturas salen sin validez fiscal.
+    prueba: !!lead.prueba,
   }
   const evento = {
     tipo: 'lead.ganado', fuente: 'joux-hub',
