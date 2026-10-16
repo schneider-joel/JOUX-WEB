@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createHash, timingSafeEqual } from 'crypto'
 import { supabaseServer as sb } from '@/lib/supabase-server'
 import { waitUntil } from '@vercel/functions'
 import { notificar } from '@/lib/push'
 import { generarBorrador } from '@/lib/ia'
+import { MAX_BYTES_INTAKE as MAX_BYTES, fuenteDeClave } from '@/lib/intake'
 
 export const dynamic = 'force-dynamic'
 // supabase-js usa fetch: sin esto, Next guarda sus respuestas en el Data Cache y la lista sale vieja.
@@ -19,22 +19,6 @@ const FUENTES = [
   { env: 'INTAKE_KEY_ARKEVO', fuente: 'arkevo', marcas: ['arkevo'] },
   { env: 'INTAKE_KEY_PERSONAL', fuente: 'personal', marcas: ['custom'] },
 ]
-const MAX_BYTES = 64 * 1024
-
-// Se comparan los hashes: mismo largo siempre, así timingSafeEqual no filtra la longitud de la clave.
-const sha = (s: string) => createHash('sha256').update(s).digest()
-function fuenteDeClave(auth: string | null) {
-  const m = auth?.match(/^Bearer\s+(.+)$/)
-  if (!m) return null
-  const dada = sha(m[1].trim())
-  let encontrada: typeof FUENTES[number] | null = null
-  for (const f of FUENTES) {
-    const clave = process.env[f.env]?.trim()
-    // Sin cortar el bucle: el tiempo no depende de qué clave coincide.
-    if (clave && timingSafeEqual(dada, sha(clave))) encontrada = f
-  }
-  return encontrada
-}
 
 const json = (body: unknown, status: number) => NextResponse.json(body, { status })
 const invalido = (error: string, campo: string) => json({ error, campo }, 400)
@@ -49,7 +33,7 @@ function texto(v: unknown, max: number): string | null | undefined {
 }
 
 export async function POST(req: NextRequest) {
-  const fuente = fuenteDeClave(req.headers.get('authorization'))
+  const fuente = fuenteDeClave(req.headers.get('authorization'), FUENTES)
   if (!fuente) return json({ error: 'no_autorizado' }, 401)
 
   if (Number(req.headers.get('content-length') || 0) > MAX_BYTES) return json({ error: 'demasiado_grande' }, 413)

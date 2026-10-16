@@ -14,7 +14,7 @@ export const metadata = { title: 'Proyectos · JOUX Hub' }
 // tienen fase; la fase se cambia aquí a mano y queda en eventos (proyecto.fase).
 export default async function ProyectosPage() {
   const { data: marcas } = await sb.from('marcas').select('key, nombre, orden').eq('modo', 'cerrado').order('orden')
-  const { data: proyectos, error } = await sb.from('proyectos').select('id, nombre, cliente, marca, fase, lead_id, created_at')
+  const { data: proyectos, error } = await sb.from('proyectos').select('id, nombre, cliente, marca, fase, lead_id, ref_entrega, created_at')
     .or('status.eq.activo,fase.not.is.null').in('marca', (marcas || []).map(m => m.key)).order('created_at', { ascending: false })
   const ids = (proyectos || []).map(p => p.id)
   const { data: eventos } = ids.length
@@ -23,6 +23,12 @@ export default async function ProyectosPage() {
   // Los emails salen de `mensajes` (no de los eventos) para saber si Resend avisó luego de un rebote.
   const { data: mensajes } = ids.length
     ? await sb.from('mensajes').select('proyecto_id, plantilla, estado, error, enviado_en').in('proyecto_id', ids).eq('direccion', 'saliente').not('enviado_en', 'is', null).order('enviado_en')
+    : { data: [] }
+  const { data: borradores } = ids.length
+    ? await sb.from('mensajes').select('id, proyecto_id, plantilla, error').in('proyecto_id', ids).eq('estado', 'borrador').order('created_at')
+    : { data: [] }
+  const { data: rondas } = ids.length
+    ? await sb.from('revisiones').select('proyecto_id, ronda, estado, comentarios, abierta_en, url').in('proyecto_id', ids).order('abierta_en')
     : { data: [] }
 
   const lista: ProyectoSeguimiento[] = (proyectos || []).map(p => {
@@ -36,6 +42,9 @@ export default async function ProyectosPage() {
     return {
       id: p.id, nombre: p.nombre, cliente: p.cliente, marca: p.marca, lead_id: p.lead_id,
       fase: esFaseProyecto(p.fase) ? p.fase : null, desde: ultimo?.fecha || p.created_at, historial, emails,
+      ref_entrega: p.ref_entrega,
+      rondas: (rondas || []).filter(r => r.proyecto_id === p.id).map(({ proyecto_id, ...r }) => r),
+      borradores: (borradores || []).filter(m => m.proyecto_id === p.id).map(m => ({ id: m.id, plantilla: m.plantilla || '', error: m.error })),
     }
   })
 

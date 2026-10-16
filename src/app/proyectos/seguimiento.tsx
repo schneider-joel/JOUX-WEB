@@ -4,9 +4,10 @@ import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ETIQUETA_FASE, FASES_PROYECTO, type FaseProyecto } from '@/lib/leads'
-import { AHORA, DIAS_ALERTA, diasDesde, type ProyectoSeguimiento } from '@/lib/seguimiento'
+import { AHORA, DIAS_ALERTA, ESTADO_RONDA, diasDesde, type ProyectoSeguimiento } from '@/lib/seguimiento'
 import { EMAIL_AL_ENTRAR, EMAIL_RECORDATORIO, NOMBRE_EMAIL } from '@/lib/emails'
 import EmailPanel from './email-panel'
+import RefEntrega from './ref-entrega'
 
 const fecha = (iso: string) => new Date(iso).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', timeZone: 'Europe/Madrid' })
 const dias = (n: number) => n === 0 ? 'hoy' : n === 1 ? 'hace 1 día' : `hace ${n} días`
@@ -22,7 +23,7 @@ export default function Seguimiento({ proyectos, marcas }: { proyectos: Proyecto
   const [mover, setMover] = useState<{ id: number; fase: FaseProyecto } | null>(null)
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState('')
-  const [email, setEmail] = useState<{ id: number; clave: string } | null>(null)
+  const [email, setEmail] = useState<{ id: number; clave: string; mensaje?: number } | null>(null)
 
   const nombreMarca = new Map(marcas.map(m => [m.key, m.nombre]))
   const conProyectos = marcas.filter(m => proyectos.some(p => p.marca === m.key))
@@ -108,7 +109,14 @@ export default function Seguimiento({ proyectos, marcas }: { proyectos: Proyecto
                       <span className="trk__que">{AHORA[p.fase]}</span>
                     </>
                   ) : <span className="trk__que">Toca la etapa en la que está</span>}
-                  {parado && p.fase && EMAIL_RECORDATORIO[p.fase] && email?.id !== p.id && (
+                  {/* Emails que dejó preparados un aviso de revisión o el cron: se revisan y se envían con un toque */}
+                  {email?.id !== p.id && p.borradores.map(b => (
+                    <button key={b.id} type="button" className={`copy caps trk__recordar${b.error ? ' aviso' : ''}`} title={b.error || undefined}
+                      onClick={() => setEmail({ id: p.id, clave: b.plantilla, mensaje: b.id })}>
+                      ✉ {NOMBRE_EMAIL[b.plantilla] || b.plantilla} {b.error ? '· no salió, reintentar' : 'listo para enviar'} →
+                    </button>
+                  ))}
+                  {parado && p.fase && EMAIL_RECORDATORIO[p.fase] && email?.id !== p.id && !p.borradores.some(b => b.plantilla === EMAIL_RECORDATORIO[p.fase!]) && (
                     <button type="button" className="copy caps trk__recordar" onClick={() => setEmail({ id: p.id, clave: EMAIL_RECORDATORIO[p.fase!]! })}>Enviar recordatorio →</button>
                   )}
                 </div>
@@ -122,7 +130,7 @@ export default function Seguimiento({ proyectos, marcas }: { proyectos: Proyecto
                   </div>
                 )}
 
-                {email?.id === p.id && <EmailPanel key={email.clave} proyectoId={p.id} clave={email.clave} onCerrar={() => setEmail(null)} />}
+                {email?.id === p.id && <EmailPanel key={`${email.clave}-${email.mensaje ?? ''}`} proyectoId={p.id} clave={email.clave} mensajeId={email.mensaje} onCerrar={() => setEmail(null)} />}
 
                 {abierto === p.id && (
                   <div className="trk__hist">
@@ -131,6 +139,14 @@ export default function Seguimiento({ proyectos, marcas }: { proyectos: Proyecto
                         {p.historial.map((h, i) => <li key={i}><span className="caps dim">{fecha(h.fecha)}</span> {ETIQUETA_FASE[h.fase]}</li>)}
                       </ol>
                     )}
+                    {p.rondas.length > 0 && (
+                      <ol>{p.rondas.map(r => (
+                        <li key={r.ronda} className={r.estado === 'comentada' ? 'ok' : undefined}>
+                          <span className="caps dim">{fecha(r.abierta_en)}</span>{' '}
+                          {r.url ? <a href={r.url} target="_blank" rel="noreferrer">{r.ronda}</a> : r.ronda} · {ESTADO_RONDA[r.estado]}{r.comentarios > 0 && <> · {r.comentarios} coment.</>}
+                        </li>
+                      ))}</ol>
+                    )}
                     {p.emails.length > 0 && (
                       <ol>{p.emails.map((e, i) => (
                         <li key={i} className={e.error ? 'aviso' : undefined} title={e.error || undefined}>
@@ -138,6 +154,7 @@ export default function Seguimiento({ proyectos, marcas }: { proyectos: Proyecto
                         </li>
                       ))}</ol>
                     )}
+                    <RefEntrega proyectoId={p.id} valor={p.ref_entrega} />
                     <span className="trk__acc">
                       {p.fase && [EMAIL_AL_ENTRAR[p.fase], EMAIL_RECORDATORIO[p.fase]].filter((c): c is string => !!c).map(c => (
                         <button key={c} type="button" className="copy caps" onClick={() => setEmail({ id: p.id, clave: c })}>✉ {NOMBRE_EMAIL[c]}</button>

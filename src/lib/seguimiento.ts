@@ -27,6 +27,11 @@ export type ProyectoSeguimiento = {
   lead_id: number | null
   historial: { fase: FaseProyecto; fecha: string }[]  // cambios de fase, del más antiguo al más reciente
   emails: { plantilla: string; fecha: string; error: string | null }[]  // emails enviados al cliente; error = rebotado, spam…
+  ref_entrega: string | null    // slug de arkevo-revision o carpeta de Pitchview (para sus avisos)
+  rondas: { ronda: string; estado: 'abierta' | 'comentada' | 'cerrada'; comentarios: number; abierta_en: string; url: string }[]
+  borradores: { id: number; plantilla: string; error: string | null }[]  // emails preparados por un aviso o el cron, sin enviar
 }
+
+export const ESTADO_RONDA = { abierta: 'esperando comentarios', comentada: 'comentada', cerrada: 'cerrada' } as const
 
 export const diasDesde = (iso: string) => Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86400000))

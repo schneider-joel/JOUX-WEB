@@ -1040,3 +1040,19 @@ ON CONFLICT (clave, marca, idioma) DO NOTHING;
 -- Cada mensaje de Gmail (o envío de Resend) se guarda una sola vez: el tick se puede repetir sin duplicar.
 -- El último historyId leído de Gmail va en configuracion (clave 'gmail_history_id'); lo escribe el tick.
 CREATE UNIQUE INDEX IF NOT EXISTS mensajes_proveedor_unico ON mensajes (canal, id_proveedor) WHERE id_proveedor IS NOT NULL;
+
+-- MIGRACIÓN: fase 4, rondas de revisión (2026-10-16, solo aditiva). Las llenan los avisos de
+-- arkevo-revision y Pitchview (POST /api/intake/evento). El recordatorio n+1 toca a los 3·(n+1) días.
+CREATE TABLE IF NOT EXISTS revisiones (
+  id            BIGSERIAL PRIMARY KEY,
+  proyecto_id   INT NOT NULL REFERENCES proyectos(id),
+  ronda         TEXT NOT NULL,              -- 'R1', 'R2'…
+  url           TEXT NOT NULL,              -- enlace del cliente (con su clave)
+  estado        TEXT NOT NULL DEFAULT 'abierta' CHECK (estado IN ('abierta','comentada','cerrada')),
+  comentarios   INT NOT NULL DEFAULT 0,
+  abierta_en    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  comentada_en  TIMESTAMPTZ,
+  recordatorios SMALLINT NOT NULL DEFAULT 0,
+  UNIQUE (proyecto_id, ronda)
+);
+ALTER TABLE revisiones ENABLE ROW LEVEL SECURITY;

@@ -7,6 +7,7 @@ import { generarBorrador } from '@/lib/ia'
 import { enviarMensajeLead } from '@/lib/enviar-lead'
 import { enviarEmail } from '@/lib/resend'
 import { notificar } from '@/lib/push'
+import { prepararEmailProyecto } from '@/lib/emails-proyecto'
 
 export const dynamic = 'force-dynamic'
 // supabase-js usa fetch: sin esto, Next guarda sus respuestas en el Data Cache y la lista sale vieja.
@@ -136,11 +137,43 @@ async function enviarAprobados() {
   return { enviados, errores }
 }
 
+// 3. Rondas abiertas sin comentarios: recordatorio n+1 a los 3·(n+1) días (como máximo 2). En las webs
+// queda el borrador «revision.recordatorio» para enviarlo desde /proyectos; en los treatments, solo el push.
+const DIAS_RECORDATORIO = 3, MAX_RECORDATORIOS = 2
+async function recordatoriosRevision() {
+  const { data } = await sb.from('revisiones').select('id, proyecto_id, ronda, url, abierta_en, recordatorios')
+    .eq('estado', 'abierta').lt('recordatorios', MAX_RECORDATORIOS).lte('abierta_en', new Date(Date.now() - DIAS_RECORDATORIO * 864e5).toISOString())
+  let preparados = 0
+  for (const r of data || []) {
+    if (new Date(r.abierta_en).getTime() + DIAS_RECORDATORIO * (r.recordatorios + 1) * 864e5 > Date.now()) continue
+    // Se reserva con un cambio condicional: dos ticks a la vez no preparan dos recordatorios.
+    const { data: reservado } = await sb.from('revisiones').update({ recordatorios: r.recordatorios + 1 }).eq('id', r.id).eq('recordatorios', r.recordatorios).eq('estado', 'abierta').select('id')
+    if (!reservado?.length) continue
+    const { data: p } = await sb.from('proyectos').select('id, nombre, cliente, marca, lead_id').eq('id', r.proyecto_id).maybeSingle()
+    if (!p) continue
+    const { data: marca } = await sb.from('marcas').select('modo').eq('key', p.marca ?? '').maybeSingle()
+    const esWeb = marca?.modo === 'cerrado'
+    const email = esWeb ? await prepararEmailProyecto(p.id, 'revision.recordatorio', { ronda: r.ronda, url: r.url }, 'joux-cron') : null
+    if (email && 'error' in email) console.error('tick recordatorio', p.id, email.error)
+    await sb.from('eventos').insert({ proyecto_id: p.id, lead_id: p.lead_id, tipo: 'revision.recordatorio', fuente: 'joux-cron', datos: { ronda: r.ronda, n: r.recordatorios + 1 } })
+    const dias = Math.floor((Date.now() - new Date(r.abierta_en).getTime()) / 864e5)
+    await notificar({
+      titulo: `Revisión sin comentarios · ${p.cliente} · ${p.nombre}`,
+      cuerpo: `Ronda ${r.ronda} abierta hace ${dias} días.${email && 'borrador' in email ? ' Recordatorio preparado para enviar.' : email && 'enviado' in email ? ' Recordatorio enviado.' : ''}`,
+      url: esWeb ? '/proyectos' : '/',
+      etiqueta: `proyecto-${p.id}`,
+    }).catch(e => console.error('tick push', e?.message))
+    preparados++
+  }
+  return { preparados }
+}
+
 export async function POST(req: NextRequest) {
   if (!autorizado(req)) return NextResponse.json({ error: 'no_autorizado' }, { status: 401 })
   const resultado: Record<string, unknown> = {}
   // Cada parte por separado: si Gmail falla, los envíos programados siguen saliendo.
   try { resultado.gmail = await leerGmail() } catch (e: any) { console.error('tick gmail', e?.message); resultado.gmail = { error: e?.message || 'error' } }
   try { resultado.envios = await enviarAprobados() } catch (e: any) { console.error('tick envios', e?.message); resultado.envios = { error: e?.message || 'error' } }
+  try { resultado.recordatorios = await recordatoriosRevision() } catch (e: any) { console.error('tick recordatorios', e?.message); resultado.recordatorios = { error: e?.message || 'error' } }
   return NextResponse.json(resultado)
 }
