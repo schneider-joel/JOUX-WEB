@@ -284,13 +284,16 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: #8A8A87
 @keyframes blink { 50% { opacity: .3; } }
 
 /* Columna de las pantallas migradas */
-.col { width: 100%; max-width: 724px; margin: 0 auto; display: flex; flex-direction: column; gap: 64px; }
+/* Entre bloques, bastante más aire que entre filas: cada bloque se lee como un grupo aparte */
+.col { width: 100%; max-width: 724px; margin: 0 auto; display: flex; flex-direction: column; gap: 88px; }
 
 /* Bloques: etiqueta en mono + línea + dato a la derecha. Densidad: solo líneas horizontales y solo
    para separar grupos (la de cada etiqueta y, como mucho, una antes de un total); filas separadas
    por aire; una fila = un texto principal + como mucho una línea pequeña; nada de cajas. */
 .block { display: flex; flex-direction: column; gap: 16px; }
-.label { display: flex; align-items: center; gap: 12px; color: var(--dim); }
+/* La etiqueta de un bloque va en --text y la línea pequeña de las filas en --dim: así el título
+   del bloque no se confunde con los datos de debajo, aunque los dos sean mono en mayúsculas. */
+.label { display: flex; align-items: center; gap: 12px; color: var(--text); letter-spacing: .07em; }
 .rule { flex: 1; height: 1px; background: var(--line); }
 .label__m { color: var(--muted); }
 .list { display: flex; flex-direction: column; list-style: none; }
@@ -736,7 +739,7 @@ a.d__btn { color: inherit; text-decoration: none; }
 .field .seg { align-self: flex-start; }
 
 @media (max-width: 899px), (max-height: 599px) {
-  .col { gap: 52px; }
+  .col { gap: 68px; }
   .main--col .page-header { margin-bottom: 52px; }
 }
 @media (max-width: 640px) {
