@@ -957,6 +957,12 @@ button.fila--btn { width: 100%; background: none; border: 0; padding: 0; font: i
 .trk__hist ol { list-style: none; display: flex; flex-wrap: wrap; gap: 6px 22px; font-size: 14px; color: var(--muted); }
 .trk__hist ol .caps { margin-right: 6px; }
 .trk__cerrados { align-self: flex-start; }
+.trk__recordar { align-self: flex-start; margin-top: 4px; }
+.trk__acc { display: flex; gap: 18px; flex-wrap: wrap; justify-content: flex-end; }
+/* Email al cliente bajo la fila del proyecto */
+.trk__email { grid-column: 1 / -1; border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; display: flex; flex-direction: column; gap: 16px; }
+.trk__email textarea { font-size: 15px; line-height: 1.5; }
+.trk__emailpie { display: flex; justify-content: flex-end; align-items: center; gap: 20px; }
 @media (hover: hover) and (pointer: fine) {
   .trk__r:hover { background: var(--hover); color: var(--text); }
   .trk__r[aria-pressed="true"]:hover { background: var(--text); color: var(--bg); }

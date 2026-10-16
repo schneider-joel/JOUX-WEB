@@ -18,7 +18,7 @@ export default async function ProyectosPage() {
     .or('status.eq.activo,fase.not.is.null').in('marca', (marcas || []).map(m => m.key)).order('created_at', { ascending: false })
   const ids = (proyectos || []).map(p => p.id)
   const { data: eventos } = ids.length
-    ? await sb.from('eventos').select('proyecto_id, tipo, datos, created_at').in('proyecto_id', ids).in('tipo', ['proyecto.fase', 'lead.ganado']).order('created_at')
+    ? await sb.from('eventos').select('proyecto_id, tipo, datos, created_at').in('proyecto_id', ids).in('tipo', ['proyecto.fase', 'lead.ganado', 'mensaje.enviado']).order('created_at')
     : { data: [] }
 
   const lista: ProyectoSeguimiento[] = (proyectos || []).map(p => {
@@ -26,10 +26,12 @@ export default async function ProyectosPage() {
     const historial = propios
       .map(e => ({ fase: e.tipo === 'lead.ganado' ? 'confirmado' : (e.datos as { a?: unknown })?.a, fecha: e.created_at as string }))
       .filter((h): h is ProyectoSeguimiento['historial'][number] => esFaseProyecto(h.fase))
+    const emails = propios.filter(e => e.tipo === 'mensaje.enviado')
+      .map(e => ({ plantilla: String((e.datos as { plantilla?: unknown })?.plantilla || ''), fecha: e.created_at as string }))
     const ultimo = [...historial].reverse().find(h => h.fase === p.fase)
     return {
       id: p.id, nombre: p.nombre, cliente: p.cliente, marca: p.marca, lead_id: p.lead_id,
-      fase: esFaseProyecto(p.fase) ? p.fase : null, desde: ultimo?.fecha || p.created_at, historial,
+      fase: esFaseProyecto(p.fase) ? p.fase : null, desde: ultimo?.fecha || p.created_at, historial, emails,
     }
   })
 

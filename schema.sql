@@ -812,3 +812,226 @@ ALTER TABLE proyectos ADD COLUMN IF NOT EXISTS idioma TEXT CHECK (idioma IN ('es
 -- Carpeta de Pitchview o slug de arkevo-revision: así los avisos de esos sistemas encuentran su proyecto.
 ALTER TABLE proyectos ADD COLUMN IF NOT EXISTS ref_entrega TEXT;
 CREATE UNIQUE INDEX IF NOT EXISTS proyectos_ref_entrega ON proyectos (ref_entrega) WHERE ref_entrega IS NOT NULL;
+
+-- MIGRACIÓN: mensajes y plantillas (automatización fase 4, 2026-10-16), tal cual el esquema de automatizacion.md.
+CREATE TABLE IF NOT EXISTS mensajes (
+  id BIGSERIAL PRIMARY KEY,
+  lead_id BIGINT REFERENCES leads(id) ON DELETE CASCADE,
+  proyecto_id INT REFERENCES proyectos(id),
+  direccion TEXT NOT NULL CHECK (direccion IN ('entrante','saliente')),
+  estado TEXT NOT NULL CHECK (estado IN ('recibido','borrador','aprobado','enviado','error','descartado')),
+  plantilla TEXT,
+  generado_por TEXT CHECK (generado_por IN ('ia','plantilla','joel')),
+  remitente TEXT, para TEXT NOT NULL, asunto TEXT, cuerpo TEXT NOT NULL,
+  canal TEXT CHECK (canal IN ('gmail','resend')),
+  id_proveedor TEXT, error TEXT, programado_para TIMESTAMPTZ, enviado_en TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CHECK (lead_id IS NOT NULL OR proyecto_id IS NOT NULL)
+);
+CREATE INDEX IF NOT EXISTS mensajes_pendientes ON mensajes (estado, programado_para) WHERE estado IN ('borrador','aprobado');
+ALTER TABLE mensajes ENABLE ROW LEVEL SECURITY;
+
+CREATE TABLE IF NOT EXISTS plantillas (
+  clave TEXT NOT NULL, marca TEXT NOT NULL REFERENCES marcas(key),
+  idioma TEXT NOT NULL CHECK (idioma IN ('es','en')),
+  remitente TEXT NOT NULL, asunto TEXT NOT NULL, cuerpo TEXT NOT NULL,
+  canal TEXT NOT NULL DEFAULT 'resend' CHECK (canal IN ('gmail','resend')),
+  auto BOOLEAN NOT NULL DEFAULT false,
+  PRIMARY KEY (clave, marca, idioma)
+);
+ALTER TABLE plantillas ENABLE ROW LEVEL SECURITY;
+
+-- DATOS: emails de las webs (Arkevo y Custom, ES/EN), basados en arkevo/proceso-cliente.md (D–G).
+-- Variables: {{nombre}}, {{web}}, {{url}}, {{ronda}}. Una agencia nueva = sus filas aquí.
+INSERT INTO plantillas (clave, marca, idioma, remitente, asunto, cuerpo, canal, auto) VALUES
+  ('proyecto.bienvenida', 'arkevo', 'es', 'Arkevo <hola@arkevostudio.com>', 'Empezamos con {{web}} · lo que necesito', 'Hola, {{nombre}}:
+
+¡Empezamos! Para no perder tiempo, súbelo todo a esta carpeta: {{url}}
+
+- Logo (SVG o PNG grande) y colores, si los tenéis.
+- Los textos, o notas sueltas y los redacto yo.
+- Las fotos en buena calidad.
+- Datos legales para el aviso legal: titular, NIF, dirección y email.
+- El acceso a vuestro dominio, si ya tenéis uno.
+
+El plazo empieza a contar cuando esté todo. Cualquier duda, responde a este correo.
+
+Joel
+Arkevo', 'resend', false),
+  ('proyecto.bienvenida', 'arkevo', 'en', 'Arkevo <hola@arkevostudio.com>', 'Let''s start {{web}} · what I need', 'Hi {{nombre}},
+
+Let''s get started! Please upload everything to this folder: {{url}}
+
+- Logo (SVG or large PNG) and brand colours, if you have them.
+- The copy, or rough notes and I''ll write it.
+- High-quality photos.
+- Legal details for the legal notice: owner, tax ID, address and email.
+- Access to your domain, if you already have one.
+
+The timeline starts once everything is in. Any questions, just reply to this email.
+
+Joel
+Arkevo', 'resend', false),
+  ('material.recordatorio', 'arkevo', 'es', 'Arkevo <hola@arkevostudio.com>', 'Para seguir con {{web}}', 'Hola, {{nombre}}:
+
+Para cumplir el plazo me falta parte del material. En cuanto lo tenga, sigo: {{url}}
+
+Si os va mejor empezar con menos y añadir el resto después, también se puede.
+
+Joel
+Arkevo', 'resend', false),
+  ('material.recordatorio', 'arkevo', 'en', 'Arkevo <hola@arkevostudio.com>', 'To keep {{web}} moving', 'Hi {{nombre}},
+
+To stay on schedule I still need some of the material. As soon as I have it, I''ll carry on: {{url}}
+
+If it''s easier to start with less and add the rest later, that works too.
+
+Joel
+Arkevo', 'resend', false),
+  ('revision.lista', 'arkevo', 'es', 'Arkevo <hola@arkevostudio.com>', '{{web}} · ronda {{ronda}} de revisión', 'Hola, {{nombre}}:
+
+Aquí está la web para revisar: {{url}}
+Es privada y no sale en Google.
+
+Mírala en el móvil y en el ordenador y mándame en un solo correo todo lo que quieras cambiar. Esta es la ronda {{ronda}} de 2.
+
+Joel
+Arkevo', 'resend', false),
+  ('revision.lista', 'arkevo', 'en', 'Arkevo <hola@arkevostudio.com>', '{{web}} · review round {{ronda}}', 'Hi {{nombre}},
+
+Your website is ready to review: {{url}}
+It''s private and not indexed by Google.
+
+Have a look on your phone and on a computer, and send me everything you''d like to change in a single email. This is round {{ronda}} of 2.
+
+Joel
+Arkevo', 'resend', false),
+  ('revision.recordatorio', 'arkevo', 'es', 'Arkevo <hola@arkevostudio.com>', '{{web}} · ¿has podido verla?', 'Hola, {{nombre}}:
+
+Te recuerdo que la ronda {{ronda}} está lista para revisar: {{url}}
+
+En cuanto me mandes los cambios, sigo. Si está todo bien, dímelo y preparo la publicación.
+
+Joel
+Arkevo', 'resend', false),
+  ('revision.recordatorio', 'arkevo', 'en', 'Arkevo <hola@arkevostudio.com>', '{{web}} · have you had a look?', 'Hi {{nombre}},
+
+Just a reminder that round {{ronda}} is ready to review: {{url}}
+
+As soon as you send me your changes, I''ll carry on. If everything looks good, let me know and I''ll get it ready to publish.
+
+Joel
+Arkevo', 'resend', false),
+  ('entrega.final', 'arkevo', 'es', 'Arkevo <hola@arkevostudio.com>', 'Vuestra web ya está publicada · {{web}}', 'Hola, {{nombre}}:
+
+¡Ya está! {{url}}
+
+- Para pedir cambios, escribe a hola@arkevostudio.com con lo que necesites.
+- La factura del segundo 50 % te llega aparte.
+
+Una cosa más: ¿me escribirías dos o tres frases sobre cómo ha ido? Me ayuda mucho.
+
+Joel
+Arkevo', 'resend', false),
+  ('entrega.final', 'arkevo', 'en', 'Arkevo <hola@arkevostudio.com>', 'Your website is live · {{web}}', 'Hi {{nombre}},
+
+It''s live! {{url}}
+
+- For any changes, write to hola@arkevostudio.com with what you need.
+- The invoice for the second 50% will reach you separately.
+
+One more thing: would you write two or three lines about how it went? It really helps.
+
+Joel
+Arkevo', 'resend', false),
+  ('proyecto.bienvenida', 'custom', 'es', 'Joel Schneider <hello@joelschneider.io>', 'Empezamos con {{web}} · lo que necesito', 'Hola, {{nombre}}:
+
+¡Empezamos! Para no perder tiempo, súbelo todo a esta carpeta: {{url}}
+
+- Logo (SVG o PNG grande) y colores, si los tenéis.
+- Los textos, o notas sueltas y los redacto yo.
+- Las fotos en buena calidad.
+- Datos legales para el aviso legal: titular, NIF, dirección y email.
+- El acceso a vuestro dominio, si ya tenéis uno.
+
+El plazo empieza a contar cuando esté todo. Cualquier duda, responde a este correo.
+
+Joel', 'resend', false),
+  ('proyecto.bienvenida', 'custom', 'en', 'Joel Schneider <hello@joelschneider.io>', 'Let''s start {{web}} · what I need', 'Hi {{nombre}},
+
+Let''s get started! Please upload everything to this folder: {{url}}
+
+- Logo (SVG or large PNG) and brand colours, if you have them.
+- The copy, or rough notes and I''ll write it.
+- High-quality photos.
+- Legal details for the legal notice: owner, tax ID, address and email.
+- Access to your domain, if you already have one.
+
+The timeline starts once everything is in. Any questions, just reply to this email.
+
+Joel Schneider', 'resend', false),
+  ('material.recordatorio', 'custom', 'es', 'Joel Schneider <hello@joelschneider.io>', 'Para seguir con {{web}}', 'Hola, {{nombre}}:
+
+Para cumplir el plazo me falta parte del material. En cuanto lo tenga, sigo: {{url}}
+
+Si os va mejor empezar con menos y añadir el resto después, también se puede.
+
+Joel', 'resend', false),
+  ('material.recordatorio', 'custom', 'en', 'Joel Schneider <hello@joelschneider.io>', 'To keep {{web}} moving', 'Hi {{nombre}},
+
+To stay on schedule I still need some of the material. As soon as I have it, I''ll carry on: {{url}}
+
+If it''s easier to start with less and add the rest later, that works too.
+
+Joel Schneider', 'resend', false),
+  ('revision.lista', 'custom', 'es', 'Joel Schneider <hello@joelschneider.io>', '{{web}} · ronda {{ronda}} de revisión', 'Hola, {{nombre}}:
+
+Aquí está la web para revisar: {{url}}
+Es privada y no sale en Google.
+
+Mírala en el móvil y en el ordenador y mándame en un solo correo todo lo que quieras cambiar. Esta es la ronda {{ronda}} de 2.
+
+Joel', 'resend', false),
+  ('revision.lista', 'custom', 'en', 'Joel Schneider <hello@joelschneider.io>', '{{web}} · review round {{ronda}}', 'Hi {{nombre}},
+
+Your website is ready to review: {{url}}
+It''s private and not indexed by Google.
+
+Have a look on your phone and on a computer, and send me everything you''d like to change in a single email. This is round {{ronda}} of 2.
+
+Joel Schneider', 'resend', false),
+  ('revision.recordatorio', 'custom', 'es', 'Joel Schneider <hello@joelschneider.io>', '{{web}} · ¿has podido verla?', 'Hola, {{nombre}}:
+
+Te recuerdo que la ronda {{ronda}} está lista para revisar: {{url}}
+
+En cuanto me mandes los cambios, sigo. Si está todo bien, dímelo y preparo la publicación.
+
+Joel', 'resend', false),
+  ('revision.recordatorio', 'custom', 'en', 'Joel Schneider <hello@joelschneider.io>', '{{web}} · have you had a look?', 'Hi {{nombre}},
+
+Just a reminder that round {{ronda}} is ready to review: {{url}}
+
+As soon as you send me your changes, I''ll carry on. If everything looks good, let me know and I''ll get it ready to publish.
+
+Joel Schneider', 'resend', false),
+  ('entrega.final', 'custom', 'es', 'Joel Schneider <hello@joelschneider.io>', 'Vuestra web ya está publicada · {{web}}', 'Hola, {{nombre}}:
+
+¡Ya está! {{url}}
+
+- Para pedir cambios, escribe a hello@joelschneider.io con lo que necesites.
+- La factura del segundo 50 % te llega aparte.
+
+Una cosa más: ¿me escribirías dos o tres frases sobre cómo ha ido? Me ayuda mucho.
+
+Joel', 'resend', false),
+  ('entrega.final', 'custom', 'en', 'Joel Schneider <hello@joelschneider.io>', 'Your website is live · {{web}}', 'Hi {{nombre}},
+
+It''s live! {{url}}
+
+- For any changes, write to hello@joelschneider.io with what you need.
+- The invoice for the second 50% will reach you separately.
+
+One more thing: would you write two or three lines about how it went? It really helps.
+
+Joel Schneider', 'resend', false)
+ON CONFLICT (clave, marca, idioma) DO NOTHING;

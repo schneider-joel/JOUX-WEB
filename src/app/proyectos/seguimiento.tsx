@@ -5,6 +5,8 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ETIQUETA_FASE, FASES_PROYECTO, type FaseProyecto } from '@/lib/leads'
 import { AHORA, DIAS_ALERTA, diasDesde, type ProyectoSeguimiento } from '@/lib/seguimiento'
+import { EMAIL_AL_ENTRAR, EMAIL_RECORDATORIO, NOMBRE_EMAIL } from '@/lib/emails'
+import EmailPanel from './email-panel'
 
 const fecha = (iso: string) => new Date(iso).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', timeZone: 'Europe/Madrid' })
 const dias = (n: number) => n === 0 ? 'hoy' : n === 1 ? 'hace 1 día' : `hace ${n} días`
@@ -20,6 +22,7 @@ export default function Seguimiento({ proyectos, marcas }: { proyectos: Proyecto
   const [mover, setMover] = useState<{ id: number; fase: FaseProyecto } | null>(null)
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState('')
+  const [email, setEmail] = useState<{ id: number; clave: string } | null>(null)
 
   const nombreMarca = new Map(marcas.map(m => [m.key, m.nombre]))
   const conProyectos = marcas.filter(m => proyectos.some(p => p.marca === m.key))
@@ -38,6 +41,9 @@ export default function Seguimiento({ proyectos, marcas }: { proyectos: Proyecto
     const r = await fetch(`/api/proyectos/${mover.id}/fase`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fase: mover.fase }) }).catch(() => null)
     setGuardando(false)
     if (!r?.ok) { setError('No se pudo guardar'); return }
+    // Si la nueva etapa tiene email para el cliente, se propone (no se envía solo).
+    const clave = EMAIL_AL_ENTRAR[mover.fase]
+    setEmail(clave ? { id: mover.id, clave } : null)
     setMover(null); router.refresh()
   }
 
@@ -102,6 +108,9 @@ export default function Seguimiento({ proyectos, marcas }: { proyectos: Proyecto
                       <span className="trk__que">{AHORA[p.fase]}</span>
                     </>
                   ) : <span className="trk__que">Toca la etapa en la que está</span>}
+                  {parado && p.fase && EMAIL_RECORDATORIO[p.fase] && email?.id !== p.id && (
+                    <button type="button" className="copy caps trk__recordar" onClick={() => setEmail({ id: p.id, clave: EMAIL_RECORDATORIO[p.fase!]! })}>Enviar recordatorio →</button>
+                  )}
                 </div>
 
                 {pend && (
@@ -113,6 +122,8 @@ export default function Seguimiento({ proyectos, marcas }: { proyectos: Proyecto
                   </div>
                 )}
 
+                {email?.id === p.id && <EmailPanel key={email.clave} proyectoId={p.id} clave={email.clave} onCerrar={() => setEmail(null)} />}
+
                 {abierto === p.id && (
                   <div className="trk__hist">
                     {p.historial.length === 0 ? <p className="nota">Aún sin cambios de etapa.</p> : (
@@ -120,7 +131,15 @@ export default function Seguimiento({ proyectos, marcas }: { proyectos: Proyecto
                         {p.historial.map((h, i) => <li key={i}><span className="caps dim">{fecha(h.fecha)}</span> {ETIQUETA_FASE[h.fase]}</li>)}
                       </ol>
                     )}
-                    {p.lead_id && <Link href={`/leads/${p.lead_id}`} className="copy caps">Ver el lead →</Link>}
+                    {p.emails.length > 0 && (
+                      <ol>{p.emails.map((e, i) => <li key={i}><span className="caps dim">{fecha(e.fecha)}</span> ✉ {NOMBRE_EMAIL[e.plantilla] || e.plantilla}</li>)}</ol>
+                    )}
+                    <span className="trk__acc">
+                      {p.fase && [EMAIL_AL_ENTRAR[p.fase], EMAIL_RECORDATORIO[p.fase]].filter((c): c is string => !!c).map(c => (
+                        <button key={c} type="button" className="copy caps" onClick={() => setEmail({ id: p.id, clave: c })}>✉ {NOMBRE_EMAIL[c]}</button>
+                      ))}
+                      {p.lead_id && <Link href={`/leads/${p.lead_id}`} className="copy caps">Ver el lead →</Link>}
+                    </span>
                   </div>
                 )}
               </li>
