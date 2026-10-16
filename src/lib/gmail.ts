@@ -6,7 +6,9 @@ let token: { valor: string; caduca: number } | null = null
 
 async function accessToken() {
   if (token && token.caduca > Date.now() + 60_000) return token.valor
-  const { GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN } = process.env
+  // Sin espacios, saltos de línea ni comillas sobrantes: un pegado así en Vercel da «invalid_grant».
+  const limpio = (v?: string) => v?.trim().replace(/^["']|["']$/g, '')
+  const GMAIL_CLIENT_ID = limpio(process.env.GMAIL_CLIENT_ID), GMAIL_CLIENT_SECRET = limpio(process.env.GMAIL_CLIENT_SECRET), GMAIL_REFRESH_TOKEN = limpio(process.env.GMAIL_REFRESH_TOKEN)
   if (!GMAIL_CLIENT_ID || !GMAIL_CLIENT_SECRET || !GMAIL_REFRESH_TOKEN) throw new Error('Faltan las credenciales de Gmail')
   const r = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
