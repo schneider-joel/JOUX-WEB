@@ -8,6 +8,7 @@ import AccionesLead from './ganado'
 import FacturarPago1 from './facturar-pago'
 import Respuesta, { type Borrador } from './respuesta'
 import EmailHilo from './email-hilo'
+import { estadoPrueba, urlsFirmadas, type AdjuntoMensaje } from '@/lib/prueba-gratis'
 
 export const dynamic = 'force-dynamic'
 // supabase-js usa fetch: sin esto, Next guarda sus respuestas en el Data Cache y la lista sale vieja.
@@ -30,6 +31,9 @@ function textoEvento(e: Evento) {
   if (e.tipo === 'lead.perdido') return `Perdido${e.datos.motivo ? `: ${valor(e.datos.motivo)}` : ''}`
   if (e.tipo === 'ia.borrador') return `Borrador de IA${e.datos.motivo === 'regenerar' ? ' (regenerado)' : e.datos.motivo === 'respuesta' ? ' para su respuesta' : ''}${e.datos.categoria ? ` · ${valor(e.datos.categoria)}` : ''}`
   if (e.tipo === 'mensaje.descartado') return 'Borrador descartado'
+  if (e.tipo === 'material.recibido') return `Material para la prueba gratis${e.datos.fotos ? ` · ${valor(e.datos.fotos)} fotos` : ''}${e.datos.diseno ? ` · ${valor(e.datos.diseno)}` : ''}`
+  if (e.tipo === 'prueba.lista') return `Prueba gratis lista${e.datos.diseno ? ` en ${valor(e.datos.diseno)}` : ''}`
+  if (e.tipo === 'prueba.error') return `El agente no pudo montar la prueba: ${valor(e.datos.motivo)}`
   if (e.tipo === 'proyecto.fase') return `Fase del proyecto: ${esFaseProyecto(e.datos.de) ? ETIQUETA_FASE[e.datos.de] : '—'} → ${esFaseProyecto(e.datos.a) ? ETIQUETA_FASE[e.datos.a] : valor(e.datos.a)}`
   return e.tipo
 }
@@ -52,7 +56,7 @@ export default async function LeadPage({ params }: { params: { id: string } }) {
 
   const [{ data: eventos }, { data: mensajes }, { data: marca }, { data: clientes }, { data: proyecto }, { data: pago1 }] = await Promise.all([
     sb.from('eventos').select('id, tipo, fuente, datos, created_at').eq('lead_id', lead.id).order('created_at', { ascending: false }),
-    sb.from('mensajes').select('id, direccion, estado, generado_por, remitente, para, asunto, cuerpo, error, enviado_en, created_at, auto').eq('lead_id', lead.id).order('created_at', { ascending: false }),
+    sb.from('mensajes').select('id, direccion, estado, generado_por, remitente, para, asunto, cuerpo, error, enviado_en, created_at, auto, plantilla, adjuntos').eq('lead_id', lead.id).order('created_at', { ascending: false }),
     sb.from('marcas').select('key, nombre, modo').eq('key', lead.marca).maybeSingle(),
     sb.from('clientes_fiscales').select('cliente, identificador, direccion, pais').order('cliente'),
     lead.proyecto_id ? sb.from('proyectos').select('id, nombre, cliente, fase, precio_cerrado').eq('id', lead.proyecto_id).maybeSingle() : Promise.resolve({ data: null }),
@@ -62,6 +66,11 @@ export default async function LeadPage({ params }: { params: { id: string } }) {
   const interes = Object.entries(lead.interes || {}).filter(([, v]) => v != null && v !== '')
   const campos = Object.entries(lead.campos || {})
   const msgs = (mensajes || []) as Mensaje[]
+  // Adjuntos de las respuestas (bucket privado `leads`): enlaces firmados de 1 h, pedidos de una vez.
+  const adjuntosMsg = msgs.flatMap(m => (m.adjuntos || []).map(a => ({ ...a, mensaje: m.id })))
+  const firmadas = await urlsFirmadas(adjuntosMsg.map(a => a.ruta))
+  const adjuntosDe = (id: number) => adjuntosMsg.flatMap((a, i) => a.mensaje === id ? [{ nombre: a.nombre, url: firmadas[i], peso: peso(a.bytes) }] : [])
+  const prueba = estadoPrueba((eventos || []) as Evento[], msgs)
   // El borrador vivo (o el que falló al enviar) va al editor; el resto, al hilo.
   const borrador = msgs.find(m => m.direccion === 'saliente' && (m.estado === 'borrador' || m.estado === 'error')) || null
   // Hilo: mensajes enviados y recibidos + eventos (sin los de envío/recepción, que ya son el propio mensaje), lo último arriba.
@@ -99,6 +108,25 @@ export default async function LeadPage({ params }: { params: { id: string } }) {
           <AccionesLead lead={lead} marca={marca} clientes={(clientes || []) as ClienteFiscal[]} />
         )}
 
+
+        {prueba && (
+          <section className="block" aria-label="Prueba gratis">
+            <p className="label caps"><span>Prueba gratis</span><i className="rule" /></p>
+            <ol className="prueba caps">
+              <li className={prueba.material ? 'prueba__paso--hecho' : undefined}>Material{prueba.material ? ` · ${fechaHora(prueba.material)}` : ''}</li>
+              {prueba.error ? (
+                <li className="prueba__paso--aviso">No se pudo montar · {fechaHora(prueba.error.fecha)}</li>
+              ) : (
+                <li className={prueba.lista ? 'prueba__paso--hecho' : undefined}>
+                  {prueba.lista?.url ? <a href={prueba.lista.url} target="_blank" rel="noopener noreferrer">Prueba lista{prueba.lista.diseno ? ` · ${prueba.lista.diseno}` : ''}</a> : 'Prueba lista'}
+                </li>
+              )}
+              <li className={prueba.enviada ? 'prueba__paso--hecho' : undefined}>Enviada{prueba.enviada ? ` · ${fechaHora(prueba.enviada)}` : ''}</li>
+            </ol>
+            {prueba.error && <p className="nota aviso">{prueba.error.motivo}</p>}
+            {prueba.lista && !prueba.enviada && <p className="nota">El email con el enlace está abajo, en «Respuesta». Revísalo y envíalo.</p>}
+          </section>
+        )}
 
         {(lead.mensaje || interes.length > 0) && (
           <section className="block" aria-label="Qué quiere">
@@ -150,7 +178,7 @@ export default async function LeadPage({ params }: { params: { id: string } }) {
                     <EmailHilo key={x.clave} entrante={entrante} abierto={x.clave === ultimoEmail}
                       etiqueta={entrante ? 'Recibido' : x.m.auto ? 'Enviado automáticamente' : x.m.generado_por === 'joel' ? 'Enviado · editado' : 'Enviado'}
                       quien={partes?.[1] || de} direccion={partes ? partes[2] : null}
-                      fecha={fechaHora(x.fecha)} asunto={x.m.asunto} cuerpo={x.m.cuerpo} />
+                      fecha={fechaHora(x.fecha)} asunto={x.m.asunto} cuerpo={x.m.cuerpo} adjuntos={adjuntosDe(x.m.id)} />
                   )
                 }
                 const alertas = Array.isArray(x.e.datos.alertas) ? (x.e.datos.alertas as unknown[]).map(String) : []

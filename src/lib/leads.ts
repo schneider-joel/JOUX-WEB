@@ -21,6 +21,8 @@ export type Mensaje = {
   id: number; direccion: 'entrante' | 'saliente'; estado: string; generado_por: string | null; remitente: string | null; para: string
   asunto: string | null; cuerpo: string; error: string | null; enviado_en: string | null; created_at: string
   auto: boolean  // salió sin aprobación (fase 5)
+  plantilla?: string | null
+  adjuntos?: { nombre: string; ruta: string; tipo: string; bytes: number; en_linea?: boolean }[]  // fotos y PDF de las respuestas (bucket `leads`)
 }
 // Fase de seguimiento de un proyecto (proyectos.fase). No toca `status` ni dispara facturas.
 export const FASES_PROYECTO = ['confirmado', 'material', 'en_curso', 'revision', 'cambios', 'entregado', 'cerrado'] as const

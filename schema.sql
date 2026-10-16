@@ -1066,3 +1066,36 @@ ALTER TABLE mensajes ADD COLUMN IF NOT EXISTS asunto_original TEXT;
 ALTER TABLE mensajes ADD COLUMN IF NOT EXISTS cuerpo_original TEXT;
 ALTER TABLE mensajes ADD COLUMN IF NOT EXISTS categoria_ia TEXT;
 ALTER TABLE mensajes ADD COLUMN IF NOT EXISTS auto BOOLEAN NOT NULL DEFAULT false;
+
+-- MIGRACIÓN: agente de prueba gratis (2026-10-16, solo aditiva). Las fotos y PDF que mandan los leads
+-- al responder van al bucket privado `leads` (<lead_id>/<mensaje_id>/<nombre>) y se apuntan aquí:
+-- [{ nombre, ruta, tipo, bytes, en_linea? }]. Un solo `prueba.lista` por lead (el agente puede repetir el aviso).
+ALTER TABLE mensajes ADD COLUMN IF NOT EXISTS adjuntos JSONB NOT NULL DEFAULT '[]'::jsonb;
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES ('leads', 'leads', false, 26214400, ARRAY['image/jpeg','image/png','image/webp','image/heic','image/heif','image/svg+xml','application/pdf'])
+ON CONFLICT (id) DO NOTHING;
+CREATE UNIQUE INDEX IF NOT EXISTS eventos_prueba_lista_unica ON eventos (lead_id) WHERE tipo = 'prueba.lista';
+-- Plantilla B de arkevo/proceso-cliente.md («Prueba gratis lista»). Sale por Gmail en el hilo del lead
+-- (el remitente real lo pone remitentes.ts); nunca sola: auto = false.
+INSERT INTO plantillas (clave, marca, idioma, remitente, asunto, cuerpo, canal, auto) VALUES
+  ('prueba.lista', 'arkevo', 'es', 'Arkevo <hola@arkevostudio.com>', 'Tu portada en {{diseno}} · enlace privado', 'Hola, {{nombre}}:
+
+Aquí tienes vuestra portada montada en {{diseno}}: {{url}}
+
+Es un enlace privado que no aparece en Google. Lo dejo activo 14 días. Si quieres cambiar algo, mándame una lista y hago una ronda de ajustes.
+
+Si os encaja, te preparo la propuesta cerrada para la web completa.
+
+Un saludo,
+Joel · Arkevo', 'gmail', false),
+  ('prueba.lista', 'arkevo', 'en', 'Arkevo <hello@arkevostudio.com>', 'Your homepage in {{diseno}} · private link', 'Hi {{nombre}},
+
+Here''s your homepage built in {{diseno}}: {{url}}
+
+It''s a private link that doesn''t show up on Google, and it stays live for 14 days. If you''d like anything changed, send me a list and I''ll do one round of tweaks.
+
+If it works for you, I''ll put together a fixed-price proposal for the full website.
+
+Best,
+Joel · Arkevo', 'gmail', false)
+ON CONFLICT (clave, marca, idioma) DO NOTHING;

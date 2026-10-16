@@ -120,7 +120,9 @@ export async function hiloIds(hilo: string): Promise<{ id: string; hilo: string 
   return (j.messages || []).map((x: any) => ({ id: x.id, hilo: x.threadId }))
 }
 
-export type Leido = { id: string; hilo: string; etiquetas: string[]; de: string; para: string; asunto: string; texto: string; fecha: string }
+// Un adjunto tal como lo describe Gmail; el contenido se baja aparte con descargarAdjunto().
+export type AdjuntoGmail = { nombre: string; tipo: string; bytes: number; idAdjunto: string; enLinea: boolean }
+export type Leido = { id: string; hilo: string; etiquetas: string[]; de: string; para: string; asunto: string; texto: string; fecha: string; adjuntos: AdjuntoGmail[] }
 
 const decodificar = (d?: string) => d ? Buffer.from(d.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8') : ''
 const sinHtml = (h: string) => h.replace(/<(script|style)[\s\S]*?<\/\1>/gi, '').replace(/<br\s*\/?>/gi, '\n').replace(/<\/p>/gi, '\n\n')
@@ -130,6 +132,21 @@ function partes(p: any, tipo: string): string[] {
   if (!p) return []
   if (p.mimeType === tipo && p.body?.data && !p.filename) return [decodificar(p.body.data)]
   return (p.parts || []).flatMap((x: any) => partes(x, tipo))
+}
+
+function adjuntos(p: any): AdjuntoGmail[] {
+  if (!p) return []
+  const propios = p.filename && p.body?.attachmentId ? [{
+    nombre: String(p.filename), tipo: String(p.mimeType || 'application/octet-stream').toLowerCase(), bytes: Number(p.body.size) || 0, idAdjunto: String(p.body.attachmentId),
+    // Imágenes pegadas en el cuerpo (firmas, logos de la firma…): Content-Disposition inline o con Content-ID.
+    enLinea: (p.headers || []).some((h: any) => (h.name.toLowerCase() === 'content-disposition' && /^\s*inline/i.test(h.value)) || h.name.toLowerCase() === 'content-id'),
+  }] : []
+  return [...propios, ...(p.parts || []).flatMap(adjuntos)]
+}
+
+export async function descargarAdjunto(mensaje: string, idAdjunto: string): Promise<Buffer> {
+  const j = await gmail(`/messages/${mensaje}/attachments/${idAdjunto}`)
+  return Buffer.from(String(j.data || '').replace(/-/g, '+').replace(/_/g, '/'), 'base64')
 }
 
 // Quita la cita del mensaje anterior («El … escribió:», «On … wrote:», líneas con «>»).
@@ -150,5 +167,6 @@ export async function leerMensaje(id: string): Promise<Leido> {
     de: cab('from'), para: cab('to'), asunto: cab('subject'),
     texto: sinCita(texto).slice(0, 20000) || '(sin texto)',
     fecha: new Date(Number(j.internalDate) || Date.now()).toISOString(),
+    adjuntos: adjuntos(j.payload),
   }
 }

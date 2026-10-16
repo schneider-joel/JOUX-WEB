@@ -9,6 +9,7 @@ import { enviarEmail } from '@/lib/resend'
 import { notificar } from '@/lib/push'
 import { prepararEmailProyecto } from '@/lib/emails-proyecto'
 import { resumenDiario } from '@/lib/resumen'
+import { avisarMaterial, guardarAdjuntos } from '@/lib/prueba-gratis'
 
 export const dynamic = 'force-dynamic'
 // supabase-js usa fetch: sin esto, Next guarda sus respuestas en el Data Cache y la lista sale vieja.
@@ -52,7 +53,7 @@ async function leerGmail() {
   }
 
   const hilos = Array.from(new Set(candidatos.map(c => c.hilo)))
-  const { data: leads } = hilos.length ? await sb.from('leads').select('id, marca, nombre, email, estado, gmail_hilo').in('gmail_hilo', hilos) : { data: [] }
+  const { data: leads } = hilos.length ? await sb.from('leads').select('id, marca, nombre, empresa, email, estado, gmail_hilo, interes, campos, proyecto_id').in('gmail_hilo', hilos) : { data: [] }
   const porHilo = new Map((leads || []).map(l => [l.gmail_hilo!, l]))
   const enHilos = candidatos.filter(c => porHilo.has(c.hilo))
   const { data: yaEstan } = enHilos.length ? await sb.from('mensajes').select('id_proveedor').eq('canal', 'gmail').in('id_proveedor', enHilos.map(c => c.id)) : { data: [] }
@@ -74,11 +75,11 @@ async function leerGmail() {
       const { count } = await sb.from('mensajes').select('id', { count: 'exact', head: true }).eq('lead_id', lead.id).eq('estado', 'enviado').is('id_proveedor', null)
       if (count) continue
     }
-    const { error } = await sb.from('mensajes').insert({
+    const { data: fila, error } = await sb.from('mensajes').insert({
       lead_id: lead.id, direccion: saliente ? 'saliente' : 'entrante', estado: saliente ? 'enviado' : 'recibido',
       generado_por: saliente ? 'joel' : null, canal: 'gmail', id_proveedor: m.id,
       remitente: m.de.slice(0, 300), para: m.para.slice(0, 300) || lead.email, asunto: m.asunto.slice(0, 300), cuerpo: m.texto, enviado_en: m.fecha,
-    })
+    }).select('id').single()
     if (error) { if (error.code === '23505') continue; throw new Error(error.message) }
 
     const ahora = new Date().toISOString()
@@ -89,6 +90,12 @@ async function leerGmail() {
       continue
     }
     recibidos++
+    // Fotos y PDF de la respuesta, al bucket privado `leads`; con fotos y diseño elegido, aviso de material.
+    let material = false
+    if (m.adjuntos.length) {
+      const guardados = await guardarAdjuntos(lead.id, fila.id, m.id, m.adjuntos)
+      material = await avisarMaterial(lead, fila.id, guardados).catch(e => { console.error('tick material', e?.message); return false })
+    }
     const estado = ['nuevo', 'borrador', 'respondido'].includes(lead.estado) ? 'conversacion' : lead.estado
     await sb.from('leads').update({ estado, ultimo_contacto: m.fecha, updated_at: ahora }).eq('id', lead.id)
     await sb.from('eventos').insert([
@@ -97,7 +104,8 @@ async function leerGmail() {
     ])
     lead.estado = estado
     const { data: marca } = await sb.from('marcas').select('nombre').eq('key', lead.marca).maybeSingle()
-    await notificar({
+    // Con material, el push ya lo dio avisarMaterial (uno por respuesta basta).
+    if (!material) await notificar({
       titulo: `Respuesta · ${marca?.nombre || lead.marca} · ${lead.nombre || lead.email}`,
       cuerpo: m.texto.slice(0, 140),
       url: `/leads/${lead.id}`,

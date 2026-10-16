@@ -8,8 +8,9 @@ import type { NextRequest } from 'next/server'
 // /api/intake/lead lo llaman los Workers de las webs y valida su propia clave por fuente.
 // /api/intake/evento lo llaman arkevo-revision y Pitchview, también con su clave por fuente.
 // /api/cron/tick lo llama el Worker joux-cron y valida CRON_TICK_SECRET.
+// /api/agente/* lo llama el agente /prueba-gratis y valida INTAKE_KEY_AGENTE.
 // /api/resend/webhook lo llama Resend (rebotes, spam) y valida su firma con RESEND_WEBHOOK_SECRET.
-const PUBLIC_PATHS = [/^\/(ab|th|t|c)\//, /^\/api\/bancos\/cron$/, /^\/api\/intake\/(lead|evento)$/, /^\/api\/resend\/webhook$/, /^\/api\/cron\/tick$/, /^\/api\/compartidos$/, /^\/invoice\//, /^\/login$/, /^\/api\/login$/, /^\/icon/, /^\/apple-icon/, /^\/sw\.js$/, /^\/manifest\.webmanifest$/]
+const PUBLIC_PATHS = [/^\/(ab|th|t|c)\//, /^\/api\/bancos\/cron$/, /^\/api\/intake\/(lead|evento)$/, /^\/api\/resend\/webhook$/, /^\/api\/cron\/tick$/, /^\/api\/agente\/(pruebas-pendientes|prueba-lista|prueba-error)$/, /^\/api\/compartidos$/, /^\/invoice\//, /^\/login$/, /^\/api\/login$/, /^\/icon/, /^\/apple-icon/, /^\/sw\.js$/, /^\/manifest\.webmanifest$/]
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
