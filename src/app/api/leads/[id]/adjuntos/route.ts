@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabaseServer as sb } from '@/lib/supabase-server'
 import { leerMensaje } from '@/lib/gmail'
-import { avisarMaterial, guardarAdjuntos } from '@/lib/prueba-gratis'
+import { avisarMaterial, cuentaComoFoto, guardarAdjuntos } from '@/lib/prueba-gratis'
 
 export const dynamic = 'force-dynamic'
 // supabase-js usa fetch: sin esto, Next guarda sus respuestas en el Data Cache y la lista sale vieja.
@@ -23,7 +23,7 @@ export async function POST(_: Request, { params }: { params: { id: string } }) {
       if (!leido.adjuntos.length) continue
       const g = await guardarAdjuntos(lead.id, m.id, leido.id, leido.adjuntos)
       guardados += g.length
-      if (await avisarMaterial(lead, m.id, g)) material++
+      if (await avisarMaterial(lead, g.filter(cuentaComoFoto).length, m.id, 'gmail')) material++
     }
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Gmail no respondió', guardados, material }, { status: 502 })

@@ -9,7 +9,7 @@ import { enviarEmail } from '@/lib/resend'
 import { notificar } from '@/lib/push'
 import { prepararEmailProyecto } from '@/lib/emails-proyecto'
 import { resumenDiario } from '@/lib/resumen'
-import { avisarMaterial, guardarAdjuntos } from '@/lib/prueba-gratis'
+import { avisarMaterial, cuentaComoFoto, guardarAdjuntos } from '@/lib/prueba-gratis'
 
 export const dynamic = 'force-dynamic'
 // supabase-js usa fetch: sin esto, Next guarda sus respuestas en el Data Cache y la lista sale vieja.
@@ -94,7 +94,7 @@ async function leerGmail() {
     let material = false
     if (m.adjuntos.length) {
       const guardados = await guardarAdjuntos(lead.id, fila.id, m.id, m.adjuntos)
-      material = await avisarMaterial(lead, fila.id, guardados).catch(e => { console.error('tick material', e?.message); return false })
+      material = await avisarMaterial(lead, guardados.filter(cuentaComoFoto).length, fila.id, 'gmail').catch(e => { console.error('tick material', e?.message); return false })
     }
     const estado = ['nuevo', 'borrador', 'respondido'].includes(lead.estado) ? 'conversacion' : lead.estado
     await sb.from('leads').update({ estado, ultimo_contacto: m.fecha, updated_at: ahora }).eq('id', lead.id)

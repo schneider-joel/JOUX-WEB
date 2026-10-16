@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseServer as sb } from '@/lib/supabase-server'
 import { waitUntil } from '@vercel/functions'
 import { notificar } from '@/lib/push'
+import { avisarMaterial, fotosFormulario } from '@/lib/prueba-gratis'
 import { generarBorrador } from '@/lib/ia'
 import { MAX_BYTES_INTAKE as MAX_BYTES, fuenteDeClave } from '@/lib/intake'
 
@@ -131,6 +132,8 @@ export async function POST(req: NextRequest) {
       url: `/leads/${lead.id}`,
       etiqueta: `lead-${lead.id}`,
     })
+    // Si el formulario ya trae fotos y un diseño elegido, la prueba gratis puede empezar sin esperar al email.
+    await avisarMaterial({ id: lead.id, marca: b.marca as string, email, nombre: contacto.nombre ?? null, empresa: contacto.empresa ?? null, interes: (b.interes ?? {}) as Record<string, unknown>, campos: (b.campos ?? {}) as Record<string, unknown> }, fotosFormulario(adjuntos), null, fuente.fuente)
   } catch (e: any) {
     console.error('intake/lead aviso', e?.message)
   }

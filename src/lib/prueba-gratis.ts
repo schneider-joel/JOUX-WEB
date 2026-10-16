@@ -80,10 +80,17 @@ export async function urlsFirmadas(rutas: string[], segundos = 3600) {
 
 type LeadMaterial = { id: number; marca: string; nombre: string | null; empresa?: string | null; email: string; interes?: Record<string, unknown> | null; campos?: Record<string, unknown> | null; proyecto_id?: number | null }
 
-// Si un lead de una web con diseño elegido responde con al menos una foto: evento `material.recibido`
-// (uno por mensaje) y push. No salta si ya es proyecto o si la prueba ya está lista: eso es otra cosa.
-export async function avisarMaterial(lead: LeadMaterial, mensajeId: number, adjuntos: AdjuntoMensaje[]) {
-  const fotos = adjuntos.filter(cuentaComoFoto).length
+// Tipo de un archivo por su nombre (o por la ruta de su enlace), solo para los que se aceptan.
+export const tipoPorNombre = (nombre: string) => TIPOS[extension(nombre)] || null
+
+// Fotos que trae el formulario (adjuntos del lead, enlaces al R2 de la marca): por extensión.
+export const fotosFormulario = (adjuntos: { nombre?: string | null; url: string }[] | null | undefined) =>
+  (adjuntos || []).filter(a => (TIPOS[extension(a.nombre || new URL(a.url).pathname)] || '').startsWith('image/')).length
+
+// Si un lead de una web con diseño elegido manda al menos una foto (en el formulario o al responder):
+// evento `material.recibido` (uno por mensaje, o uno por el formulario) y push. No salta si ya es
+// proyecto o si la prueba ya está lista: eso es otra cosa.
+export async function avisarMaterial(lead: LeadMaterial, fotos: number, mensajeId: number | null, fuente: string) {
   if (!fotos || lead.proyecto_id) return false
   const diseno = disenoDelLead(lead)
   if (!diseno) return false
@@ -91,12 +98,13 @@ export async function avisarMaterial(lead: LeadMaterial, mensajeId: number, adju
   if (marca?.modo !== 'cerrado') return false
   const { count: lista } = await sb.from('eventos').select('id', { count: 'exact', head: true }).eq('lead_id', lead.id).eq('tipo', 'prueba.lista')
   if (lista) return false
-  const { count: repetido } = await sb.from('eventos').select('id', { count: 'exact', head: true }).eq('lead_id', lead.id).eq('tipo', 'material.recibido').eq('datos->>mensaje_id', String(mensajeId))
+  const previo = sb.from('eventos').select('id', { count: 'exact', head: true }).eq('lead_id', lead.id).eq('tipo', 'material.recibido')
+  const { count: repetido } = await (mensajeId ? previo.eq('datos->>mensaje_id', String(mensajeId)) : previo.eq('datos->>origen', 'formulario'))
   if (repetido) return false
-  await sb.from('eventos').insert({ lead_id: lead.id, tipo: 'material.recibido', fuente: 'gmail', datos: { mensaje_id: mensajeId, diseno, fotos, adjuntos: adjuntos.length } })
+  await sb.from('eventos').insert({ lead_id: lead.id, tipo: 'material.recibido', fuente, datos: { ...(mensajeId ? { mensaje_id: mensajeId } : { origen: 'formulario' }), diseno, fotos } })
   await notificar({
     titulo: `Material de ${estudioDelLead(lead)} · prueba gratis en marcha`,
-    cuerpo: `${fotos} foto${fotos === 1 ? '' : 's'} para la portada en ${diseno}.`,
+    cuerpo: `${fotos} foto${fotos === 1 ? '' : 's'} para la portada en ${diseno}${mensajeId ? '' : ' (desde el formulario)'}.`,
     url: `/leads/${lead.id}`,
     etiqueta: `lead-${lead.id}`,
   }).catch(e => console.error('material push', e?.message))
