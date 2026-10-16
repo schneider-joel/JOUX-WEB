@@ -30,6 +30,8 @@ export type ProyectoSeguimiento = {
   ref_entrega: string | null    // slug de arkevo-revision o carpeta de Pitchview (para sus avisos)
   rondas: { ronda: string; estado: 'abierta' | 'comentada' | 'cerrada'; comentarios: number; abierta_en: string; url: string }[]
   borradores: { id: number; plantilla: string; error: string | null }[]  // emails preparados por un aviso o el cron, sin enviar
+  drive_url: string | null      // carpeta de Drive compartida con el cliente
+  drive_error: string | null    // por qué falló el último intento de crearla o compartirla
 }
 
 export const ESTADO_RONDA = { abierta: 'esperando comentarios', comentada: 'comentada', cerrada: 'cerrada' } as const

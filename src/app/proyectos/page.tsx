@@ -14,7 +14,7 @@ export const metadata = { title: 'Proyectos · JOUX Hub' }
 // tienen fase; la fase se cambia aquí a mano y queda en eventos (proyecto.fase).
 export default async function ProyectosPage() {
   const { data: marcas } = await sb.from('marcas').select('key, nombre, orden').eq('modo', 'cerrado').order('orden')
-  const { data: proyectos, error } = await sb.from('proyectos').select('id, nombre, cliente, marca, fase, lead_id, ref_entrega, created_at')
+  const { data: proyectos, error } = await sb.from('proyectos').select('id, nombre, cliente, marca, fase, lead_id, ref_entrega, drive_url, drive_error, created_at')
     .or('status.eq.activo,fase.not.is.null').in('marca', (marcas || []).map(m => m.key)).order('created_at', { ascending: false })
   const ids = (proyectos || []).map(p => p.id)
   const { data: eventos } = ids.length
@@ -42,7 +42,7 @@ export default async function ProyectosPage() {
     return {
       id: p.id, nombre: p.nombre, cliente: p.cliente, marca: p.marca, lead_id: p.lead_id,
       fase: esFaseProyecto(p.fase) ? p.fase : null, desde: ultimo?.fecha || p.created_at, historial, emails,
-      ref_entrega: p.ref_entrega,
+      ref_entrega: p.ref_entrega, drive_url: p.drive_url, drive_error: p.drive_error,
       rondas: (rondas || []).filter(r => r.proyecto_id === p.id).map(({ proyecto_id, ...r }) => r),
       borradores: (borradores || []).filter(m => m.proyecto_id === p.id).map(m => ({ id: m.id, plantilla: m.plantilla || '', error: m.error })),
     }

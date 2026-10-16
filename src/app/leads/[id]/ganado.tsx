@@ -7,6 +7,7 @@ import type { Marca } from '@/lib/marcas'
 import { PAISES, type PaisFiscal } from '@/lib/clientes'
 import { faltaGanado, filasGanado, formInicial, nombreProyecto, sugerirPais, type ClienteFiscal, type FormGanado } from '@/lib/ganado'
 import { desglose } from '@/lib/importes'
+import { SUBCARPETAS, rutaCarpeta } from '@/lib/drive-carpetas'
 
 type LeadProps = Pick<Lead, 'id' | 'estado' | 'nombre' | 'email' | 'empresa' | 'pais' | 'idioma' | 'interes'>
 type MarcaProps = Pick<Marca, 'key' | 'nombre' | 'modo'>
@@ -103,6 +104,7 @@ export default function AccionesLead({ lead, marca, clientes }: { lead: LeadProp
       <Fila titulo="INSERT proyectos (id lo pone la base de datos)" fila={filas.proyecto} />
       <Fila titulo={`UPDATE leads WHERE id = ${lead.id}`} fila={{ estado: 'ganado', proyecto_id: '<id del proyecto nuevo>' }} />
       <Fila titulo="INSERT eventos" fila={{ lead_id: lead.id, proyecto_id: '<id del proyecto nuevo>', tipo: filas.evento.tipo, fuente: filas.evento.fuente, datos: JSON.stringify({ ...filas.evento.datos, de: lead.estado }) }} />
+      {SUBCARPETAS[marca.key] && <p className="nota">Drive: se crea <span className="mono">{rutaCarpeta(marca.nombre, filas.proyecto.cliente, filas.proyecto.nombre)}/</span> ({SUBCARPETAS[marca.key].join(', ')}) y se comparte con {lead.email} como editor, sin el email de Google.</p>}
       {web && form.precio ? <p className="nota mono">Después podrás facturar el pago 1: {eur(form.precio / 2)} base{form.pais === 'ES' ? ` · ${eur(desglose(Number(form.precio) / 2, true)!.total)} a cobrar` : ''}.</p> : null}
       {error && <p className="nota error">{error}</p>}
       <div className="modal__foot" style={{ marginTop: 8 }}>

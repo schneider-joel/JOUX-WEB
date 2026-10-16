@@ -1129,3 +1129,159 @@ If it works for you, I''ll put together a fixed-price proposal for the full webs
 Best,
 Joel · Arkevo', 'gmail', false)
 ON CONFLICT (clave, marca, idioma) DO NOTHING;
+
+-- MIGRACIÓN: carpeta de Google Drive por proyecto (2026-10-17). Aditiva.
+-- drive_folder_id se guarda en cuanto existe la carpeta; drive_url solo cuando ya está compartida con el
+-- cliente (es lo que rellena {{drive_url}}); drive_error = motivo del último fallo («Reintentar»).
+ALTER TABLE proyectos
+  ADD COLUMN IF NOT EXISTS drive_folder_id text,
+  ADD COLUMN IF NOT EXISTS drive_url text,
+  ADD COLUMN IF NOT EXISTS drive_error text;
+-- Archivos que el cliente ha subido y ya avisaron (el tick solo avisa de los que no están aquí).
+CREATE TABLE IF NOT EXISTS drive_archivos (
+  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  proyecto_id integer NOT NULL REFERENCES proyectos(id) ON DELETE CASCADE,
+  file_id text NOT NULL,
+  nombre text,
+  visto_en timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (proyecto_id, file_id)
+);
+ALTER TABLE drive_archivos ENABLE ROW LEVEL SECURITY;
+-- Bienvenida y recordatorio de material: {{#drive_url}}…{{/drive_url}} solo sale con carpeta;
+-- {{^drive_url}}…{{/drive_url}}, solo sin ella. Ya no piden {{url}} a mano.
+UPDATE plantillas SET cuerpo = $t$Hola, {{nombre}}:
+
+¡Empezamos! Esto es lo que necesito:
+
+- Logo (SVG o PNG grande) y colores, si los tenéis.
+- Los textos, o notas sueltas y los redacto yo.
+- Las fotos en buena calidad.
+- Datos legales para el aviso legal: titular, NIF, dirección y email.
+- El acceso a vuestro dominio, si ya tenéis uno.
+
+{{#drive_url}}He preparado una carpeta para que lo subas todo: {{drive_url}}
+
+- Fotos: las fotos, en la mejor calidad que tengas.
+- Planos: planos, plantas o bocetos, si los hay.
+- Logo y marca: el logo y los colores.
+- Textos: textos, notas y datos legales.
+- Otros: lo que no encaje en las demás.
+
+Si no tienes cuenta de Google, responde a este correo con un enlace de WeTransfer.{{/drive_url}}{{^drive_url}}Puedes mandármelo respondiendo a este correo o con un enlace de WeTransfer.{{/drive_url}}
+
+El plazo empieza a contar cuando esté todo. Cualquier duda, responde a este correo.
+
+Joel
+Arkevo$t$ WHERE clave = 'proyecto.bienvenida' AND marca = 'arkevo' AND idioma = 'es';
+UPDATE plantillas SET cuerpo = $t$Hi {{nombre}},
+
+Let's get started! Here's what I need:
+
+- Logo (SVG or large PNG) and brand colours, if you have them.
+- The copy, or rough notes and I'll write it.
+- High-quality photos.
+- Legal details for the legal notice: owner, tax ID, address and email.
+- Access to your domain, if you already have one.
+
+{{#drive_url}}I've set up a folder for you to upload everything: {{drive_url}}
+
+- Fotos: photos, in the best quality you have.
+- Planos: drawings, floor plans or sketches, if any.
+- Logo y marca: logo and brand colours.
+- Textos: copy, notes and legal details.
+- Otros: anything that doesn't fit the others.
+
+If you don't have a Google account, just reply to this email with a WeTransfer link.{{/drive_url}}{{^drive_url}}You can send it by replying to this email or with a WeTransfer link.{{/drive_url}}
+
+The timeline starts once everything is in. Any questions, just reply to this email.
+
+Joel
+Arkevo$t$ WHERE clave = 'proyecto.bienvenida' AND marca = 'arkevo' AND idioma = 'en';
+UPDATE plantillas SET cuerpo = $t$Hola, {{nombre}}:
+
+¡Empezamos! Esto es lo que necesito:
+
+- Logo (SVG o PNG grande) y colores, si los tenéis.
+- Los textos, o notas sueltas y los redacto yo.
+- Las fotos en buena calidad.
+- Datos legales para el aviso legal: titular, NIF, dirección y email.
+- El acceso a vuestro dominio, si ya tenéis uno.
+
+{{#drive_url}}He preparado una carpeta para que lo subas todo: {{drive_url}}
+
+- Fotos: las fotos, en la mejor calidad que tengas.
+- Planos: planos, plantas o bocetos, si los hay.
+- Logo y marca: el logo y los colores.
+- Textos: textos, notas y datos legales.
+- Otros: lo que no encaje en las demás.
+
+Si no tienes cuenta de Google, responde a este correo con un enlace de WeTransfer.{{/drive_url}}{{^drive_url}}Puedes mandármelo respondiendo a este correo o con un enlace de WeTransfer.{{/drive_url}}
+
+El plazo empieza a contar cuando esté todo. Cualquier duda, responde a este correo.
+
+Joel$t$ WHERE clave = 'proyecto.bienvenida' AND marca = 'custom' AND idioma = 'es';
+UPDATE plantillas SET cuerpo = $t$Hi {{nombre}},
+
+Let's get started! Here's what I need:
+
+- Logo (SVG or large PNG) and brand colours, if you have them.
+- The copy, or rough notes and I'll write it.
+- High-quality photos.
+- Legal details for the legal notice: owner, tax ID, address and email.
+- Access to your domain, if you already have one.
+
+{{#drive_url}}I've set up a folder for you to upload everything: {{drive_url}}
+
+- Fotos: photos, in the best quality you have.
+- Planos: drawings, floor plans or sketches, if any.
+- Logo y marca: logo and brand colours.
+- Textos: copy, notes and legal details.
+- Otros: anything that doesn't fit the others.
+
+If you don't have a Google account, just reply to this email with a WeTransfer link.{{/drive_url}}{{^drive_url}}You can send it by replying to this email or with a WeTransfer link.{{/drive_url}}
+
+The timeline starts once everything is in. Any questions, just reply to this email.
+
+Joel Schneider$t$ WHERE clave = 'proyecto.bienvenida' AND marca = 'custom' AND idioma = 'en';
+UPDATE plantillas SET cuerpo = $t$Hola, {{nombre}}:
+
+Para cumplir el plazo me falta parte del material. En cuanto lo tenga, sigo.
+
+{{#drive_url}}Puedes subirlo a tu carpeta: {{drive_url}}
+Si no tienes cuenta de Google, responde a este correo con un enlace de WeTransfer.{{/drive_url}}{{^drive_url}}Puedes mandármelo respondiendo a este correo o con un enlace de WeTransfer.{{/drive_url}}
+
+Si os va mejor empezar con menos y añadir el resto después, también se puede.
+
+Joel
+Arkevo$t$ WHERE clave = 'material.recordatorio' AND marca = 'arkevo' AND idioma = 'es';
+UPDATE plantillas SET cuerpo = $t$Hi {{nombre}},
+
+To stay on schedule I still need some of the material. As soon as I have it, I'll carry on.
+
+{{#drive_url}}You can upload it to your folder: {{drive_url}}
+If you don't have a Google account, just reply to this email with a WeTransfer link.{{/drive_url}}{{^drive_url}}You can send it by replying to this email or with a WeTransfer link.{{/drive_url}}
+
+If it's easier to start with less and add the rest later, that works too.
+
+Joel
+Arkevo$t$ WHERE clave = 'material.recordatorio' AND marca = 'arkevo' AND idioma = 'en';
+UPDATE plantillas SET cuerpo = $t$Hola, {{nombre}}:
+
+Para cumplir el plazo me falta parte del material. En cuanto lo tenga, sigo.
+
+{{#drive_url}}Puedes subirlo a tu carpeta: {{drive_url}}
+Si no tienes cuenta de Google, responde a este correo con un enlace de WeTransfer.{{/drive_url}}{{^drive_url}}Puedes mandármelo respondiendo a este correo o con un enlace de WeTransfer.{{/drive_url}}
+
+Si os va mejor empezar con menos y añadir el resto después, también se puede.
+
+Joel$t$ WHERE clave = 'material.recordatorio' AND marca = 'custom' AND idioma = 'es';
+UPDATE plantillas SET cuerpo = $t$Hi {{nombre}},
+
+To stay on schedule I still need some of the material. As soon as I have it, I'll carry on.
+
+{{#drive_url}}You can upload it to your folder: {{drive_url}}
+If you don't have a Google account, just reply to this email with a WeTransfer link.{{/drive_url}}{{^drive_url}}You can send it by replying to this email or with a WeTransfer link.{{/drive_url}}
+
+If it's easier to start with less and add the rest later, that works too.
+
+Joel Schneider$t$ WHERE clave = 'material.recordatorio' AND marca = 'custom' AND idioma = 'en';

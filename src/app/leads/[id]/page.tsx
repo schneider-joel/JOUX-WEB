@@ -6,6 +6,8 @@ import type { ClienteFiscal } from '@/lib/ganado'
 import CambiarEstado from './cambiar-estado'
 import AccionesLead from './ganado'
 import FacturarPago1 from './facturar-pago'
+import DriveCarpeta from '@/app/proyectos/drive-carpeta'
+import { SUBCARPETAS } from '@/lib/drive-carpetas'
 import Respuesta, { type Borrador } from './respuesta'
 import EmailHilo from './email-hilo'
 import PedirAjustes from './pedir-ajustes'
@@ -36,6 +38,8 @@ function textoEvento(e: Evento) {
   if (e.tipo === 'prueba.lista') return `${Number(e.datos.ronda) === 2 ? 'Prueba gratis con ajustes lista' : 'Prueba gratis lista'}${e.datos.diseno ? ` en ${valor(e.datos.diseno)}` : ''}`
   if (e.tipo === 'prueba.ajustes') return `Ajustes pedidos al agente: ${valor(e.datos.peticion)}`
   if (e.tipo === 'prueba.error') return `El agente no pudo montar la prueba: ${valor(e.datos.motivo)}`
+  if (e.tipo === 'drive.creada') return `Carpeta de Drive compartida con ${valor(e.datos.compartida_con)}`
+  if (e.tipo === 'material.subido') return `Ha subido ${valor(e.datos.n)} archivo${Number(e.datos.n) === 1 ? '' : 's'} a Drive`
   if (e.tipo === 'proyecto.fase') return `Fase del proyecto: ${esFaseProyecto(e.datos.de) ? ETIQUETA_FASE[e.datos.de] : '—'} → ${esFaseProyecto(e.datos.a) ? ETIQUETA_FASE[e.datos.a] : valor(e.datos.a)}`
   return e.tipo
 }
@@ -61,7 +65,7 @@ export default async function LeadPage({ params }: { params: { id: string } }) {
     sb.from('mensajes').select('id, direccion, estado, generado_por, remitente, para, asunto, cuerpo, error, enviado_en, created_at, auto, plantilla, adjuntos').eq('lead_id', lead.id).order('created_at', { ascending: false }),
     sb.from('marcas').select('key, nombre, modo').eq('key', lead.marca).maybeSingle(),
     sb.from('clientes_fiscales').select('cliente, identificador, direccion, pais').order('cliente'),
-    lead.proyecto_id ? sb.from('proyectos').select('id, nombre, cliente, fase, precio_cerrado').eq('id', lead.proyecto_id).maybeSingle() : Promise.resolve({ data: null }),
+    lead.proyecto_id ? sb.from('proyectos').select('id, nombre, cliente, marca, fase, precio_cerrado, drive_url, drive_error').eq('id', lead.proyecto_id).maybeSingle() : Promise.resolve({ data: null }),
     lead.proyecto_id ? sb.from('facturas').select('id, numero').eq('proyecto_id', lead.proyecto_id).eq('pago', 1).maybeSingle() : Promise.resolve({ data: null }),
   ])
   const paisProyecto = proyecto ? (clientes || []).find(c => c.cliente === proyecto.cliente)?.pais ?? null : null
@@ -105,6 +109,7 @@ export default async function LeadPage({ params }: { params: { id: string } }) {
               <div><dt>Cliente</dt><dd>{proyecto.cliente}</dd></div>
               <div><dt>Fase</dt><dd>{esFaseProyecto(proyecto.fase) ? ETIQUETA_FASE[proyecto.fase] : '—'}</dd></div>
               {pago1 && <div><dt>Pago 1</dt><dd><a href={`/invoice/${pago1.id}`} target="_blank" rel="noopener noreferrer">{pago1.numero || 'Factura'}</a></dd></div>}
+              {(proyecto.drive_url || SUBCARPETAS[proyecto.marca || '']) && <div><dt>Material</dt><dd><DriveCarpeta proyectoId={proyecto.id} url={proyecto.drive_url} error={proyecto.drive_error} /></dd></div>}
             </dl>
             {marca?.modo === 'cerrado' && proyecto.precio_cerrado != null && !pago1 && (
               <FacturarPago1 proyectoId={proyecto.id} precio={Number(proyecto.precio_cerrado)} pais={paisProyecto} />

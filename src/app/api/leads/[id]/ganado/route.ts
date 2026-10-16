@@ -2,10 +2,13 @@ import { NextResponse } from 'next/server'
 import { supabaseServer as sb } from '@/lib/supabase-server'
 import { faltaGanado, filasGanado, type FormGanado } from '@/lib/ganado'
 import type { Lead } from '@/lib/leads'
+import { crearCarpetaProyecto } from '@/lib/drive'
+import { SUBCARPETAS } from '@/lib/drive-carpetas'
 
 export const dynamic = 'force-dynamic'
 // supabase-js usa fetch: sin esto, Next guarda sus respuestas en el Data Cache y la lista sale vieja.
 export const fetchCache = 'force-no-store'
+export const maxDuration = 30
 
 // «Marcar ganado»: cliente fiscal (si es nuevo) + proyecto en fase «confirmado» + lead ganado + evento.
 // Las filas salen de filasGanado(), la misma función que pinta la vista previa.
@@ -42,5 +45,8 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const { error: errL } = await sb.from('leads').update({ estado: 'ganado', proyecto_id: nuevo.id, updated_at: new Date().toISOString() }).eq('id', lead.id)
   if (errL) return NextResponse.json({ error: errL.message, proyecto_id: nuevo.id }, { status: 500 })
   await sb.from('eventos').insert({ ...evento, lead_id: lead.id, proyecto_id: nuevo.id, datos: { ...evento.datos, de: lead.estado } })
-  return NextResponse.json({ ok: true, proyecto_id: nuevo.id })
+  // Carpeta de Drive para el material (solo marcas con subcarpetas). Si falla, el proyecto ya está creado:
+  // el motivo queda en proyectos.drive_error y la ficha ofrece «Reintentar».
+  const drive = SUBCARPETAS[marca.key] ? await crearCarpetaProyecto(nuevo.id).catch(e => ({ error: String(e?.message || e) })) : null
+  return NextResponse.json({ ok: true, proyecto_id: nuevo.id, drive })
 }

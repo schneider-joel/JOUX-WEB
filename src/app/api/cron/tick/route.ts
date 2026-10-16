@@ -9,6 +9,7 @@ import { enviarEmail } from '@/lib/resend'
 import { notificar } from '@/lib/push'
 import { prepararEmailProyecto } from '@/lib/emails-proyecto'
 import { resumenDiario } from '@/lib/resumen'
+import { revisarSubidas } from '@/lib/drive'
 import { avisarMaterial, cuentaComoFoto, guardarAdjuntos } from '@/lib/prueba-gratis'
 
 export const dynamic = 'force-dynamic'
@@ -184,6 +185,8 @@ export async function POST(req: NextRequest) {
   try { resultado.gmail = await leerGmail() } catch (e: any) { console.error('tick gmail', e?.message); resultado.gmail = { error: e?.message || 'error' } }
   try { resultado.envios = await enviarAprobados() } catch (e: any) { console.error('tick envios', e?.message); resultado.envios = { error: e?.message || 'error' } }
   try { resultado.recordatorios = await recordatoriosRevision() } catch (e: any) { console.error('tick recordatorios', e?.message); resultado.recordatorios = { error: e?.message || 'error' } }
+  // Archivos que el cliente sube a su carpeta de Drive (solo con drive.metadata.readonly).
+  try { resultado.drive = await revisarSubidas() } catch (e: any) { console.error('tick drive', e?.message); resultado.drive = { error: e?.message || 'error' } }
   // Al final: así el resumen ya cuenta las respuestas y recordatorios de este mismo tick.
   try { resultado.resumen = await resumenDiario() } catch (e: any) { console.error('tick resumen', e?.message); resultado.resumen = { error: e?.message || 'error' } }
   return NextResponse.json(resultado)

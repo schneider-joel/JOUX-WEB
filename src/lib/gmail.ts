@@ -1,10 +1,11 @@
-// API de Gmail (solo servidor) con el refresh token de joel@joelschneider.io (gmail.send + gmail.readonly).
+// API de Gmail (solo servidor) con el refresh token de joel@joelschneider.io (gmail.send + gmail.readonly
+// + drive.file; el mismo token lo usa src/lib/drive.ts).
 // Las respuestas a leads salen de aquí con el alias de la marca («Enviar como») y quedan en sus hilos.
 const API = 'https://gmail.googleapis.com/gmail/v1/users/me'
 
-let token: { valor: string; caduca: number } | null = null
+let token: { valor: string; caduca: number; permisos: string[] } | null = null
 
-async function accessToken() {
+export async function accessToken() {
   if (token && token.caduca > Date.now() + 60_000) return token.valor
   // Sin espacios, saltos de línea ni comillas sobrantes: un pegado así en Vercel da «invalid_grant».
   const limpio = (v?: string) => v?.trim().replace(/^["']|["']$/g, '')
@@ -18,8 +19,14 @@ async function accessToken() {
   })
   const j = await r.json().catch(() => ({}))
   if (!r.ok || !j.access_token) throw new Error(`Gmail no dio acceso (${j.error || r.status})`)
-  token = { valor: j.access_token, caduca: Date.now() + (j.expires_in || 3600) * 1000 }
+  token = { valor: j.access_token, caduca: Date.now() + (j.expires_in || 3600) * 1000, permisos: String(j.scope || '').split(' ') }
   return token.valor
+}
+
+// Scopes que concedió Joel al token (p. ej. para saber si ya hay permiso de Drive).
+export async function permisosGoogle() {
+  await accessToken()
+  return token?.permisos || []
 }
 
 export class ErrorGmail extends Error { constructor(public status: number, msg: string) { super(msg) } }

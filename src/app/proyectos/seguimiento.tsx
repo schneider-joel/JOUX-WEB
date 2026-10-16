@@ -8,6 +8,8 @@ import { AHORA, DIAS_ALERTA, ESTADO_RONDA, diasDesde, type ProyectoSeguimiento }
 import { EMAIL_AL_ENTRAR, EMAIL_RECORDATORIO, NOMBRE_EMAIL } from '@/lib/emails'
 import EmailPanel from './email-panel'
 import RefEntrega from './ref-entrega'
+import DriveCarpeta from './drive-carpeta'
+import { SUBCARPETAS } from '@/lib/drive-carpetas'
 
 const fecha = (iso: string) => new Date(iso).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', timeZone: 'Europe/Madrid' })
 const dias = (n: number) => n === 0 ? 'hoy' : n === 1 ? 'hace 1 día' : `hace ${n} días`
@@ -116,6 +118,9 @@ export default function Seguimiento({ proyectos, marcas }: { proyectos: Proyecto
                       ✉ {NOMBRE_EMAIL[b.plantilla] || b.plantilla} {b.error ? '· no salió, reintentar' : 'listo para enviar'} →
                     </button>
                   ))}
+                  {p.drive_error && !p.drive_url && abierto !== p.id && (
+                    <button type="button" className="copy caps trk__recordar aviso" title={p.drive_error} onClick={() => setAbierto(p.id)}>Drive no se pudo crear · reintentar →</button>
+                  )}
                   {parado && p.fase && EMAIL_RECORDATORIO[p.fase] && email?.id !== p.id && !p.borradores.some(b => b.plantilla === EMAIL_RECORDATORIO[p.fase!]) && (
                     <button type="button" className="copy caps trk__recordar" onClick={() => setEmail({ id: p.id, clave: EMAIL_RECORDATORIO[p.fase!]! })}>Enviar recordatorio →</button>
                   )}
@@ -159,6 +164,7 @@ export default function Seguimiento({ proyectos, marcas }: { proyectos: Proyecto
                       {p.fase && [EMAIL_AL_ENTRAR[p.fase], EMAIL_RECORDATORIO[p.fase]].filter((c): c is string => !!c).map(c => (
                         <button key={c} type="button" className="copy caps" onClick={() => setEmail({ id: p.id, clave: c })}>✉ {NOMBRE_EMAIL[c]}</button>
                       ))}
+                      {(p.drive_url || SUBCARPETAS[p.marca || '']) && <DriveCarpeta proyectoId={p.id} url={p.drive_url} error={p.drive_error} />}
                       {p.lead_id && <Link href={`/leads/${p.lead_id}`} className="copy caps">Ver el lead →</Link>}
                     </span>
                   </div>
