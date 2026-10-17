@@ -3,14 +3,15 @@
 // Las respuestas a leads salen de aquí con el alias de la marca («Enviar como») y quedan en sus hilos.
 const API = 'https://gmail.googleapis.com/gmail/v1/users/me'
 
-let token: { valor: string; caduca: number; permisos: string[] } | null = null
+let token: { valor: string; caduca: number; permisos: string[]; de: string } | null = null
 
 export async function accessToken() {
-  if (token && token.caduca > Date.now() + 60_000) return token.valor
   // Sin espacios, saltos de línea ni comillas sobrantes: un pegado así en Vercel da «invalid_grant».
   const limpio = (v?: string) => v?.trim().replace(/^["']|["']$/g, '')
   const GMAIL_CLIENT_ID = limpio(process.env.GMAIL_CLIENT_ID), GMAIL_CLIENT_SECRET = limpio(process.env.GMAIL_CLIENT_SECRET), GMAIL_REFRESH_TOKEN = limpio(process.env.GMAIL_REFRESH_TOKEN)
   if (!GMAIL_CLIENT_ID || !GMAIL_CLIENT_SECRET || !GMAIL_REFRESH_TOKEN) throw new Error('Faltan las credenciales de Gmail')
+  // Si cambia el refresh token (p. ej. con más permisos), el acceso guardado del anterior ya no vale.
+  if (token && token.de === GMAIL_REFRESH_TOKEN && token.caduca > Date.now() + 60_000) return token.valor
   const r = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -19,7 +20,7 @@ export async function accessToken() {
   })
   const j = await r.json().catch(() => ({}))
   if (!r.ok || !j.access_token) throw new Error(`Gmail no dio acceso (${j.error || r.status})`)
-  token = { valor: j.access_token, caduca: Date.now() + (j.expires_in || 3600) * 1000, permisos: String(j.scope || '').split(' ') }
+  token = { valor: j.access_token, caduca: Date.now() + (j.expires_in || 3600) * 1000, permisos: String(j.scope || '').split(' '), de: GMAIL_REFRESH_TOKEN }
   return token.valor
 }
 
