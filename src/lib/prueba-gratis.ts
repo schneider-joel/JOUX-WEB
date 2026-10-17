@@ -4,6 +4,7 @@
 import { supabaseServer as sb } from '@/lib/supabase-server'
 import { descargarAdjunto, type AdjuntoGmail } from '@/lib/gmail'
 import { notificar } from '@/lib/push'
+import type { Adjunto } from '@/lib/leads'
 
 // La colección de diseños de Arkevo. El formulario manda el slug (interes.diseno = 'lino') o el nombre.
 export const DISENOS = ['Lino', 'Pedra', 'Cota Cero', 'Umbral', 'NAVE', 'Cimbra'] as const
@@ -74,6 +75,31 @@ export async function urlsFirmadas(rutas: string[], segundos = 3600) {
   if (!rutas.length) return []
   const { data } = await sb.storage.from(BUCKET_LEADS).createSignedUrls(rutas, segundos)
   return rutas.map((_, i) => data?.[i]?.signedUrl || null)
+}
+
+// Respuestas del cliente y adjuntos (formulario + emails) de varios leads, como los recibe el agente.
+// Primero lo del formulario (enlaces al R2 de la marca, con su caducidad), luego lo de los emails (URL de 1 h).
+export async function materialDeLeads(leads: { id: number; adjuntos?: unknown }[]) {
+  const ids = leads.map(l => l.id)
+  const { data: mensajes } = ids.length
+    ? await sb.from('mensajes').select('id, lead_id, cuerpo, enviado_en, created_at, adjuntos').in('lead_id', ids).eq('direccion', 'entrante').order('created_at', { ascending: true })
+    : { data: [] }
+  const adjuntos = (mensajes || []).flatMap(m => ((m.adjuntos || []) as AdjuntoMensaje[]).map(a => ({ ...a, mensaje_id: m.id, lead_id: m.lead_id })))
+  const urls = await urlsFirmadas(adjuntos.map(a => a.ruta))
+  const conUrl = adjuntos.map((a, i) => ({ ...a, url: urls[i] }))
+  return new Map(leads.map(l => [l.id, {
+    mensajes: (mensajes || []).filter(m => m.lead_id === l.id).map(m => ({ id: m.id, fecha: m.enviado_en || m.created_at, texto: m.cuerpo })),
+    adjuntos: [
+      ...((l.adjuntos || []) as Adjunto[]).filter(a => !a.caduca || new Date(a.caduca) > new Date()).flatMap(a => {
+        const nombre = a.nombre || decodeURIComponent(new URL(a.url).pathname.split('/').pop() || 'adjunto')
+        const tipo = tipoPorNombre(nombre)
+        return tipo ? [{ origen: 'formulario', mensaje_id: null, nombre, tipo, bytes: a.bytes ?? null, en_linea: false, url: a.url, caduca: a.caduca ?? null }] : []
+      }),
+      ...conUrl.filter(a => a.lead_id === l.id && a.url).map(a => ({
+        origen: 'email', mensaje_id: a.mensaje_id, nombre: a.nombre, tipo: a.tipo, bytes: a.bytes, en_linea: !!a.en_linea, url: a.url!, caduca: null,
+      })),
+    ],
+  }]))
 }
 
 // ── Aviso de material ────────────────────────────────────────────────────────

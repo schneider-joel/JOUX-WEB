@@ -20,3 +20,12 @@ export function urlHttps(v: unknown) {
   if (typeof v !== 'string' || v.length > 2000) return null
   try { const u = new URL(v.trim()); return u.protocol === 'https:' ? u.toString() : null } catch { return null }
 }
+
+export const idProyecto = idLead
+
+// Frases cortas que manda el agente (cambios, notas): como mucho 20 de ≤ 300 caracteres. null = no valen.
+export function frasesAgente(v: unknown): string[] | null {
+  if (v == null) return []
+  if (!Array.isArray(v) || v.length > 20 || v.some(c => typeof c !== 'string' || !c.trim() || c.length > 300)) return null
+  return (v as string[]).map(c => c.trim())
+}

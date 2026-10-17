@@ -3,6 +3,7 @@ import { supabaseServer as sb } from '@/lib/supabase-server'
 import { esFaseProyecto } from '@/lib/leads'
 import type { ProyectoSeguimiento } from '@/lib/seguimiento'
 import Seguimiento from './seguimiento'
+import { MARCAS_AGENTE, estadosAgente } from '@/lib/primera-version'
 
 export const dynamic = 'force-dynamic'
 // supabase-js usa fetch: sin esto, Next guarda sus respuestas en el Data Cache y la lista sale vieja.
@@ -31,6 +32,12 @@ export default async function ProyectosPage() {
     ? await sb.from('revisiones').select('proyecto_id, ronda, estado, comentarios, abierta_en, url').in('proyecto_id', ids).order('abierta_en')
     : { data: [] }
 
+  // Agente de primera versión y copia del material de Drive que usa.
+  const agentes = await estadosAgente(ids)
+  const { data: copias } = ids.length
+    ? await sb.from('drive_copias').select('proyecto_id, ruta, copiado_en, error').in('proyecto_id', ids)
+    : { data: [] }
+
   const lista: ProyectoSeguimiento[] = (proyectos || []).map(p => {
     const propios = (eventos || []).filter(e => e.proyecto_id === p.id)
     const historial = propios.filter(e => e.tipo !== 'material.completo')
@@ -47,6 +54,14 @@ export default async function ProyectosPage() {
       ref_entrega: p.ref_entrega, material_completo: materialCompleto, drive_url: p.drive_url, drive_error: p.drive_error,
       rondas: (rondas || []).filter(r => r.proyecto_id === p.id).map(({ proyecto_id, ...r }) => r),
       borradores: (borradores || []).filter(m => m.proyecto_id === p.id).map(m => ({ id: m.id, plantilla: m.plantilla || '', error: m.error })),
+      agente: agentes.get(p.id) || null, agente_disponible: MARCAS_AGENTE.includes(p.marca || ''),
+      material: (() => {
+        const c = (copias || []).filter(x => x.proyecto_id === p.id)
+        return c.length ? {
+          copiados: c.filter(x => x.copiado_en).length, pendientes: c.filter(x => !x.copiado_en && !x.error).length,
+          errores: c.filter(x => x.error).map(x => ({ ruta: x.ruta as string, error: x.error as string })),
+        } : null
+      })(),
     }
   })
 

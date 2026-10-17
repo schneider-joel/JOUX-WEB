@@ -1401,3 +1401,30 @@ UPDATE plantillas SET cuerpo = replace(cuerpo, 'WeTransfer link.{{/drive_url}}',
 
 Once everything is uploaded, just reply to this email with "All done" and I'll start — the timeline runs from then.{{/drive_url}}$t$)
 WHERE clave IN ('proyecto.bienvenida', 'material.recordatorio') AND idioma = 'en' AND marca IN ('arkevo', 'custom') AND cuerpo NOT LIKE '%All done%';
+
+-- ── Agente de primera versión (webs Arkevo), 2026-10-17 ──────────────────────────
+-- Al pasar una web de Arkevo a «En curso» se crea `web.encargo`; el agente (`arkevo/`, /primera-version)
+-- avisa con web.empezada / web.lista / web.error. Una primera versión por proyecto.
+CREATE UNIQUE INDEX IF NOT EXISTS eventos_web_lista_unica ON eventos (proyecto_id) WHERE tipo = 'web.lista';
+
+-- Copia del material de la carpeta de Drive al bucket privado `material` (necesita drive.readonly).
+CREATE TABLE IF NOT EXISTS drive_copias (
+  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  proyecto_id integer NOT NULL REFERENCES proyectos(id) ON DELETE CASCADE,
+  file_id text NOT NULL,
+  ruta text NOT NULL,                 -- 'Fotos/obra-1.jpg' dentro de la carpeta del proyecto
+  nombre text NOT NULL,
+  tipo text,
+  bytes bigint,
+  modificado timestamptz,             -- modifiedTime de Drive: si cambia, se vuelve a copiar
+  de_cliente boolean NOT NULL DEFAULT true,
+  storage_path text,                  -- material/<proyecto>/<file_id>-<nombre>
+  error text,
+  copiado_en timestamptz,
+  UNIQUE (proyecto_id, file_id)
+);
+ALTER TABLE drive_copias ENABLE ROW LEVEL SECURITY;
+
+INSERT INTO storage.buckets (id, name, public, file_size_limit)
+VALUES ('material', 'material', false, 52428800)
+ON CONFLICT (id) DO NOTHING;

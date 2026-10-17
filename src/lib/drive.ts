@@ -85,20 +85,24 @@ export async function crearCarpetaProyecto(id: number): Promise<ResultadoDrive> 
 const METADATOS = 'https://www.googleapis.com/auth/drive.metadata.readonly'
 const PROFUNDIDAD = 3
 
-type Archivo = { id: string; name: string; mimeType: string; ownedByMe?: boolean }
+type Archivo = { id: string; name: string; mimeType: string; ownedByMe?: boolean; size?: string; modifiedTime?: string; ruta: string }
 
+// Todo lo que hay dentro de la carpeta (hasta PROFUNDIDAD niveles), con su ruta: 'Fotos/obra-1.jpg'.
 async function contenido(raiz: string): Promise<Archivo[]> {
   const archivos: Archivo[] = []
-  let nivel = [raiz]
+  let nivel = [{ id: raiz, ruta: '' }]
   for (let d = 0; d < PROFUNDIDAD && nivel.length; d++) {
-    const siguiente: string[] = []
+    const siguiente: typeof nivel = []
     for (const padre of nivel) {
       let pagina: string | undefined
       do {
-        const q = new URLSearchParams({ q: `'${padre}' in parents and trashed = false`, fields: 'nextPageToken,files(id,name,mimeType,ownedByMe)', pageSize: '1000' })
+        const q = new URLSearchParams({ q: `'${padre.id}' in parents and trashed = false`, fields: 'nextPageToken,files(id,name,mimeType,ownedByMe,size,modifiedTime)', pageSize: '1000' })
         if (pagina) q.set('pageToken', pagina)
         const j = await drive(`/files?${q}`)
-        for (const f of (j.files || []) as Archivo[]) f.mimeType === CARPETA ? siguiente.push(f.id) : archivos.push(f)
+        for (const f of (j.files || []) as Archivo[]) {
+          const ruta = padre.ruta ? `${padre.ruta}/${f.name}` : f.name
+          f.mimeType === CARPETA ? siguiente.push({ id: f.id, ruta }) : archivos.push({ ...f, ruta })
+        }
         pagina = j.nextPageToken
       } while (pagina)
     }
@@ -132,4 +136,93 @@ export async function revisarSubidas() {
     avisos++
   }
   return { avisos }
+}
+
+// ── Copia del material para el agente de primera versión ────────────────────────
+// El agente nunca toca Google: el hub copia lo que hay en la carpeta al bucket privado `material`
+// (<proyecto>/<file_id>-<nombre>) y le da URLs firmadas. Ver el contenido necesita drive.readonly.
+const LECTURA = 'https://www.googleapis.com/auth/drive.readonly'
+export const BUCKET_MATERIAL = 'material'
+const MAX_BYTES_MATERIAL = 50 * 1024 * 1024
+// Lo que se copia en una pasada (el tick tiene poco tiempo); el resto, en la siguiente.
+const PRESUPUESTO = 40 * 1024 * 1024
+// Los documentos de Google no se pueden bajar tal cual: se exportan.
+const EXPORTAR: Record<string, { tipo: string; ext: string }> = {
+  'application/vnd.google-apps.document': { tipo: 'text/plain', ext: 'txt' },
+  'application/vnd.google-apps.spreadsheet': { tipo: 'text/csv', ext: 'csv' },
+  'application/vnd.google-apps.presentation': { tipo: 'application/pdf', ext: 'pdf' },
+  'application/vnd.google-apps.drawing': { tipo: 'image/png', ext: 'png' },
+}
+
+export const puedeLeerDrive = async () => (await permisosGoogle()).includes(LECTURA)
+
+const nombreSeguro = (n: string) => n.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 100) || 'archivo'
+
+async function bajar(f: { file_id: string; tipo: string | null }) {
+  const exp = EXPORTAR[f.tipo || '']
+  const ruta = exp ? `/files/${f.file_id}/export?mimeType=${encodeURIComponent(exp.tipo)}` : `/files/${f.file_id}?alt=media`
+  const r = await fetch(`${API}${ruta}`, { headers: { Authorization: `Bearer ${await accessToken()}` }, cache: 'no-store' })
+  if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(motivo(r.status, j?.error?.message || '')) }
+  return { datos: Buffer.from(await r.arrayBuffer()), tipo: exp?.tipo || r.headers.get('content-type') || 'application/octet-stream', ext: exp?.ext }
+}
+
+// Apunta en drive_copias lo que hay en la carpeta (nuevo o cambiado → por copiar; borrado en Drive → fuera)
+// y copia lo pendiente hasta `presupuesto` bytes. Sin drive.readonly no hace nada.
+export async function copiarMaterial(ids: number[], presupuesto = PRESUPUESTO) {
+  if (!ids.length) return { copiados: 0 }
+  if (!(await puedeLeerDrive())) return { omitido: 'sin drive.readonly' }
+  const { data: proyectos } = await sb.from('proyectos').select('id, drive_folder_id').in('id', ids).not('drive_folder_id', 'is', null)
+  let copiados = 0, gastado = 0
+  for (const p of proyectos || []) {
+    const archivos = await contenido(p.drive_folder_id!)
+    const { data: filas } = await sb.from('drive_copias').select('id, file_id, modificado, storage_path').eq('proyecto_id', p.id)
+    const previas = new Map((filas || []).map(f => [f.file_id as string, f]))
+    // Borrados en Drive: fuera la fila y la copia.
+    const vivos = new Set(archivos.map(f => f.id))
+    const borrados = (filas || []).filter(f => !vivos.has(f.file_id))
+    if (borrados.length) {
+      const rutas = borrados.map(f => f.storage_path).filter((r): r is string => !!r)
+      if (rutas.length) await sb.storage.from(BUCKET_MATERIAL).remove(rutas)
+      await sb.from('drive_copias').delete().in('id', borrados.map(f => f.id))
+    }
+    const cambiados = archivos.filter(f => {
+      const prev = previas.get(f.id)
+      return !prev || (f.modifiedTime && prev.modificado && new Date(prev.modificado).getTime() !== new Date(f.modifiedTime).getTime())
+    })
+    if (cambiados.length) {
+      const { error } = await sb.from('drive_copias').upsert(cambiados.map(f => ({
+        proyecto_id: p.id, file_id: f.id, ruta: f.ruta.slice(0, 500), nombre: f.name.slice(0, 300), tipo: f.mimeType,
+        bytes: f.size ? Number(f.size) : null, modificado: f.modifiedTime || null, de_cliente: !f.ownedByMe,
+        storage_path: null, error: null, copiado_en: null,
+      })), { onConflict: 'proyecto_id,file_id' })
+      if (error) throw new Error(error.message)
+    }
+    const { data: porCopiar } = await sb.from('drive_copias').select('id, file_id, nombre, tipo, bytes, storage_path')
+      .eq('proyecto_id', p.id).is('copiado_en', null).is('error', null).order('ruta')
+    for (const f of porCopiar || []) {
+      if ((f.bytes || 0) > MAX_BYTES_MATERIAL) {
+        await sb.from('drive_copias').update({ error: 'Más de 50 MB: pásalo a mano' }).eq('id', f.id)
+        continue
+      }
+      if (f.tipo?.startsWith('application/vnd.google-apps.') && !EXPORTAR[f.tipo]) {
+        await sb.from('drive_copias').update({ error: 'Tipo de Google que no se puede exportar' }).eq('id', f.id)
+        continue
+      }
+      // Siempre al menos uno por pasada, aunque sea grande; luego, hasta agotar el presupuesto.
+      if (copiados && gastado + (f.bytes || 0) > presupuesto) return { copiados, faltan: true }
+      try {
+        const { datos, tipo, ext } = await bajar(f)
+        if (datos.length > MAX_BYTES_MATERIAL) throw new Error('Más de 50 MB: pásalo a mano')
+        const ruta = `${p.id}/${f.file_id}-${nombreSeguro(ext ? `${f.nombre}.${ext}` : f.nombre)}`
+        if (f.storage_path && f.storage_path !== ruta) await sb.storage.from(BUCKET_MATERIAL).remove([f.storage_path])
+        const { error } = await sb.storage.from(BUCKET_MATERIAL).upload(ruta, datos, { contentType: tipo, upsert: true })
+        if (error) throw new Error(error.message)
+        await sb.from('drive_copias').update({ storage_path: ruta, tipo: ext ? tipo : f.tipo, bytes: datos.length, copiado_en: new Date().toISOString() }).eq('id', f.id)
+        copiados++; gastado += datos.length
+      } catch (e: any) {
+        await sb.from('drive_copias').update({ error: String(e?.message || 'No se pudo copiar').slice(0, 300) }).eq('id', f.id)
+      }
+    }
+  }
+  return { copiados }
 }

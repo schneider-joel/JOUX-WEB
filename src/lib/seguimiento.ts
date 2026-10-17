@@ -33,7 +33,16 @@ export type ProyectoSeguimiento = {
   material_completo: boolean    // el cliente respondió «ya está todo» estando en «Material» (se propone «En curso»)
   drive_url: string | null      // carpeta de Drive compartida con el cliente
   drive_error: string | null    // por qué falló el último intento de crearla o compartirla
+  agente: AgenteWeb | null      // encargo de la primera versión al agente (solo Arkevo)
+  agente_disponible: boolean    // la marca tiene agente (para ofrecer «Encargar al agente»)
+  material: { copiados: number; pendientes: number; errores: { ruta: string; error: string }[] } | null  // copia de Drive para el agente
 }
+
+// Agente de primera versión: encargada → montándose → lista (vista previa solo para Joel) o error.
+export type AgenteWeb =
+  | { estado: 'encargada' | 'montandose'; fecha: string; nota: string | null }
+  | { estado: 'lista'; fecha: string; url: string | null; notas: string[]; diseno: string | null }
+  | { estado: 'error'; fecha: string; motivo: string; nota: string | null }
 
 export const ESTADO_RONDA = { abierta: 'esperando comentarios', comentada: 'comentada', cerrada: 'cerrada' } as const
 

@@ -9,9 +9,13 @@ import { EMAIL_AL_ENTRAR, EMAIL_RECORDATORIO, NOMBRE_EMAIL } from '@/lib/emails'
 import EmailPanel from './email-panel'
 import RefEntrega from './ref-entrega'
 import DriveCarpeta from './drive-carpeta'
+import AgenteWeb from './agente-web'
 import { SUBCARPETAS } from '@/lib/drive-carpetas'
 
 const fecha = (iso: string) => new Date(iso).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', timeZone: 'Europe/Madrid' })
+// Pasar a «En curso» una web de una marca con agente que aún no tiene primera versión ni encargo en marcha.
+const encargaAgente = (p: ProyectoSeguimiento, fase: FaseProyecto) =>
+  fase === 'en_curso' && p.agente_disponible && (!p.agente || p.agente.estado === 'error')
 const dias = (n: number) => n === 0 ? 'hoy' : n === 1 ? 'hace 1 día' : `hace ${n} días`
 
 // Cada proyecto es una línea con sus siete etapas: lo hecho queda trazado, la etapa actual late
@@ -25,6 +29,7 @@ export default function Seguimiento({ proyectos, marcas }: { proyectos: Proyecto
   const [mover, setMover] = useState<{ id: number; fase: FaseProyecto } | null>(null)
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState('')
+  const [nota, setNota] = useState('')  // para el agente, al pasar a «En curso»
   const [email, setEmail] = useState<{ id: number; clave: string; mensaje?: number } | null>(null)
 
   const nombreMarca = new Map(marcas.map(m => [m.key, m.nombre]))
@@ -41,13 +46,13 @@ export default function Seguimiento({ proyectos, marcas }: { proyectos: Proyecto
   const confirmar = async () => {
     if (!mover) return
     setGuardando(true); setError('')
-    const r = await fetch(`/api/proyectos/${mover.id}/fase`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fase: mover.fase }) }).catch(() => null)
+    const r = await fetch(`/api/proyectos/${mover.id}/fase`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fase: mover.fase, ...(mover.fase === 'en_curso' && nota.trim() ? { nota: nota.trim() } : {}) }) }).catch(() => null)
     setGuardando(false)
     if (!r?.ok) { setError('No se pudo guardar'); return }
     // Si la nueva etapa tiene email para el cliente, se propone (no se envía solo).
     const clave = EMAIL_AL_ENTRAR[mover.fase]
     setEmail(clave ? { id: mover.id, clave } : null)
-    setMover(null); router.refresh()
+    setMover(null); setNota(''); router.refresh()
   }
 
   return (
@@ -121,6 +126,7 @@ export default function Seguimiento({ proyectos, marcas }: { proyectos: Proyecto
                   {p.material_completo && !pend && (
                     <button type="button" className="copy caps trk__recordar ok" onClick={() => { setError(''); setMover({ id: p.id, fase: 'en_curso' }) }}>Material completo · pasar a En curso →</button>
                   )}
+                  {!pend && <AgenteWeb p={p} />}
                   {p.drive_error && !p.drive_url && abierto !== p.id && (
                     <button type="button" className="copy caps trk__recordar aviso" title={p.drive_error} onClick={() => setAbierto(p.id)}>Drive no se pudo crear · reintentar →</button>
                   )}
@@ -131,9 +137,15 @@ export default function Seguimiento({ proyectos, marcas }: { proyectos: Proyecto
 
                 {pend && (
                   <div className="trk__mover">
-                    <span>Mover a <b>{ETIQUETA_FASE[pend.fase]}</b>{p.fase ? <> desde {ETIQUETA_FASE[p.fase]}</> : null}</span>
+                    <span>Mover a <b>{ETIQUETA_FASE[pend.fase]}</b>{p.fase ? <> desde {ETIQUETA_FASE[p.fase]}</> : null}{encargaAgente(p, pend.fase) && <> · el agente monta la primera versión</>}</span>
+                    {encargaAgente(p, pend.fase) && (
+                      <div className="field trk__nota">
+                        <label className="caps" htmlFor={`nota-${p.id}`}>Nota para el agente (opcional)</label>
+                        <input id={`nota-${p.id}`} value={nota} onChange={e => setNota(e.target.value)} maxLength={1000} placeholder="p. ej. sin página de equipo" />
+                      </div>
+                    )}
                     {error && <span className="nota error">{error}</span>}
-                    <button type="button" className="copy caps" onClick={() => setMover(null)}>Cancelar</button>
+                    <button type="button" className="copy caps" onClick={() => { setMover(null); setNota('') }}>Cancelar</button>
                     <button type="button" className="pill pill--sm" disabled={guardando} onClick={confirmar}>{guardando ? 'Guardando…' : 'Mover'}</button>
                   </div>
                 )}
@@ -162,6 +174,7 @@ export default function Seguimiento({ proyectos, marcas }: { proyectos: Proyecto
                         </li>
                       ))}</ol>
                     )}
+                    <AgenteWeb p={p} detalle />
                     <RefEntrega proyectoId={p.id} valor={p.ref_entrega} />
                     <span className="trk__acc">
                       {p.fase && [EMAIL_AL_ENTRAR[p.fase], EMAIL_RECORDATORIO[p.fase]].filter((c): c is string => !!c).map(c => (
