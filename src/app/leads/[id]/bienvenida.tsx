@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import type { VistaBienvenida } from '@/lib/bienvenida'
+import type { ClaveInicio, VistaBienvenida } from '@/lib/bienvenida'
 
 const eur = (n: number) => '€' + new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: 'always' } as unknown as Intl.NumberFormatOptions).format(n)
 
 // Bienvenida al aceptar: vista previa del email (con la carpeta de Drive) y de la factura del pago 1,
 // y «Emitir y enviar». Nada sale ni se factura hasta pulsar el botón (GET/POST /api/proyectos/[id]/bienvenida).
-export default function Bienvenida({ proyectoId }: { proyectoId: number }) {
+export default function Bienvenida({ proyectoId, clave = 'proyecto.bienvenida' }: { proyectoId: number; clave?: ClaveInicio }) {
+  const esFactura = clave === 'factura.pago'
   const router = useRouter()
   const [abierto, setAbierto] = useState(false)
   const [v, setV] = useState<VistaBienvenida | null>(null)
@@ -19,15 +20,15 @@ export default function Bienvenida({ proyectoId }: { proyectoId: number }) {
   useEffect(() => {
     if (!abierto) return
     setV(null); setError('')
-    fetch(`/api/proyectos/${proyectoId}/bienvenida`).then(async r => {
+    fetch(`/api/proyectos/${proyectoId}/bienvenida?clave=${clave}`).then(async r => {
       const j = await r.json().catch(() => ({}))
       if (!r.ok) setError(j.error || 'No se pudo preparar'); else setV(j)
     }).catch(() => setError('No se pudo preparar'))
-  }, [abierto, proyectoId])
+  }, [abierto, proyectoId, clave])
 
   const enviar = async () => {
     setEnviando(true); setError('')
-    const r = await fetch(`/api/proyectos/${proyectoId}/bienvenida`, { method: 'POST' }).catch(() => null)
+    const r = await fetch(`/api/proyectos/${proyectoId}/bienvenida`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clave }) }).catch(() => null)
     const j = await r?.json().catch(() => ({}))
     setEnviando(false)
     if (!r?.ok) { setError(j?.error || 'No se pudo enviar'); router.refresh(); return }
@@ -35,13 +36,13 @@ export default function Bienvenida({ proyectoId }: { proyectoId: number }) {
     router.refresh()
   }
 
-  if (hecho) return <p className="nota ok">✉ Bienvenida {hecho}</p>
-  if (!abierto) return <button type="button" className="pill pill--sm" style={{ alignSelf: 'flex-start' }} onClick={() => setAbierto(true)}>Bienvenida{' '}y factura →</button>
+  if (hecho) return <p className="nota ok">✉ {esFactura ? 'Factura' : 'Bienvenida'} {hecho}</p>
+  if (!abierto) return <button type="button" className="pill pill--sm" style={{ alignSelf: 'flex-start' }} onClick={() => setAbierto(true)}>{esFactura ? 'Factura del pago 1 →' : 'Bienvenida →'}</button>
 
   const f = v?.factura
   return (
     <div className="block" style={{ gap: 10 }}>
-      <p className="label caps"><span>Bienvenida{f ? ' · factura del pago 1' : ''}</span><i className="rule" /></p>
+      <p className="label caps"><span>{esFactura ? 'Factura del pago 1' : `Bienvenida${f ? ' · factura del pago 1' : v?.datos_url ? ' · pide los datos fiscales' : ''}`}</span><i className="rule" /></p>
       {!v && !error && <p className="nota">Preparando…</p>}
       {v && (
         <>
@@ -66,7 +67,8 @@ export default function Bienvenida({ proyectoId }: { proyectoId: number }) {
             {f && <div><dt>Adjunto</dt><dd>Factura en PDF</dd></div>}
           </dl>
           <pre className="nota" style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', margin: 0 }}>{v.cuerpo}</pre>
-          {!v.drive && <p className="nota aviso">Sin carpeta de Drive: el email pide el material por respuesta o WeTransfer.</p>}
+          {v.datos_url && <p className="nota">El cliente rellenará sus datos fiscales en el formulario; la factura irá en un segundo email cuando los mande.</p>}
+          {!v.drive && !esFactura && <p className="nota aviso">Sin carpeta de Drive: el email pide el material por respuesta o WeTransfer.</p>}
           {v.bloqueo && <p className="nota error">{v.bloqueo}</p>}
         </>
       )}

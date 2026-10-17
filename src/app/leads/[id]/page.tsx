@@ -40,6 +40,7 @@ function textoEvento(e: Evento) {
   if (e.tipo === 'prueba.error') return `El agente no pudo montar la prueba: ${valor(e.datos.motivo)}`
   if (e.tipo === 'drive.creada') return `Carpeta de Drive compartida con ${valor(e.datos.compartida_con)}`
   if (e.tipo === 'material.subido') return `Ha subido ${valor(e.datos.n)} archivo${Number(e.datos.n) === 1 ? '' : 's'} a Drive`
+  if (e.tipo === 'datos.fiscales') return `${e.datos.corrigiendo ? 'Ha corregido' : 'Ha enviado'} sus datos fiscales: ${valor(e.datos.cliente)} (${valor(e.datos.pais)})`
   if (e.tipo === 'factura.emitida') return `Factura ${valor(e.datos.numero)} emitida (pago ${valor(e.datos.pago)})${e.datos.prueba ? ' · prueba, sin validez fiscal' : ''}`
   if (e.tipo === 'proyecto.fase') return `Fase del proyecto: ${esFaseProyecto(e.datos.de) ? ETIQUETA_FASE[e.datos.de] : '—'} → ${esFaseProyecto(e.datos.a) ? ETIQUETA_FASE[e.datos.a] : valor(e.datos.a)}`
   return e.tipo
@@ -73,6 +74,8 @@ export default async function LeadPage({ params }: { params: { id: string } }) {
   const campos = Object.entries(lead.campos || {})
   const msgs = (mensajes || []) as Mensaje[]
   const bienvenidaEnviada = msgs.some(m => m.plantilla === 'proyecto.bienvenida' && m.estado === 'enviado')
+  const bienvenidaConFactura = (eventos || []).some(e => e.tipo === 'mensaje.enviado' && e.datos?.plantilla === 'proyecto.bienvenida' && e.datos?.factura)
+  const facturaPendiente = !!proyecto && proyecto.precio_cerrado != null && bienvenidaEnviada && !bienvenidaConFactura && !msgs.some(m => m.plantilla === 'factura.pago' && m.estado === 'enviado')
   // Adjuntos de las respuestas (bucket privado `leads`): enlaces firmados de 1 h, pedidos de una vez.
   const adjuntosMsg = msgs.flatMap(m => (m.adjuntos || []).map(a => ({ ...a, mensaje: m.id })))
   const firmadas = await urlsFirmadas(adjuntosMsg.map(a => a.ruta))
@@ -115,6 +118,8 @@ export default async function LeadPage({ params }: { params: { id: string } }) {
             {proyecto.prueba && <p className="nota aviso caps">Proyecto de prueba · sus facturas no tienen validez fiscal</p>}
             {/* Webs: bienvenida + carpeta de Drive + factura del pago 1 en un solo email, con vista previa */}
             {marca?.modo === 'cerrado' && !bienvenidaEnviada && <Bienvenida proyectoId={proyecto.id} />}
+            {/* Si la bienvenida pidió los datos fiscales, la factura del pago 1 va en un segundo email */}
+            {marca?.modo === 'cerrado' && facturaPendiente && <Bienvenida proyectoId={proyecto.id} clave="factura.pago" />}
           </section>
         ) : marca && (
           <AccionesLead lead={lead} marca={marca} clientes={(clientes || []) as ClienteFiscal[]} />

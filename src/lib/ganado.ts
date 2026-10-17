@@ -9,6 +9,7 @@ export type ClienteFiscal = { cliente: string; identificador: string | null; dir
 
 export type FormGanado = {
   existente: boolean           // true = cliente ya guardado en clientes_fiscales (no se escribe)
+  datos_cliente: boolean       // cliente nuevo que rellena sus datos fiscales en /datos/<token> (no se escribe ahora)
   cliente: string              // nombre fiscal
   identificador: string
   direccion: string
@@ -23,7 +24,7 @@ export type FormGanado = {
 type LeadGanado = Pick<Lead, 'id' | 'nombre' | 'email' | 'empresa' | 'pais' | 'idioma' | 'interes' | 'prueba'>
 type MarcaGanado = Pick<Marca, 'key' | 'nombre' | 'modo'>
 
-const UE_ISO = new Set(['AT', 'BE', 'BG', 'CY', 'CZ', 'DE', 'DK', 'EE', 'FI', 'FR', 'GR', 'HR', 'HU', 'IE', 'IT', 'LT', 'LU', 'LV', 'MT', 'NL', 'PL', 'PT', 'RO', 'SE', 'SI', 'SK'])
+export const UE_ISO = new Set(['AT', 'BE', 'BG', 'CY', 'CZ', 'DE', 'DK', 'EE', 'FI', 'FR', 'GR', 'HR', 'HU', 'IE', 'IT', 'LT', 'LU', 'LV', 'MT', 'NL', 'PL', 'PT', 'RO', 'SE', 'SI', 'SK'])
 // País fiscal sugerido: primero por NIF/dirección (src/lib/clientes.ts); si no hay pistas, el país del formulario.
 export function sugerirPais(identificador: string, direccion: string, paisLead?: string | null): PaisFiscal {
   const p = detectarPais(identificador, direccion)
@@ -43,7 +44,7 @@ export const nombreProyecto = (cliente: string, marca: MarcaGanado) =>
 export function formInicial(lead: LeadGanado, marca: MarcaGanado, existente?: ClienteFiscal): FormGanado {
   const cliente = existente?.cliente || lead.empresa?.trim() || lead.nombre?.trim() || lead.email
   return {
-    existente: !!existente, cliente,
+    existente: !!existente, datos_cliente: !existente, cliente,
     identificador: existente?.identificador || '', direccion: existente?.direccion || '',
     pais: (existente?.pais as PaisFiscal) || sugerirPais('', '', lead.pais),
     nombre: nombreProyecto(cliente, marca),
@@ -54,9 +55,11 @@ export function formInicial(lead: LeadGanado, marca: MarcaGanado, existente?: Cl
 // Qué falta para poder crear; null = listo.
 export function faltaGanado(f: FormGanado, marca: MarcaGanado): string | null {
   if (!f.cliente.trim()) return 'Falta el nombre fiscal'
-  if (!f.existente && !f.identificador.trim()) return 'Falta el NIF/CIF'
-  if (!f.existente && !f.direccion.trim()) return 'Falta la dirección'
-  if (!['ES', 'UE', 'EXT'].includes(f.pais)) return 'Falta el país'
+  // Si los rellena el cliente, el NIF, la dirección y el país llegan luego por el formulario.
+  const aMano = !f.existente && !f.datos_cliente
+  if (aMano && !f.identificador.trim()) return 'Falta el NIF/CIF'
+  if (aMano && !f.direccion.trim()) return 'Falta la dirección'
+  if (aMano && !['ES', 'UE', 'EXT'].includes(f.pais)) return 'Falta el país'
   if (!f.nombre.trim()) return 'Falta el nombre del proyecto'
   if (marca.modo === 'cerrado' && !(Number(f.precio) > 0)) return 'Falta el precio cerrado'
   return null
@@ -65,7 +68,7 @@ export function faltaGanado(f: FormGanado, marca: MarcaGanado): string | null {
 // Las filas exactas que se van a escribir. `proyectos` sin id: lo pone la base de datos.
 export function filasGanado(lead: LeadGanado, marca: MarcaGanado, f: FormGanado) {
   const cliente = f.cliente.trim()
-  const clienteFiscal = f.existente ? null : {
+  const clienteFiscal = f.existente || f.datos_cliente ? null : {
     cliente, identificador: f.identificador.trim() || null, direccion: f.direccion.trim() || null, pais: f.pais,
   }
   const web = marca.modo === 'cerrado'
@@ -83,7 +86,7 @@ export function filasGanado(lead: LeadGanado, marca: MarcaGanado, f: FormGanado)
   }
   const evento = {
     tipo: 'lead.ganado', fuente: 'joux-hub',
-    datos: { cliente, cliente_nuevo: !f.existente, ...(marca.modo === 'dia' && f.tarifa_dia ? { tarifa_dia: Number(f.tarifa_dia) } : {}) },
+    datos: { cliente, cliente_nuevo: !f.existente, ...(f.datos_cliente && !f.existente ? { datos_por_formulario: true } : {}), ...(marca.modo === 'dia' && f.tarifa_dia ? { tarifa_dia: Number(f.tarifa_dia) } : {}) },
   }
   return { clienteFiscal, proyecto, evento }
 }

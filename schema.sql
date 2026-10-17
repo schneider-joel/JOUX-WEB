@@ -1342,3 +1342,50 @@ UPDATE plantillas SET cuerpo = replace(cuerpo, 'The timeline starts',
 
 The timeline starts$t$)
 WHERE clave = 'proyecto.bienvenida' AND idioma = 'en' AND marca IN ('arkevo', 'custom') AND cuerpo NOT LIKE '%{{#factura_numero}}%';
+
+-- MIGRACIÓN: datos fiscales por formulario (2026-10-17). Aditiva.
+-- «Marcar ganado» con «los rellena el cliente» guarda un token en el proyecto; la bienvenida enlaza a
+-- /datos/<token>; al enviarlo se crea clientes_fiscales y la factura del pago 1 sale en un segundo email.
+ALTER TABLE proyectos ADD COLUMN IF NOT EXISTS token_fiscal text UNIQUE;
+
+-- Bienvenida: párrafo del formulario, solo cuando faltan los datos ({{datos_url}}); va antes del de la factura.
+UPDATE plantillas SET cuerpo = replace(cuerpo, '{{#factura_numero}}',
+  $t${{#datos_url}}Para preparar la factura del primer pago (50 %), rellena tus datos de facturación aquí (son dos minutos): {{datos_url}}{{/datos_url}}{{#factura_numero}}$t$)
+WHERE clave = 'proyecto.bienvenida' AND idioma = 'es' AND marca IN ('arkevo', 'custom') AND cuerpo NOT LIKE '%{{#datos_url}}%';
+UPDATE plantillas SET cuerpo = replace(cuerpo, '{{#factura_numero}}',
+  $t${{#datos_url}}To prepare the invoice for the first payment (50%), please fill in your billing details here (it takes two minutes): {{datos_url}}{{/datos_url}}{{#factura_numero}}$t$)
+WHERE clave = 'proyecto.bienvenida' AND idioma = 'en' AND marca IN ('arkevo', 'custom') AND cuerpo NOT LIKE '%{{#datos_url}}%';
+
+-- Segundo email: la factura del pago 1 (responde en el hilo de la bienvenida, así que el asunto es «Re: …»).
+INSERT INTO plantillas (clave, marca, idioma, remitente, asunto, cuerpo, canal, auto) VALUES
+  ('factura.pago', 'arkevo', 'es', 'Arkevo <hola@arkevostudio.com>', 'Factura del primer pago · {{web}}', $t$Hola, {{nombre}}:
+
+Gracias por los datos. Te adjunto la factura del primer pago (50 %), {{factura_numero}}, por {{factura_total}}. Los datos para la transferencia están en la propia factura.{{#factura_url}} Si no ves el adjunto, la tienes aquí: {{factura_url}}{{/factura_url}}
+
+Cualquier duda, responde a este correo.
+
+Joel
+Arkevo$t$, 'gmail', false),
+  ('factura.pago', 'arkevo', 'en', 'Arkevo <hello@arkevostudio.com>', 'Invoice for the first payment · {{web}}', $t$Hi {{nombre}},
+
+Thanks for the details. I've attached the invoice for the first payment (50%), {{factura_numero}}, for {{factura_total}}. The bank details for the transfer are on the invoice.{{#factura_url}} If you can't see the attachment, it's here: {{factura_url}}{{/factura_url}}
+
+Any questions, just reply to this email.
+
+Joel
+Arkevo$t$, 'gmail', false),
+  ('factura.pago', 'custom', 'es', 'Joel Schneider <joel@joelschneider.io>', 'Factura del primer pago · {{web}}', $t$Hola, {{nombre}}:
+
+Gracias por los datos. Te adjunto la factura del primer pago (50 %), {{factura_numero}}, por {{factura_total}}. Los datos para la transferencia están en la propia factura.{{#factura_url}} Si no ves el adjunto, la tienes aquí: {{factura_url}}{{/factura_url}}
+
+Cualquier duda, responde a este correo.
+
+Joel$t$, 'gmail', false),
+  ('factura.pago', 'custom', 'en', 'Joel Schneider <joel@joelschneider.io>', 'Invoice for the first payment · {{web}}', $t$Hi {{nombre}},
+
+Thanks for the details. I've attached the invoice for the first payment (50%), {{factura_numero}}, for {{factura_total}}. The bank details for the transfer are on the invoice.{{#factura_url}} If you can't see the attachment, it's here: {{factura_url}}{{/factura_url}}
+
+Any questions, just reply to this email.
+
+Joel Schneider$t$, 'gmail', false)
+ON CONFLICT (clave, marca, idioma) DO NOTHING;

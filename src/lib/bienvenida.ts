@@ -1,5 +1,7 @@
-// Bienvenida al aceptar (solo servidor): un solo email por Gmail con el alias de la marca que lleva la
-// carpeta de Drive ({{drive_url}}) y, en las webs de precio cerrado, la factura del pago 1 en PDF.
+// Emails al aceptar una web (solo servidor), por Gmail con el alias de la marca:
+// - `proyecto.bienvenida`: carpeta de Drive ({{drive_url}}) y, si el cliente ya tiene ficha fiscal, la
+//   factura del pago 1 en PDF; si no la tiene, el enlace al formulario de datos fiscales ({{datos_url}}).
+// - `factura.pago`: cuando el cliente ha mandado sus datos, la factura del pago 1, en el mismo hilo.
 // La factura sale de crear_factura_pago() (número correlativo, IVA/retención por país, bloqueos de
 // datos fiscales y ROI). Un proyecto de prueba factura con fiscal = false y número PRUEBA-… (ver schema.sql).
 // Nunca se llama sola: solo desde «Emitir y enviar», después de la vista previa.
@@ -13,9 +15,10 @@ import { desglose } from '@/lib/importes'
 import { pdfFactura } from '@/lib/pdf'
 import { nombreArchivoFactura } from '@/app/invoice/[id]/nombre-archivo'
 
-const CLAVE = 'proyecto.bienvenida'
+export const CLAVES_INICIO = ['proyecto.bienvenida', 'factura.pago'] as const
+export type ClaveInicio = typeof CLAVES_INICIO[number]
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-// El enlace de respaldo va siempre a producción: desde local, un localhost no le sirve al cliente.
+// Los enlaces van siempre a producción: desde local, un localhost no le sirve al cliente.
 const PUBLICA = 'https://joux-web.vercel.app'
 export const PREFIJO_PRUEBA = 'PRUEBA · sin validez fiscal · '
 
@@ -29,10 +32,12 @@ export type FacturaBienvenida = {
   prueba: boolean
 }
 export type VistaBienvenida = {
+  clave: ClaveInicio
   remitente: string; para: string; asunto: string; cuerpo: string
-  factura: FacturaBienvenida | null   // null = sin factura al aceptar (web sin precio cerrado)
+  factura: FacturaBienvenida | null   // null = este email no lleva factura
+  datos_url: string | null            // formulario de datos fiscales, si la bienvenida lo pide
   bloqueo: string | null              // por qué no se puede emitir (datos fiscales, ROI, email…)
-  enviada: string | null              // fecha si la bienvenida ya salió por aquí
+  enviada: string | null              // fecha si este email ya salió por aquí
   drive: boolean
 }
 
@@ -44,61 +49,81 @@ async function numeroPrevisto() {
   return `${prefijo}${max + 1}`
 }
 
-export async function vistaBienvenida(id: number): Promise<VistaBienvenida | { error: string; status: number }> {
-  const { data: p } = await sb.from('proyectos').select('id, cliente, marca, idioma, precio_cerrado, prueba, contacto_email, drive_url').eq('id', id).maybeSingle()
+export async function vistaBienvenida(id: number, clave: ClaveInicio = 'proyecto.bienvenida'): Promise<VistaBienvenida | { error: string; status: number }> {
+  const { data: p } = await sb.from('proyectos').select('id, cliente, marca, idioma, precio_cerrado, prueba, contacto_email, drive_url, token_fiscal, lead_id').eq('id', id).maybeSingle()
   if (!p) return { error: 'No existe el proyecto', status: 404 }
   const idioma = p.idioma === 'en' ? 'en' : 'es'
   const remitente = remitenteLead(p.marca || '', idioma)
   if (!remitente) return { error: 'Esta marca no tiene remitente de Gmail', status: 400 }
+  const esFactura = clave === 'factura.pago'
 
-  let factura: FacturaBienvenida | null = null, bloqueo: string | null = null
+  let factura: FacturaBienvenida | null = null, bloqueo: string | null = null, datos_url: string | null = null
   if (p.precio_cerrado != null) {
-    const { data: f } = await sb.from('facturas').select('id, numero, importe, tipo_factura').eq('proyecto_id', p.id).eq('pago', 1).maybeSingle()
-    let base: number, espana: boolean, numero: string
-    if (f) {
-      base = Number(f.importe); espana = f.tipo_factura === 'dentro_ue'; numero = f.numero || ''
-    } else {
-      // Los mismos bloqueos que crear_factura_pago(), para verlos antes de pulsar.
-      const { data: cf } = await sb.from('clientes_fiscales').select('pais').eq('cliente', p.cliente).maybeSingle()
-      if (!cf?.pais) bloqueo = `Faltan los datos fiscales de ${p.cliente}`
-      else if (cf.pais === 'UE') bloqueo = 'Cliente de la UE: sin alta en el ROI, consúltalo con el gestor antes de facturar'
-      base = Math.round(Number(p.precio_cerrado) / 2 * 100) / 100
-      espana = cf?.pais === 'ES'
-      numero = p.prueba ? `PRUEBA-${p.id}-1` : await numeroPrevisto()
+    const [{ data: f }, { data: cf }] = await Promise.all([
+      sb.from('facturas').select('id, numero, importe, tipo_factura').eq('proyecto_id', p.id).eq('pago', 1).maybeSingle(),
+      sb.from('clientes_fiscales').select('pais').eq('cliente', p.cliente).maybeSingle(),
+    ])
+    // Sin ficha fiscal y con formulario: la bienvenida pide los datos y la factura va después.
+    const porFormulario = !f && !cf?.pais && !!p.token_fiscal
+    if (!esFactura && porFormulario) datos_url = `${PUBLICA}/datos/${p.token_fiscal}`
+    else if (esFactura && porFormulario) bloqueo = `${p.cliente} aún no ha enviado sus datos fiscales`
+    if (!(!esFactura && porFormulario)) {
+      let base: number, espana: boolean, numero: string
+      if (f) {
+        base = Number(f.importe); espana = f.tipo_factura === 'dentro_ue'; numero = f.numero || ''
+      } else {
+        // Los mismos bloqueos que crear_factura_pago(), para verlos antes de pulsar.
+        if (!bloqueo && !cf?.pais) bloqueo = `Faltan los datos fiscales de ${p.cliente}`
+        else if (!bloqueo && cf?.pais === 'UE') bloqueo = 'Cliente de la UE: sin alta en el ROI, consúltalo con el gestor antes de facturar'
+        base = Math.round(Number(p.precio_cerrado) / 2 * 100) / 100
+        espana = cf?.pais === 'ES'
+        numero = p.prueba ? `PRUEBA-${p.id}-1` : await numeroPrevisto()
+      }
+      const d = desglose(base, espana)
+      factura = { id: f?.id ?? null, numero, base, iva: d?.iva ?? 0, ret: d?.ret ?? 0, total: d?.total ?? base, espana, prueba: !!p.prueba }
     }
-    const d = desglose(base, espana)
-    factura = { id: f?.id ?? null, numero, base, iva: d?.iva ?? 0, ret: d?.ret ?? 0, total: d?.total ?? base, espana, prueba: !!p.prueba }
-  }
+  } else if (esFactura) return { error: 'Este proyecto no es de precio cerrado', status: 400 }
 
-  const t = await plantillaProyecto(id, CLAVE, { vars: factura ? { factura_numero: factura.numero, factura_total: dinero(factura.total, idioma) } : {} })
+  const t = await plantillaProyecto(id, clave, {
+    vars: { datos_url, ...(factura ? { factura_numero: factura.numero, factura_total: dinero(factura.total, idioma) } : {}) },
+  })
   if ('error' in t) return { error: String(t.error), status: Number(t.status) || 500 }
   const para = p.contacto_email?.trim() || ''
   if (!bloqueo && !EMAIL.test(para)) bloqueo = 'El proyecto no tiene un email de contacto válido'
   const faltan = pendientes(t.asunto + t.cuerpo)
   if (!bloqueo && faltan.length) bloqueo = `La plantilla tiene sin rellenar ${faltan.join(', ')}`
 
-  const { data: ya } = await sb.from('mensajes').select('enviado_en').eq('proyecto_id', p.id).eq('plantilla', CLAVE).eq('estado', 'enviado').eq('canal', 'gmail').limit(1).maybeSingle()
+  // La factura va en el hilo de la bienvenida: «Re: <asunto de la bienvenida>».
+  let asunto = t.asunto
+  if (esFactura) {
+    const { data: b } = await sb.from('mensajes').select('asunto').eq('proyecto_id', p.id).eq('plantilla', 'proyecto.bienvenida').eq('estado', 'enviado').eq('canal', 'gmail').limit(1).maybeSingle()
+    if (b?.asunto) asunto = `Re: ${b.asunto.replace(/^re:\s*/i, '')}`
+  }
+  if (p.prueba && !asunto.includes(PREFIJO_PRUEBA)) asunto = PREFIJO_PRUEBA + asunto
+
+  const { data: ya } = await sb.from('mensajes').select('enviado_en').eq('proyecto_id', p.id).eq('plantilla', clave).eq('estado', 'enviado').eq('canal', 'gmail').limit(1).maybeSingle()
   return {
-    remitente, para, asunto: (p.prueba ? PREFIJO_PRUEBA : '') + t.asunto, cuerpo: t.cuerpo,
-    factura, bloqueo, enviada: ya ? ya.enviado_en || 'enviando' : null, drive: !!p.drive_url,
+    clave, remitente, para, asunto, cuerpo: t.cuerpo, factura, datos_url,
+    bloqueo, enviada: ya ? ya.enviado_en || 'enviando' : null, drive: !!p.drive_url,
   }
 }
 
-// «Emitir y enviar»: crea la factura del pago 1 (si toca y no existe), la imprime en PDF y manda la bienvenida.
+// «Emitir y enviar»: crea la factura del pago 1 (si toca y no existe), la imprime en PDF y manda el email.
 // Si el email falla, la factura queda creada y el reintento la reutiliza (nunca crea otra).
-export async function enviarBienvenida(id: number, origen: string): Promise<{ ok: true; factura: string | null; pdf: boolean } | { error: string; status: number }> {
-  const v = await vistaBienvenida(id)
+export async function enviarBienvenida(id: number, origen: string, clave: ClaveInicio = 'proyecto.bienvenida'): Promise<{ ok: true; factura: string | null; pdf: boolean } | { error: string; status: number }> {
+  const v = await vistaBienvenida(id, clave)
   if ('error' in v) return v
-  if (v.enviada) return { error: 'La bienvenida ya se envió', status: 409 }
+  if (v.enviada) return { error: 'Este email ya se envió', status: 409 }
   if (v.bloqueo) return { error: v.bloqueo, status: 400 }
   const { data: p } = await sb.from('proyectos').select('id, cliente, idioma, lead_id, fase, prueba').eq('id', id).single()
   if (!p) return { error: 'No existe el proyecto', status: 404 }
   const idioma = p.idioma === 'en' ? 'en' : 'es'
+  const { data: lead } = p.lead_id ? await sb.from('leads').select('gmail_hilo').eq('id', p.lead_id).maybeSingle() : { data: null }
 
   // Se reserva el envío antes de nada (estado «enviado», sin id de Gmail): un segundo toque choca con
   // `enviada` y el tick no lo confunde con un envío hecho a mano desde Gmail.
   const { data: fila, error: errM } = await sb.from('mensajes').insert({
-    proyecto_id: id, lead_id: p.lead_id, direccion: 'saliente', estado: 'enviado', plantilla: CLAVE, generado_por: 'plantilla',
+    proyecto_id: id, lead_id: p.lead_id, direccion: 'saliente', estado: 'enviado', plantilla: clave, generado_por: 'plantilla',
     canal: 'gmail', remitente: v.remitente, para: v.para, asunto: v.asunto, cuerpo: v.cuerpo,
   }).select('id').single()
   if (errM || !fila) return { error: errM?.message || 'No se pudo preparar el envío', status: 500 }
@@ -124,27 +149,31 @@ export async function enviarBienvenida(id: number, origen: string): Promise<{ ok
   let pdf: Buffer | null = null
   if (factura) pdf = await pdfFactura(origen, factura.id).catch(e => { console.error('bienvenida pdf', e?.message); return null })
   const d = factura ? desglose(Number(factura.importe), factura.tipo_factura === 'dentro_ue') : null
-  const t = await plantillaProyecto(id, CLAVE, {
-    vars: factura ? {
-      factura_numero: factura.numero, factura_total: dinero(d?.total ?? Number(factura.importe), idioma),
-      factura_url: pdf ? null : `${PUBLICA}/invoice/${factura.id}`,
-    } : {},
+  const t = await plantillaProyecto(id, clave, {
+    vars: {
+      datos_url: v.datos_url,
+      ...(factura ? {
+        factura_numero: factura.numero, factura_total: dinero(d?.total ?? Number(factura.importe), idioma),
+        factura_url: pdf ? null : `${PUBLICA}/invoice/${factura.id}`,
+      } : {}),
+    },
   })
   if ('error' in t) return fallo(String(t.error), Number(t.status) || 500)
-  const asunto = (p.prueba ? PREFIJO_PRUEBA : '') + t.asunto
+  // La bienvenida abre hilo nuevo; la factura responde en el de la bienvenida.
+  const hilo = clave === 'factura.pago' ? lead?.gmail_hilo ?? null : null
 
   try {
     const r = await enviarGmail({
-      de: v.remitente, para: v.para, asunto, texto: t.cuerpo, html: aHtml(t.cuerpo),
+      de: v.remitente, para: v.para, asunto: v.asunto, texto: t.cuerpo, html: aHtml(t.cuerpo), hilo,
       adjuntos: pdf && factura ? [{ nombre: `${nombreArchivoFactura(factura.numero, p.cliente)}.pdf`, tipo: 'application/pdf', datos: pdf }] : [],
     })
     const ahora = new Date().toISOString()
-    await sb.from('mensajes').update({ id_proveedor: r.id, enviado_en: ahora, asunto, cuerpo: t.cuerpo, error: null }).eq('id', fila.id)
-    // Hilo nuevo (otro asunto): el lead pasa a seguir este, así el tick lee las respuestas a la bienvenida.
+    await sb.from('mensajes').update({ id_proveedor: r.id, enviado_en: ahora, cuerpo: t.cuerpo, error: null }).eq('id', fila.id)
+    // El lead sigue el hilo de estos emails, así el tick lee las respuestas del cliente.
     if (p.lead_id) await sb.from('leads').update({ gmail_hilo: r.hilo, ultimo_contacto: ahora, updated_at: ahora }).eq('id', p.lead_id)
-    await sb.from('eventos').insert({ proyecto_id: id, lead_id: p.lead_id, tipo: 'mensaje.enviado', fuente: 'joux-hub', datos: { mensaje_id: fila.id, plantilla: CLAVE, de: v.remitente, para: v.para, asunto, factura: factura?.numero ?? null, pdf: !!pdf } })
+    await sb.from('eventos').insert({ proyecto_id: id, lead_id: p.lead_id, tipo: 'mensaje.enviado', fuente: 'joux-hub', datos: { mensaje_id: fila.id, plantilla: clave, de: v.remitente, para: v.para, asunto: v.asunto, factura: factura?.numero ?? null, pdf: !!pdf, datos_fiscales: !!v.datos_url } })
     // La bienvenida pide el material: el proyecto pasa a esa etapa.
-    if (!p.fase || p.fase === 'confirmado') {
+    if (clave === 'proyecto.bienvenida' && (!p.fase || p.fase === 'confirmado')) {
       await sb.from('proyectos').update({ fase: 'material' }).eq('id', id)
       await sb.from('eventos').insert({ proyecto_id: id, lead_id: p.lead_id, tipo: 'proyecto.fase', fuente: 'joux-hub', datos: { de: p.fase, a: 'material' } })
     }

@@ -1,3 +1,4 @@
+import { randomBytes } from 'crypto'
 import { NextResponse } from 'next/server'
 import { supabaseServer as sb } from '@/lib/supabase-server'
 import { faltaGanado, filasGanado, type FormGanado } from '@/lib/ganado'
@@ -35,7 +36,9 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  const { data: nuevo, error: errP } = await sb.from('proyectos').insert(proyecto).select('id').single()
+  // Datos fiscales por formulario: el proyecto lleva el token de su enlace público (/datos/<token>).
+  const token_fiscal = form.datos_cliente && !form.existente ? randomBytes(18).toString('base64url') : null
+  const { data: nuevo, error: errP } = await sb.from('proyectos').insert({ ...proyecto, ...(token_fiscal ? { token_fiscal } : {}) }).select('id').single()
   if (errP || !nuevo) {
     // Sin proyecto no dejamos un cliente fiscal huérfano recién creado.
     if (clienteFiscal) await sb.from('clientes_fiscales').delete().eq('cliente', clienteFiscal.cliente)

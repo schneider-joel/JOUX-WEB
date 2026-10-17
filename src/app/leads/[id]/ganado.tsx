@@ -100,7 +100,9 @@ export default function AccionesLead({ lead, marca, clientes }: { lead: LeadProp
       <p className="label caps"><span>Se va a escribir esto</span><i className="rule" /></p>
       {filas.clienteFiscal
         ? <Fila titulo="INSERT clientes_fiscales" fila={filas.clienteFiscal} />
-        : <p className="nota">Cliente existente: {form.cliente} (no se escribe en clientes_fiscales).</p>}
+        : form.datos_cliente && !form.existente
+          ? <p className="nota">Datos fiscales: los rellena el cliente en un formulario (enlace en la bienvenida). Se guarda token_fiscal en el proyecto; clientes_fiscales se escribe cuando lo envíe.</p>
+          : <p className="nota">Cliente existente: {form.cliente} (no se escribe en clientes_fiscales).</p>}
       <Fila titulo="INSERT proyectos (id lo pone la base de datos)" fila={filas.proyecto} />
       <Fila titulo={`UPDATE leads WHERE id = ${lead.id}`} fila={{ estado: 'ganado', proyecto_id: '<id del proyecto nuevo>' }} />
       <Fila titulo="INSERT eventos" fila={{ lead_id: lead.id, proyecto_id: '<id del proyecto nuevo>', tipo: filas.evento.tipo, fuente: filas.evento.fuente, datos: JSON.stringify({ ...filas.evento.datos, de: lead.estado }) }} />
@@ -137,6 +139,17 @@ export default function AccionesLead({ lead, marca, clientes }: { lead: LeadProp
           </div>
         ) : (
           <>
+            <label className="nota" style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer' }}>
+              <input type="checkbox" checked={form.datos_cliente} onChange={e => set({ datos_cliente: e.target.checked })} />
+              Los datos fiscales los rellena el cliente (formulario en la bienvenida)
+            </label>
+            {form.datos_cliente ? (
+              <div className="field">
+                <label className="caps" htmlFor="lg-cliente">Cliente (provisional)</label>
+                <input id="lg-cliente" value={form.cliente} onChange={e => set({ cliente: e.target.value })} />
+                <p className="nota field__nota">Al enviar el formulario se cambia por su razón social.</p>
+              </div>
+            ) : (<>
             <div className="modal__par">
               <div className="field">
                 <label className="caps" htmlFor="lg-cliente">Nombre fiscal</label>
@@ -164,6 +177,7 @@ export default function AccionesLead({ lead, marca, clientes }: { lead: LeadProp
                 {form.pais === 'UE' ? ' UE: no se puede facturar hasta el alta en el ROI.' : ''}
               </p>
             </div>
+            </>)}
           </>
         )}
 
