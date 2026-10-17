@@ -1389,3 +1389,15 @@ Any questions, just reply to this email.
 
 Joel Schneider$t$, 'gmail', false)
 ON CONFLICT (clave, marca, idioma) DO NOTHING;
+
+-- PLANTILLAS: «Ya está todo» (2026-10-17, aprobado por Joel). Al final de la parte de Drive de la bienvenida y del
+-- recordatorio de material. Si el cliente responde así estando en «Material», el tick crea `material.completo`,
+-- da un push y /proyectos propone pasar a «En curso» (no se mueve solo).
+UPDATE plantillas SET cuerpo = replace(cuerpo, 'enlace de WeTransfer.{{/drive_url}}', $t$enlace de WeTransfer.
+
+Cuando lo tengas todo subido, respóndeme a este email con un «Ya está todo» y empiezo: el plazo cuenta desde ese momento.{{/drive_url}}$t$)
+WHERE clave IN ('proyecto.bienvenida', 'material.recordatorio') AND idioma = 'es' AND marca IN ('arkevo', 'custom') AND cuerpo NOT LIKE '%Ya está todo%';
+UPDATE plantillas SET cuerpo = replace(cuerpo, 'WeTransfer link.{{/drive_url}}', $t$WeTransfer link.
+
+Once everything is uploaded, just reply to this email with "All done" and I'll start — the timeline runs from then.{{/drive_url}}$t$)
+WHERE clave IN ('proyecto.bienvenida', 'material.recordatorio') AND idioma = 'en' AND marca IN ('arkevo', 'custom') AND cuerpo NOT LIKE '%All done%';

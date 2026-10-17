@@ -105,8 +105,14 @@ async function leerGmail() {
     ])
     lead.estado = estado
     const { data: marca } = await sb.from('marcas').select('nombre').eq('key', lead.marca).maybeSingle()
+    const completo = lead.proyecto_id ? await materialCompleto(lead.proyecto_id, lead.id, m.texto).catch(e => { console.error('tick material completo', e?.message); return null }) : null
+    if (completo) await notificar({
+      titulo: `${completo} ha subido todo el material`,
+      cuerpo: 'Revísalo y pasa la web a «En curso» en Proyectos.',
+      url: '/proyectos', etiqueta: `proyecto-${lead.proyecto_id}`,
+    }).catch(e => console.error('tick push', e?.message))
     // Con material, el push ya lo dio avisarMaterial (uno por respuesta basta).
-    if (!material) await notificar({
+    else if (!material) await notificar({
       titulo: `Respuesta · ${marca?.nombre || lead.marca} · ${lead.nombre || lead.email}`,
       cuerpo: m.texto.slice(0, 140),
       url: `/leads/${lead.id}`,
@@ -119,6 +125,22 @@ async function leerGmail() {
   // El borrador de IA para cada respuesta, después de contestar al Worker.
   if (borradores.length) waitUntil(Promise.all(borradores.map(id => generarBorrador(id, 'respuesta').then(r => { if (!r.ok) console.error('tick ia', id, r.error) }))))
   return { iniciado: false, recibidos, enviados_fuera: enviadosFuera }
+}
+
+// «Ya está todo» / «All done»: lo que piden la bienvenida y el recordatorio al terminar de subir el material.
+const TODO_SUBIDO = /\b(ya est[aá] todo|est[aá] todo subido|todo subido|lo he subido todo|ya lo tienes todo|all done|all uploaded|everything('s| is) (uploaded|up)|uploaded everything)\b/i
+
+// Respuesta de un cliente cuya web está en «Material» que avisa de que ya lo ha subido todo: evento
+// material.completo (una vez por etapa). /proyectos propone entonces pasar a «En curso»; no se mueve solo.
+async function materialCompleto(proyectoId: number, leadId: number, texto: string) {
+  if (!TODO_SUBIDO.test(texto)) return null
+  const { data: p } = await sb.from('proyectos').select('id, cliente, fase').eq('id', proyectoId).maybeSingle()
+  if (p?.fase !== 'material') return null
+  const { data: entrada } = await sb.from('eventos').select('created_at').eq('proyecto_id', p.id).eq('tipo', 'proyecto.fase').eq('datos->>a', 'material').order('created_at', { ascending: false }).limit(1).maybeSingle()
+  const { count } = await sb.from('eventos').select('id', { count: 'exact', head: true }).eq('proyecto_id', p.id).eq('tipo', 'material.completo').gte('created_at', entrada?.created_at || '1970-01-01')
+  if (count) return null
+  await sb.from('eventos').insert({ proyecto_id: p.id, lead_id: leadId, tipo: 'material.completo', fuente: 'gmail', datos: { texto: texto.slice(0, 300) } })
+  return p.cliente as string
 }
 
 // 2. Mensajes «aprobado» cuya hora ya llegó (o sin hora): los de leads por Gmail, los de proyectos por Resend.

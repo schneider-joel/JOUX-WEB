@@ -118,10 +118,13 @@ export default function Seguimiento({ proyectos, marcas }: { proyectos: Proyecto
                       ✉ {NOMBRE_EMAIL[b.plantilla] || b.plantilla} {b.error ? '· no salió, reintentar' : 'listo para enviar'} →
                     </button>
                   ))}
+                  {p.material_completo && !pend && (
+                    <button type="button" className="copy caps trk__recordar ok" onClick={() => { setError(''); setMover({ id: p.id, fase: 'en_curso' }) }}>Material completo · pasar a En curso →</button>
+                  )}
                   {p.drive_error && !p.drive_url && abierto !== p.id && (
                     <button type="button" className="copy caps trk__recordar aviso" title={p.drive_error} onClick={() => setAbierto(p.id)}>Drive no se pudo crear · reintentar →</button>
                   )}
-                  {parado && p.fase && EMAIL_RECORDATORIO[p.fase] && email?.id !== p.id && !p.borradores.some(b => b.plantilla === EMAIL_RECORDATORIO[p.fase!]) && (
+                  {parado && !p.material_completo && p.fase && EMAIL_RECORDATORIO[p.fase] && email?.id !== p.id && !p.borradores.some(b => b.plantilla === EMAIL_RECORDATORIO[p.fase!]) && (
                     <button type="button" className="copy caps trk__recordar" onClick={() => setEmail({ id: p.id, clave: EMAIL_RECORDATORIO[p.fase!]! })}>Enviar recordatorio →</button>
                   )}
                 </div>

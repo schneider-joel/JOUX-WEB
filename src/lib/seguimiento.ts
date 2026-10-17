@@ -30,6 +30,7 @@ export type ProyectoSeguimiento = {
   ref_entrega: string | null    // slug de arkevo-revision o carpeta de Pitchview (para sus avisos)
   rondas: { ronda: string; estado: 'abierta' | 'comentada' | 'cerrada'; comentarios: number; abierta_en: string; url: string }[]
   borradores: { id: number; plantilla: string; error: string | null }[]  // emails preparados por un aviso o el cron, sin enviar
+  material_completo: boolean    // el cliente respondió «ya está todo» estando en «Material» (se propone «En curso»)
   drive_url: string | null      // carpeta de Drive compartida con el cliente
   drive_error: string | null    // por qué falló el último intento de crearla o compartirla
 }

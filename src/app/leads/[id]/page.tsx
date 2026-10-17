@@ -41,6 +41,7 @@ function textoEvento(e: Evento) {
   if (e.tipo === 'drive.creada') return `Carpeta de Drive compartida con ${valor(e.datos.compartida_con)}`
   if (e.tipo === 'material.subido') return `Ha subido ${valor(e.datos.n)} archivo${Number(e.datos.n) === 1 ? '' : 's'} a Drive`
   if (e.tipo === 'datos.fiscales') return `${e.datos.corrigiendo ? 'Ha corregido' : 'Ha enviado'} sus datos fiscales: ${valor(e.datos.cliente)} (${valor(e.datos.pais)})`
+  if (e.tipo === 'material.completo') return 'Ha avisado de que ya está todo el material subido'
   if (e.tipo === 'factura.emitida') return `Factura ${valor(e.datos.numero)} emitida (pago ${valor(e.datos.pago)})${e.datos.prueba ? ' · prueba, sin validez fiscal' : ''}`
   if (e.tipo === 'proyecto.fase') return `Fase del proyecto: ${esFaseProyecto(e.datos.de) ? ETIQUETA_FASE[e.datos.de] : '—'} → ${esFaseProyecto(e.datos.a) ? ETIQUETA_FASE[e.datos.a] : valor(e.datos.a)}`
   return e.tipo
