@@ -9,7 +9,8 @@ import { notificar } from '@/lib/push'
 
 // Borradores de IA para los leads (automatizacion.md, «La IA»). La IA redacta y Joel aprueba; solo sale
 // solo si Joel activó esa categoría para la marca en /ajustes (fase 5) y no hay pausa ni marcas [[Joel:. Cada borrador queda en `mensajes` (estado «borrador», generado_por «ia»).
-const MODELO = 'claude-opus-5-5'
+// Sonnet 5.5 por decisión de Joel (2026-10-17): más rápido y barato para borradores de email.
+const MODELO = 'claude-sonnet-5-5'
 export const CATEGORIAS = ['precio', 'plazos', 'encargo', 'informacion', 'material', 'spam', 'otro'] as const
 export const MARCAS_CON_IA = ['arkevo', 'pitchlab', 'custom']
 
