@@ -335,11 +335,12 @@ export default function InvoiceEditor({
 
           {!dentroUe && <p className="sh__note">{t.notaFueraUe}</p>}
 
-          {!dentroUe && emisor.iban && factura.origen !== 'regularizacion' && (
+          {/* Datos de pago para todos (los emails de las webs remiten a la factura); el SWIFT solo fuera de España */}
+          {emisor.iban && factura.origen !== 'regularizacion' && (
             <div className="sh__pay">
               <p className="sh__k">{t.notaTransferencia}</p>
               <p className="sh__iban">{emisor.iban}</p>
-              {emisor.swift && <p>SWIFT/BIC: <b>{emisor.swift}</b></p>}
+              {!dentroUe && emisor.swift && <p>SWIFT/BIC: <b>{emisor.swift}</b></p>}
             </div>
           )}
         </article>
