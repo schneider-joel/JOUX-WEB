@@ -8,12 +8,17 @@ import { BUCKET_MATERIAL, copiarMaterial, puedeLeerDrive } from '@/lib/drive'
 import type { TipoEncargo } from '@/lib/seguimiento'
 
 // Pendiente = último `web.encargo` de ese tipo sin `web.lista` de su pasada, sin `web.error` posterior y sin
-// `web.empezada` reciente. Antes de responder copia lo que falte de Drive (un poco; el resto lo hace el tick).
+// `web.empezada` reciente (con `solo`, también montándose). Antes de responder copia lo que falte de Drive (un poco; el resto lo hace el tick).
 export async function encargosPendientes(tipo: TipoEncargo, solo: string | null) {
   const { data: encargos } = await sb.from('eventos').select('proyecto_id').eq('tipo', 'web.encargo').not('proyecto_id', 'is', null)
   const candidatos = Array.from(new Set((encargos || []).map(e => e.proyecto_id as number))).filter(id => !solo || String(id) === solo)
   const estados = await estadosAgente(candidatos)
-  const ids = candidatos.filter(id => { const a = estados.get(id) || null; return a?.tipo === tipo && pendienteParaAgente(a) })
+  // Con ?proyecto_id el agente pide una web concreta (p. ej. para prepararla después de web-empezada):
+  // también sale si ya está «Montando», aunque no hayan pasado las 3 h.
+  const ids = candidatos.filter(id => {
+    const a = estados.get(id) || null
+    return a?.tipo === tipo && (pendienteParaAgente(a) || (!!solo && a.estado === 'montandose'))
+  })
   if (!ids.length) return []
 
   const { data: proyectos } = await sb.from('proyectos').select('id, nombre, cliente, marca, web, plan, idioma, prueba, contacto_nombre, contacto_email, lead_id, drive_folder_id, drive_url, brief, ref_entrega')
