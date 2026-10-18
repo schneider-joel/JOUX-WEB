@@ -1033,3 +1033,11 @@ div.ajustes { display: flex; flex-direction: column; gap: 48px; }
 .ajustes__grupo .chip { flex: none; }
 .ajustes__grupo .chip:disabled { opacity: .5; cursor: default; }
 .ajustes__pausa { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; margin-top: 12px; }
+
+/* /proyectos: etapa que la marca no tiene (los treatments no tienen «Cambios»), y brief de dirección */
+.trk__nodo.is-salta { visibility: hidden; pointer-events: none; }
+.trk__brief { grid-column: 1 / -1; display: grid; gap: 10px; max-width: 640px; }
+.trk__brief ol { list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 14px; color: var(--muted); }
+.trk__brief ol .caps { margin-right: 6px; }
+.trk__brief a { color: inherit; text-underline-offset: 3px; word-break: break-all; }
+.trk__brief .modal__foot { margin-top: 0; }

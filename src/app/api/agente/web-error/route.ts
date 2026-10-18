@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
     if (r.estado?.estado !== 'encargada' && r.estado?.estado !== 'montandose') return json({ error: 'sin_encargo' }, 409)
     await sb.from('eventos').insert({ proyecto_id: r.p.id, lead_id: r.p.lead_id, tipo: 'web.error', fuente: 'agente-web', datos: { motivo } })
     await notificar({
-      titulo: `No se pudo montar la web de ${r.p.cliente}`,
+      titulo: `No se pudo montar ${r.estado?.tipo === 'treatment' ? 'el treatment' : 'la web'} de ${r.p.cliente}`,
       cuerpo: motivo.slice(0, 140),
       url: '/proyectos',
       etiqueta: `proyecto-${r.p.id}`,

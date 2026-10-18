@@ -8,10 +8,10 @@ import type { NextRequest } from 'next/server'
 // /api/intake/lead lo llaman los Workers de las webs y valida su propia clave por fuente.
 // /api/intake/evento lo llaman arkevo-revision y Pitchview, también con su clave por fuente.
 // /api/cron/tick lo llama el Worker joux-cron y valida CRON_TICK_SECRET.
-// /api/agente/* lo llaman los agentes /prueba-gratis y /primera-version y valida INTAKE_KEY_AGENTE.
+// /api/agente/* lo llaman los agentes (/prueba-gratis, /primera-version, custom y treatment) y valida INTAKE_KEY_AGENTE.
 // /datos/<token> es el formulario de datos fiscales de un cliente; su API valida el mismo token.
 // /api/resend/webhook lo llama Resend (rebotes, spam) y valida su firma con RESEND_WEBHOOK_SECRET.
-const PUBLIC_PATHS = [/^\/(ab|th|t|c|datos)\//, /^\/api\/datos\/[\w-]+$/, /^\/api\/bancos\/cron$/, /^\/api\/intake\/(lead|evento)$/, /^\/api\/resend\/webhook$/, /^\/api\/cron\/tick$/, /^\/api\/agente\/(pruebas-pendientes|prueba-lista|prueba-error|webs-pendientes|web-empezada|web-lista|web-error)$/, /^\/api\/compartidos$/, /^\/invoice\//, /^\/login$/, /^\/api\/login$/, /^\/icon/, /^\/apple-icon/, /^\/sw\.js$/, /^\/manifest\.webmanifest$/]
+const PUBLIC_PATHS = [/^\/(ab|th|t|c|datos)\//, /^\/api\/datos\/[\w-]+$/, /^\/api\/bancos\/cron$/, /^\/api\/intake\/(lead|evento)$/, /^\/api\/resend\/webhook$/, /^\/api\/cron\/tick$/, /^\/api\/agente\/(pruebas-pendientes|prueba-lista|prueba-error|webs-pendientes|encargos-pendientes|web-empezada|web-lista|web-error)$/, /^\/api\/compartidos$/, /^\/invoice\//, /^\/login$/, /^\/api\/login$/, /^\/icon/, /^\/apple-icon/, /^\/sw\.js$/, /^\/manifest\.webmanifest$/]
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl

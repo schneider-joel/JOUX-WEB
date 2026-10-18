@@ -2,7 +2,8 @@ import Link from 'next/link'
 import { supabaseServer as sb } from '@/lib/supabase-server'
 import { ETIQUETA_ESTADO, ETIQUETA_FASE, esEstadoLead, esFaseProyecto, fechaHora, hace, type Evento, type Lead, type Mensaje } from '@/lib/leads'
 import { remitenteLead } from '@/lib/remitentes'
-import type { ClienteFiscal } from '@/lib/ganado'
+import { precioPropuesto, type ClienteFiscal } from '@/lib/ganado'
+import { MARCAS_TREATMENT } from '@/lib/seguimiento'
 import CambiarEstado from './cambiar-estado'
 import AccionesLead from './ganado'
 import Bienvenida from './bienvenida'
@@ -11,7 +12,7 @@ import { SUBCARPETAS } from '@/lib/drive-carpetas'
 import Respuesta, { type Borrador } from './respuesta'
 import EmailHilo from './email-hilo'
 import PedirAjustes from './pedir-ajustes'
-import { estadoPrueba, urlsFirmadas, type AdjuntoMensaje } from '@/lib/prueba-gratis'
+import { disenoDelLead, estadoPrueba, urlsFirmadas, type AdjuntoMensaje } from '@/lib/prueba-gratis'
 
 export const dynamic = 'force-dynamic'
 // supabase-js usa fetch: sin esto, Next guarda sus respuestas en el Data Cache y la lista sale vieja.
@@ -118,12 +119,13 @@ export default async function LeadPage({ params }: { params: { id: string } }) {
             </dl>
             {proyecto.prueba && <p className="nota aviso caps">Proyecto de prueba · sus facturas no tienen validez fiscal</p>}
             {/* Webs: bienvenida + carpeta de Drive + factura del pago 1 en un solo email, con vista previa */}
-            {marca?.modo === 'cerrado' && !bienvenidaEnviada && <Bienvenida proyectoId={proyecto.id} />}
+            {(marca?.modo === 'cerrado' || MARCAS_TREATMENT.includes(marca?.key || '')) && !bienvenidaEnviada && <Bienvenida proyectoId={proyecto.id} />}
             {/* Si la bienvenida pidió los datos fiscales, la factura del pago 1 va en un segundo email */}
             {marca?.modo === 'cerrado' && facturaPendiente && <Bienvenida proyectoId={proyecto.id} clave="factura.pago" />}
           </section>
         ) : marca && (
-          <AccionesLead lead={lead} marca={marca} clientes={(clientes || []) as ClienteFiscal[]} />
+          <AccionesLead lead={lead} marca={marca} clientes={(clientes || []) as ClienteFiscal[]}
+            propuesto={marca.modo === 'cerrado' ? precioPropuesto(msgs.filter(m => m.direccion === 'saliente' && m.estado === 'enviado').map(m => ({ cuerpo: m.cuerpo, fecha: m.enviado_en || m.created_at })), lead.marca === 'arkevo' ? disenoDelLead(lead) : null) : null} />
         )}
 
 

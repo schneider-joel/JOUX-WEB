@@ -9,6 +9,7 @@ import { enviarEmail } from '@/lib/resend'
 import { notificar } from '@/lib/push'
 import { prepararEmailProyecto } from '@/lib/emails-proyecto'
 import { resumenDiario } from '@/lib/resumen'
+import { repetirPasada } from '@/lib/primera-version'
 import { copiarMaterial, revisarSubidas } from '@/lib/drive'
 import { proyectosConEncargo } from '@/lib/primera-version'
 import { avisarMaterial, cuentaComoFoto, guardarAdjuntos } from '@/lib/prueba-gratis'
@@ -108,8 +109,8 @@ async function leerGmail() {
     const { data: marca } = await sb.from('marcas').select('nombre').eq('key', lead.marca).maybeSingle()
     const completo = lead.proyecto_id ? await materialCompleto(lead.proyecto_id, lead.id, m.texto).catch(e => { console.error('tick material completo', e?.message); return null }) : null
     if (completo) await notificar({
-      titulo: `${completo} ha subido todo el material`,
-      cuerpo: 'Revísalo y pasa la web a «En curso» en Proyectos.',
+      titulo: `${completo.cliente} ha subido todo el material`,
+      cuerpo: completo.repetida ? `El agente vuelve a montarlo con todo (pasada ${completo.repetida}).` : 'Revísalo y pulsa «Comenzar» en Proyectos cuando esté cobrado el pago 1.',
       url: '/proyectos', etiqueta: `proyecto-${lead.proyecto_id}`,
     }).catch(e => console.error('tick push', e?.message))
     // Con material, el push ya lo dio avisarMaterial (uno por respuesta basta).
@@ -131,17 +132,19 @@ async function leerGmail() {
 // «Ya está todo» / «All done»: lo que piden la bienvenida y el recordatorio al terminar de subir el material.
 const TODO_SUBIDO = /\b(ya est[aá] todo|est[aá] todo subido|todo subido|lo he subido todo|ya lo tienes todo|all done|all uploaded|everything('s| is) (uploaded|up)|uploaded everything)\b/i
 
-// Respuesta de un cliente cuya web está en «Material» que avisa de que ya lo ha subido todo: evento
-// material.completo (una vez por etapa). /proyectos propone entonces pasar a «En curso»; no se mueve solo.
+// Respuesta de un cliente en «Material» o «Comenzado» que avisa de que ya lo ha subido todo: evento
+// material.completo (una vez por etapa). En «Material», /proyectos propone «Comenzar» (no se mueve solo);
+// en «Comenzado», si es un diseño que el agente ya empezó, se le encarga otra pasada con todo el material.
 async function materialCompleto(proyectoId: number, leadId: number, texto: string) {
   if (!TODO_SUBIDO.test(texto)) return null
   const { data: p } = await sb.from('proyectos').select('id, cliente, fase').eq('id', proyectoId).maybeSingle()
-  if (p?.fase !== 'material') return null
-  const { data: entrada } = await sb.from('eventos').select('created_at').eq('proyecto_id', p.id).eq('tipo', 'proyecto.fase').eq('datos->>a', 'material').order('created_at', { ascending: false }).limit(1).maybeSingle()
+  if (p?.fase !== 'material' && p?.fase !== 'comenzado') return null
+  const { data: entrada } = await sb.from('eventos').select('created_at').eq('proyecto_id', p.id).eq('tipo', 'proyecto.fase').eq('datos->>a', p.fase).order('created_at', { ascending: false }).limit(1).maybeSingle()
   const { count } = await sb.from('eventos').select('id', { count: 'exact', head: true }).eq('proyecto_id', p.id).eq('tipo', 'material.completo').gte('created_at', entrada?.created_at || '1970-01-01')
   if (count) return null
   await sb.from('eventos').insert({ proyecto_id: p.id, lead_id: leadId, tipo: 'material.completo', fuente: 'gmail', datos: { texto: texto.slice(0, 300) } })
-  return p.cliente as string
+  const r = p.fase === 'comenzado' ? await repetirPasada(p.id, 'El cliente avisó de que ya lo ha subido todo', 'gmail') : null
+  return { cliente: p.cliente as string, repetida: r && 'ok' in r ? r.pasada : null }
 }
 
 // 2. Mensajes «aprobado» cuya hora ya llegó (o sin hora): los de leads por Gmail, los de proyectos por Resend.

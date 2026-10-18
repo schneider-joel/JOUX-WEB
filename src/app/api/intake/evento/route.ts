@@ -4,6 +4,7 @@ import { notificar } from '@/lib/push'
 import { MAX_BYTES_INTAKE, fuenteDeClave } from '@/lib/intake'
 import { prepararEmailProyecto } from '@/lib/emails-proyecto'
 import type { FaseProyecto } from '@/lib/leads'
+import { MARCAS_TREATMENT, fasesDe } from '@/lib/seguimiento'
 
 export const dynamic = 'force-dynamic'
 // supabase-js usa fetch: sin esto, Next guarda sus respuestas en el Data Cache y la lista sale vieja.
@@ -70,13 +71,15 @@ export async function POST(req: NextRequest) {
     }
 
     const evento = (t: string, d: Record<string, unknown>) => sb.from('eventos').insert({ proyecto_id: p.id, lead_id: p.lead_id, tipo: t, fuente: fuente.fuente, datos: d })
-    // Solo las webs se siguen por etapas; los treatments no llevan fase.
+    // Se siguen por etapas las webs y los treatments de The Pitch Lab que ya tienen fase (los de «Marcar
+    // ganado»); los treatments no tienen «Cambios», así que los comentarios no la mueven.
+    const conEtapas = esWeb || (MARCAS_TREATMENT.includes(p.marca || '') && !!p.fase)
     const ponerFase = async (fase: FaseProyecto) => {
-      if (!esWeb || p.fase === fase) return
+      if (!conEtapas || p.fase === fase || !fasesDe(p.marca).includes(fase)) return
       await sb.from('proyectos').update({ fase }).eq('id', p.id)
       await evento('proyecto.fase', { de: p.fase, a: fase })
     }
-    const avisar = (titulo: string, cuerpo: string) => notificar({ titulo, cuerpo, url: esWeb ? '/proyectos' : '/', etiqueta: `proyecto-${p.id}` })
+    const avisar = (titulo: string, cuerpo: string) => notificar({ titulo, cuerpo, url: conEtapas ? '/proyectos' : '/', etiqueta: `proyecto-${p.id}` })
       .catch(e => console.error('intake/evento push', e?.message))
     const quien = `${p.cliente} · ${p.nombre}`
     const { data: rev } = ronda

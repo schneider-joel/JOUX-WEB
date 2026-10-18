@@ -1,6 +1,8 @@
 // Emails al aceptar una web (solo servidor), por Gmail con el alias de la marca:
 // - `proyecto.bienvenida`: carpeta de Drive ({{drive_url}}) y, si el cliente ya tiene ficha fiscal, la
 //   factura del pago 1 en PDF; si no la tiene, el enlace al formulario de datos fiscales ({{datos_url}}).
+//   Treatments de The Pitch Lab: sin factura (se cobra todo a la entrega, desde el timesheet), solo el
+//   formulario de datos fiscales si el cliente es nuevo.
 // - `factura.pago`: cuando el cliente ha mandado sus datos, la factura del pago 1, en el mismo hilo.
 // La factura sale de crear_factura_pago() (número correlativo, IVA/retención por país, bloqueos de
 // datos fiscales y ROI). Un proyecto de prueba factura con fiscal = false y número PRUEBA-… (ver schema.sql).
@@ -14,6 +16,7 @@ import { remitenteLead } from '@/lib/remitentes'
 import { desglose } from '@/lib/importes'
 import { pdfFactura } from '@/lib/pdf'
 import { nombreArchivoFactura } from '@/app/invoice/[id]/nombre-archivo'
+import { MARCAS_TREATMENT } from '@/lib/seguimiento'
 
 export const CLAVES_INICIO = ['proyecto.bienvenida', 'factura.pago'] as const
 export type ClaveInicio = typeof CLAVES_INICIO[number]
@@ -39,6 +42,7 @@ export type VistaBienvenida = {
   bloqueo: string | null              // por qué no se puede emitir (datos fiscales, ROI, email…)
   enviada: string | null              // fecha si este email ya salió por aquí
   drive: boolean
+  a_la_entrega: boolean               // treatment: se factura entero a la entrega (sin factura ahora)
 }
 
 // Número que pondrá siguiente_numero_factura(): el F-AAAA-N más alto + 1 (sin llamarla, que lo guarda).
@@ -83,6 +87,11 @@ export async function vistaBienvenida(id: number, clave: ClaveInicio = 'proyecto
       factura = { id: f?.id ?? null, numero, base, iva: d?.iva ?? 0, ret: d?.ret ?? 0, total: d?.total ?? base, espana, prueba: !!p.prueba }
     }
   } else if (esFactura) return { error: 'Este proyecto no es de precio cerrado', status: 400 }
+  else if (p.token_fiscal) {
+    // Treatment (o web sin precio cerrado) con cliente nuevo: el formulario va en la bienvenida.
+    const { data: cf } = await sb.from('clientes_fiscales').select('pais').eq('cliente', p.cliente).maybeSingle()
+    if (!cf?.pais) datos_url = `${PUBLICA}/datos/${p.token_fiscal}`
+  }
 
   const t = await plantillaProyecto(id, clave, {
     vars: { datos_url, ...(factura ? { factura_numero: factura.numero, factura_total: dinero(factura.total, idioma) } : {}) },
@@ -105,6 +114,7 @@ export async function vistaBienvenida(id: number, clave: ClaveInicio = 'proyecto
   return {
     clave, remitente, para, asunto, cuerpo: t.cuerpo, factura, datos_url,
     bloqueo, enviada: ya ? ya.enviado_en || 'enviando' : null, drive: !!p.drive_url,
+    a_la_entrega: p.precio_cerrado == null && MARCAS_TREATMENT.includes(p.marca || ''),
   }
 }
 

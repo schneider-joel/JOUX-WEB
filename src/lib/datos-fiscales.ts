@@ -5,6 +5,7 @@ import { supabaseServer as sb } from '@/lib/supabase-server'
 import { UE_ISO } from '@/lib/ganado'
 import { tipoLegacy } from '@/lib/timesheets'
 import { notificar } from '@/lib/push'
+import { MARCAS_TREATMENT } from '@/lib/seguimiento'
 
 export type EnvioDatos = { razon: string; nif: string; direccion: string; pais: string }   // pais: ISO o 'OTRO'
 
@@ -52,7 +53,8 @@ export async function guardarDatosFiscales(token: string, e: EnvioDatos): Promis
   await sb.from('eventos').insert({ proyecto_id: p.id, lead_id: p.lead_id, tipo: 'datos.fiscales', fuente: 'formulario', datos: { cliente: razon, antes: p.cliente !== razon ? p.cliente : null, pais: fila.pais, corrigiendo: !!d.datos } })
   await notificar({
     titulo: `${razon} ha enviado sus datos fiscales`,
-    cuerpo: fila.pais === 'UE' ? 'Cliente de la UE: antes de facturar, el ROI.' : 'La factura del pago 1 está lista para revisar y enviar.',
+    cuerpo: fila.pais === 'UE' ? 'Cliente de la UE: antes de facturar, el ROI.'
+      : MARCAS_TREATMENT.includes(p.marca || '') ? 'Listos para la factura de la entrega (sale del timesheet).' : 'La factura del pago 1 está lista para revisar y enviar.',
     url: p.lead_id ? `/leads/${p.lead_id}` : '/proyectos', etiqueta: `proyecto-${p.id}`,
   }).catch(err => console.error('datos push', err?.message))
   return { ok: true }

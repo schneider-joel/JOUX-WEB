@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import type { Lead } from '@/lib/leads'
 import type { Marca } from '@/lib/marcas'
 import { PAISES, type PaisFiscal } from '@/lib/clientes'
-import { faltaGanado, filasGanado, formInicial, nombreProyecto, sugerirPais, type ClienteFiscal, type FormGanado } from '@/lib/ganado'
+import { faltaGanado, filasGanado, formInicial, nombreProyecto, sugerirPais, type ClienteFiscal, type FormGanado, type PrecioPropuesto } from '@/lib/ganado'
 import { desglose } from '@/lib/importes'
 import { SUBCARPETAS, rutaCarpeta } from '@/lib/drive-carpetas'
 
@@ -29,11 +29,11 @@ function Fila({ titulo, fila }: { titulo: string; fila: Record<string, unknown> 
 }
 
 // Ganado / perdido desde la ficha del lead. Ganado: formulario → vista previa de las filas → «Crear».
-export default function AccionesLead({ lead, marca, clientes }: { lead: LeadProps; marca: MarcaProps; clientes: ClienteFiscal[] }) {
+export default function AccionesLead({ lead, marca, clientes, propuesto }: { lead: LeadProps; marca: MarcaProps; clientes: ClienteFiscal[]; propuesto: PrecioPropuesto | null }) {
   const router = useRouter()
   const [abierto, setAbierto] = useState<null | 'ganado' | 'perdido'>(null)
   const [revisando, setRevisando] = useState(false)
-  const [form, setForm] = useState<FormGanado>(() => formInicial(lead, marca))
+  const [form, setForm] = useState<FormGanado>(() => formInicial(lead, marca, undefined, propuesto))
   const [nombreTocado, setNombreTocado] = useState(false)
   const [paisTocado, setPaisTocado] = useState(false)
   const [motivo, setMotivo] = useState('')
@@ -55,6 +55,9 @@ export default function AccionesLead({ lead, marca, clientes }: { lead: LeadProp
   const falta = faltaGanado(form, marca)
   const filas = filasGanado(lead as Lead, marca, form)
   const sugerido = sugerirPais(form.identificador, form.direccion, lead.pais)
+  // Aviso si el precio no es el propuesto (en la prueba de Vignolles la factura salió por otro importe).
+  const distinto = web && propuesto && form.precio != null && Math.abs(Number(form.precio) - propuesto.precio) > 0.005
+  const avisoPrecio = distinto ? <p className="nota aviso field__nota">No coincide con {propuesto!.fuente}: {eur(propuesto!.precio)}.{' '}<button type="button" className="copy caps" onClick={() => set({ precio: propuesto!.precio })}>Usar {eur(propuesto!.precio)}</button></p> : null
 
   const cerrar = () => { setAbierto(null); setRevisando(false); setError('') }
   const crear = async () => {
@@ -108,6 +111,8 @@ export default function AccionesLead({ lead, marca, clientes }: { lead: LeadProp
       <Fila titulo="INSERT eventos" fila={{ lead_id: lead.id, proyecto_id: '<id del proyecto nuevo>', tipo: filas.evento.tipo, fuente: filas.evento.fuente, datos: JSON.stringify({ ...filas.evento.datos, de: lead.estado }) }} />
       {lead.prueba && <p className="nota aviso caps">Lead de prueba: el proyecto sale con prueba = true y sus facturas, sin validez fiscal (número PRUEBA-…).</p>}
       {SUBCARPETAS[marca.key] && <p className="nota">Drive: se crea <span className="mono">{rutaCarpeta(marca.nombre, filas.proyecto.cliente, filas.proyecto.nombre)}/</span> ({SUBCARPETAS[marca.key].join(', ')}) y se comparte con {lead.email} como editor, sin el email de Google.</p>}
+      {avisoPrecio}
+      {!web && marca.modo === 'dia' && <p className="nota">Treatment: sale en Proyectos con sus etapas. Bienvenida sin factura: se factura entero a la entrega desde el timesheet.</p>}
       {web && form.precio ? <p className="nota mono">Después podrás facturar el pago 1: {eur(form.precio / 2)} base{form.pais === 'ES' ? ` · ${eur(desglose(Number(form.precio) / 2, true)!.total)} a cobrar` : ''}.</p> : null}
       {error && <p className="nota error">{error}</p>}
       <div className="modal__foot" style={{ marginTop: 8 }}>
@@ -122,7 +127,7 @@ export default function AccionesLead({ lead, marca, clientes }: { lead: LeadProp
       <p className="label caps"><span>Marcar ganado · {marca.nombre}</span><i className="rule" /></p>
       <div className="modal__campos">
         <div className="chips__row" role="group" aria-label="Cliente">
-          <button type="button" className="chip" aria-pressed={!form.existente} onClick={() => setForm(formInicial(lead, marca))}><span>Cliente nuevo</span></button>
+          <button type="button" className="chip" aria-pressed={!form.existente} onClick={() => setForm(formInicial(lead, marca, undefined, propuesto))}><span>Cliente nuevo</span></button>
           <button type="button" className="chip" aria-pressed={form.existente} disabled={!clientes.length} onClick={() => elegirExistente(clientes[0]?.cliente)}><span>Ya está en Clientes</span></button>
         </div>
 
@@ -195,13 +200,15 @@ export default function AccionesLead({ lead, marca, clientes }: { lead: LeadProp
               <div className="field">
                 <label className="caps" htmlFor="lg-plan">Plan</label>
                 <input id="lg-plan" list="lg-planes" value={form.plan} onChange={e => set({ plan: e.target.value })} placeholder="Opcional" />
-                {marca.key === 'arkevo' && <datalist id="lg-planes">{['Essential', 'Studio', 'Signature'].map(x => <option key={x} value={x} />)}</datalist>}
+                {marca.key === 'arkevo' && <datalist id="lg-planes">{['Esencial', 'Estudio', 'Signature', 'Lino', 'Pedra', 'Cota Cero', 'Umbral', 'NAVE', 'Cimbra'].map(x => <option key={x} value={x} />)}</datalist>}
               </div>
               <div className="field">
                 <label className="caps" htmlFor="lg-precio">Precio cerrado (base)</label>
-                <input id="lg-precio" type="number" inputMode="decimal" value={form.precio ?? ''} onChange={e => set({ precio: e.target.value ? Number(e.target.value) : null })} placeholder="990" />
+                <input id="lg-precio" type="number" inputMode="decimal" value={form.precio ?? ''} onChange={e => set({ precio: e.target.value ? Number(e.target.value) : null })} placeholder="1900" />
+                {propuesto && !distinto && <p className="nota field__nota">De {propuesto.fuente}.</p>}
               </div>
             </div>
+            {avisoPrecio}
           </>
         ) : marca.modo === 'dia' ? (
           <div className="field">

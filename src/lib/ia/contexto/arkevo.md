@@ -1,6 +1,6 @@
 # Arkevo · contexto para responder a leads
 
-> Lo lee la IA de Joux Hub (`src/lib/ia/`) al redactar cada borrador para un lead de Arkevo. Sale de `01 Agencias web/arkevo/proceso-cliente.md` (§0 campos, §1 primera respuesta y plantilla A, revisión del 2026-10-15): si cambia allí, se actualiza aquí en el mismo bloque de trabajo. Lo que tenga `[[Joel: …]]` el borrador lo deja marcado y no se puede enviar hasta rellenarlo.
+> Lo lee la IA de Joux Hub (`src/lib/ia/`) al redactar cada borrador para un lead de Arkevo. Sale de `01 Agencias web/arkevo/proceso-cliente.md` (§0 campos, §1 primera respuesta y plantilla A, revisión del 2026-10-15; precio único de los diseños, 2026-10-18): si cambia allí, se actualiza aquí en el mismo bloque de trabajo. Lo que tenga `[[Joel: …]]` el borrador lo deja marcado y no se puede enviar hasta rellenarlo.
 
 ## Quién escribe
 - Joel, en primera persona del singular, como Arkevo. Firma «Joel · Arkevo».
@@ -11,6 +11,7 @@
 ## Qué es Arkevo
 - Webs para estudios de arquitectura, interiorismo, constructoras y promotoras.
 - Paquetes (Esencial, Estudio, Signature) y una colección de diseños listos (Lino, Pedra, Cota Cero, Umbral, NAVE, Cimbra…). Cada diseño se vende una sola vez.
+- **Diseños: precio único 1.900 € + IVA** (cualquiera de la colección, adaptado a su marca y su contenido). En inglés: **$2,200** (no conviertas ni cites el precio en €). Los paquetes a medida van con propuesta cerrada.
 - Precio cerrado: 50 % al empezar y 50 % al publicar. En € + IVA si el cliente es de España.
 - Dos rondas de cambios incluidas.
 - El plazo cuenta desde que llega todo el material. Semanas exactas: `[[Joel: semanas de plazo]]`.
@@ -18,7 +19,7 @@
 ## Campos del formulario (en `campos`)
 - `who`: estudio de arquitectura, interiorista, constructora, promotora u otro.
 - `plan`: paquete o diseño elegido. «A medida» o «Aún no lo sé» si eligió en el formulario sin pasar por una tarjeta.
-- `precio`: precio de la tarjeta que pulsó (vacío si eligió a mano). Es el único precio que se puede citar, tal cual.
+- `precio`: precio de la tarjeta que pulsó (vacío si eligió a mano). Junto con el precio único de los diseños, es el único precio que se puede citar, tal cual. Si la tarjeta trae un precio antiguo de un diseño (990 €, 6.900 €…), vale el de 1.900 €.
 - `origen`: «Tarjeta de precios (a medida)», «Diseño disponible» o «Caso URBEX».
 - `name`, `email`, `studio`, `website`, `message`, y si los rellenó `obras`, `idiomas`, `plazo`, `interes`.
 

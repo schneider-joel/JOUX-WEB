@@ -26,10 +26,11 @@ export type Mensaje = {
   adjuntos?: { nombre: string; ruta: string; tipo: string; bytes: number; en_linea?: boolean }[]  // fotos y PDF de las respuestas (bucket `leads`)
 }
 // Fase de seguimiento de un proyecto (proyectos.fase). No toca `status` ni dispara facturas.
-export const FASES_PROYECTO = ['confirmado', 'material', 'en_curso', 'revision', 'cambios', 'entregado', 'cerrado'] as const
+// «Comenzado» la marca Joel al ver cobrado el pago 1 y crea el encargo del agente (sustituye a «En curso»).
+export const FASES_PROYECTO = ['confirmado', 'material', 'comenzado', 'revision', 'cambios', 'entregado', 'cerrado'] as const
 export type FaseProyecto = typeof FASES_PROYECTO[number]
 export const ETIQUETA_FASE: Record<FaseProyecto, string> = {
-  confirmado: 'Confirmado', material: 'Material', en_curso: 'En curso', revision: 'Revisión',
+  confirmado: 'Confirmado', material: 'Material', comenzado: 'Comenzado', revision: 'Revisión',
   cambios: 'Cambios', entregado: 'Entregado', cerrado: 'Cerrado',
 }
 export const esFaseProyecto = (x: unknown): x is FaseProyecto => typeof x === 'string' && (FASES_PROYECTO as readonly string[]).includes(x)

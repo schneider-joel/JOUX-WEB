@@ -67,7 +67,8 @@ export default function Bienvenida({ proyectoId, clave = 'proyecto.bienvenida' }
             {f && <div><dt>Adjunto</dt><dd>Factura en PDF</dd></div>}
           </dl>
           <pre className="nota" style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', margin: 0 }}>{v.cuerpo}</pre>
-          {v.datos_url && <p className="nota">El cliente rellenará sus datos fiscales en el formulario; la factura irá en un segundo email cuando los mande.</p>}
+          {v.a_la_entrega && <p className="nota">Sin factura: el treatment se factura entero a la entrega, desde su timesheet.</p>}
+          {v.datos_url && <p className="nota">{v.a_la_entrega ? 'El cliente rellenará sus datos fiscales en el formulario; quedan listos para la factura de la entrega.' : 'El cliente rellenará sus datos fiscales en el formulario; la factura irá en un segundo email cuando los mande.'}</p>}
           {!v.drive && !esFactura && <p className="nota aviso">Sin carpeta de Drive: el email pide el material por respuesta o WeTransfer.</p>}
           {v.bloqueo && <p className="nota error">{v.bloqueo}</p>}
         </>

@@ -3,6 +3,7 @@ import { supabaseServer as sb } from '@/lib/supabase-server'
 import { pendientes, rellenar } from '@/lib/emails'
 import { enviarEmail } from '@/lib/resend'
 import { enviosPausados } from '@/lib/autonomia'
+import { MARCAS_TREATMENT } from '@/lib/seguimiento'
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -14,7 +15,8 @@ export async function plantillaProyecto(id: number | string, clave: string, extr
   const { data: p } = await sb.from('proyectos').select('id, nombre, cliente, marca, web, idioma, contacto_email, contacto_nombre, lead_id, drive_url').eq('id', id).maybeSingle()
   if (!p) return { error: 'No existe', status: 404 } as const
   const { data: marca } = await sb.from('marcas').select('modo').eq('key', p.marca ?? '').maybeSingle()
-  if (marca?.modo !== 'cerrado') return { error: 'Solo las webs tienen emails de seguimiento', status: 400 } as const
+  // Webs y treatments de The Pitch Lab (estos, solo los emails que tengan plantilla: bienvenida y material).
+  if (marca?.modo !== 'cerrado' && !MARCAS_TREATMENT.includes(p.marca || '')) return { error: 'Esta marca no tiene emails de seguimiento', status: 400 } as const
   const idioma = p.idioma === 'en' ? 'en' : 'es'
   const { data: t } = await sb.from('plantillas').select('remitente, asunto, cuerpo, auto').eq('clave', clave).eq('marca', p.marca).eq('idioma', idioma).maybeSingle()
   if (!t) return { error: 'No hay plantilla para esta marca e idioma', status: 404 } as const
@@ -28,6 +30,7 @@ export async function plantillaProyecto(id: number | string, clave: string, extr
     const { count } = await sb.from('mensajes').select('id', { count: 'exact', head: true }).eq('proyecto_id', p.id).eq('plantilla', 'revision.lista').eq('estado', 'enviado')
     ronda = clave === 'revision.lista' ? (count || 0) + 1 : Math.max(1, count || 0)
   }
+  // {{web}}: la web, o el cliente si no hay (los treatments no tienen web).
   const vars = { nombre: (p.contacto_nombre || p.cliente).split(' ')[0], web: p.web || p.cliente, ronda, url: extra.url, drive_url: p.drive_url, ...extra.vars }
   return { p, t, asunto: rellenar(t.asunto, vars), cuerpo: rellenar(t.cuerpo, vars) }
 }

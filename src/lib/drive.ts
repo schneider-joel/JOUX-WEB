@@ -6,6 +6,7 @@ import { supabaseServer as sb } from '@/lib/supabase-server'
 import { accessToken, permisosGoogle } from '@/lib/gmail'
 import { notificar } from '@/lib/push'
 import { SUBCARPETAS, rutaCarpeta } from '@/lib/drive-carpetas'
+import { repetirPasada } from '@/lib/primera-version'
 
 const API = 'https://www.googleapis.com/drive/v3'
 const CARPETA = 'application/vnd.google-apps.folder'
@@ -128,9 +129,11 @@ export async function revisarSubidas() {
     if (!nuevos?.length) continue
     const n = nuevos.length
     await sb.from('eventos').insert({ proyecto_id: p.id, lead_id: p.lead_id, tipo: 'material.subido', fuente: 'drive', datos: { n, nombres: nuevos.slice(0, 20).map(f => f.nombre) } })
+    // Un diseño ya empezado por el agente se vuelve a montar con lo nuevo (solo en «Comenzado»).
+    const r = await repetirPasada(p.id, `${n} archivo${n === 1 ? '' : 's'} nuevo${n === 1 ? '' : 's'} en Drive`, 'drive').catch(e => ({ omitido: String(e?.message) }))
     await notificar({
       titulo: `${p.cliente} ha subido ${n} archivo${n === 1 ? '' : 's'}`,
-      cuerpo: nuevos.slice(0, 5).map(f => f.nombre).join(', '),
+      cuerpo: ('ok' in r ? `El agente lo vuelve a montar (pasada ${r.pasada}). ` : '') + nuevos.slice(0, 5).map(f => f.nombre).join(', '),
       url: '/proyectos', etiqueta: `drive-${p.id}`,
     }).catch(e => console.error('drive push', e?.message))
     avisos++

@@ -1428,3 +1428,105 @@ ALTER TABLE drive_copias ENABLE ROW LEVEL SECURITY;
 INSERT INTO storage.buckets (id, name, public, file_size_limit)
 VALUES ('material', 'material', false, 52428800)
 ON CONFLICT (id) DO NOTHING;
+
+-- ============================================================
+-- MIGRACIÓN: bloque 2 de plan-agentes.md (2026-10-18, aplicada). «Comenzar», brief de custom y The Pitch Lab en /proyectos.
+-- Ningún proyecto ni evento usa hoy la fase 'en_curso' (comprobado): se sustituye por 'comenzado' sin tocar filas.
+
+-- 1. Etapa «Comenzado» en lugar de «En curso» (Joel la marca al ver cobrado el pago 1; crea el encargo del agente).
+ALTER TABLE proyectos DROP CONSTRAINT IF EXISTS proyectos_fase_check;
+ALTER TABLE proyectos ADD CONSTRAINT proyectos_fase_check
+  CHECK (fase IN ('confirmado','material','comenzado','revision','cambios','entregado','cerrado'));
+
+-- 2. Brief de dirección de las webs custom de Arkevo (lo escribe Joel en /proyectos; sin él no hay encargo).
+--    { referencias: [url…], tono, tipografia, colores, paginas, notas, guardado_en }
+ALTER TABLE proyectos ADD COLUMN IF NOT EXISTS brief JSONB;
+
+-- 3. Pasadas del agente: con material nuevo («Ya está todo» o archivos en Drive) el diseño se vuelve a montar.
+--    Un `web.lista` por proyecto y pasada (los antiguos, sin pasada, cuentan como 1).
+CREATE UNIQUE INDEX IF NOT EXISTS eventos_web_lista_pasada ON eventos (proyecto_id, (COALESCE(datos->>'pasada', '1'))) WHERE tipo = 'web.lista';
+DROP INDEX IF EXISTS eventos_web_lista_unica;
+
+-- 4. Plantillas de The Pitch Lab (bienvenida sin factura y recordatorio de material). Voz «we», firma The Pitch Lab,
+--    sin nombres de persona y sin nombrar la plataforma de entrega. Remitente hello@thepitchlab.xyz.
+--    {{web}} es el nombre del cliente (los treatments no tienen web).
+INSERT INTO plantillas (clave, marca, idioma, remitente, asunto, cuerpo) VALUES
+('proyecto.bienvenida', 'pitchlab', 'es', 'The Pitch Lab <hello@thepitchlab.xyz>', 'Empezamos tu treatment · lo que necesitamos',
+'Hola, {{nombre}}:
+
+¡Empezamos! Para preparar el treatment necesitamos:
+
+- El brief de la agencia o la marca, y el guion o la idea del spot.
+- Referencias que te gusten: películas, fotos, otros spots.
+- Tu texto o tus notas como director, aunque sean sueltas: lo redactamos nosotros.
+- Fechas: cuándo hay que presentarlo.
+
+{{#drive_url}}Hemos preparado una carpeta para que lo subas todo: {{drive_url}}
+
+- Brief: el brief y el guion.
+- Referencias: imágenes, enlaces y vídeos de referencia.
+- Texto: tu texto o tus notas.
+- Otros: lo que no encaje en las demás.
+
+Si no tienes cuenta de Google, responde a este correo con un enlace de WeTransfer.
+
+Cuando lo tengas todo subido, responde a este email con un «Ya está todo» y empezamos.{{/drive_url}}{{^drive_url}}Puedes mandárnoslo respondiendo a este correo o con un enlace de WeTransfer.
+
+Cuando lo tengas todo, responde a este email con un «Ya está todo» y empezamos.{{/drive_url}}
+
+{{#datos_url}}El treatment se factura entero a la entrega. Para tener la factura lista, rellena tus datos de facturación aquí (son dos minutos): {{datos_url}}{{/datos_url}}{{^datos_url}}El treatment se factura entero a la entrega.{{/datos_url}}
+
+Cualquier duda, responde a este correo.
+
+The Pitch Lab'),
+('proyecto.bienvenida', 'pitchlab', 'en', 'The Pitch Lab <hello@thepitchlab.xyz>', 'Starting your treatment · what we need',
+'Hi {{nombre}},
+
+Let''s get started! To build the treatment we need:
+
+- The agency or brand brief, and the script or idea for the spot.
+- References you like: films, photos, other spots.
+- Your director''s text or notes, even rough ones: we''ll write it up.
+- Dates: when it needs to be presented.
+
+{{#drive_url}}We''ve set up a folder for you to upload everything: {{drive_url}}
+
+- Brief: the brief and the script.
+- Referencias: reference images, links and videos.
+- Texto: your text or notes.
+- Otros: anything that doesn''t fit the others.
+
+If you don''t have a Google account, just reply to this email with a WeTransfer link.
+
+Once everything is uploaded, just reply to this email with "All done" and we''ll start.{{/drive_url}}{{^drive_url}}You can send it by replying to this email or with a WeTransfer link.
+
+Once you have everything in, just reply to this email with "All done" and we''ll start.{{/drive_url}}
+
+{{#datos_url}}The treatment is invoiced in full on delivery. To have the invoice ready, please fill in your billing details here (it takes two minutes): {{datos_url}}{{/datos_url}}{{^datos_url}}The treatment is invoiced in full on delivery.{{/datos_url}}
+
+Any questions, just reply to this email.
+
+The Pitch Lab'),
+('material.recordatorio', 'pitchlab', 'es', 'The Pitch Lab <hello@thepitchlab.xyz>', 'Para seguir con tu treatment',
+'Hola, {{nombre}}:
+
+Para cumplir el plazo nos falta parte del material. En cuanto lo tengamos, seguimos.
+
+{{#drive_url}}Puedes subirlo a tu carpeta: {{drive_url}}
+Si no tienes cuenta de Google, responde a este correo con un enlace de WeTransfer.{{/drive_url}}{{^drive_url}}Puedes mandárnoslo respondiendo a este correo o con un enlace de WeTransfer.{{/drive_url}}
+
+Cuando lo tengas todo, responde con un «Ya está todo» y seguimos.
+
+The Pitch Lab'),
+('material.recordatorio', 'pitchlab', 'en', 'The Pitch Lab <hello@thepitchlab.xyz>', 'To keep your treatment moving',
+'Hi {{nombre}},
+
+To stay on schedule we still need some of the material. As soon as we have it, we''ll carry on.
+
+{{#drive_url}}You can upload it to your folder: {{drive_url}}
+If you don''t have a Google account, just reply to this email with a WeTransfer link.{{/drive_url}}{{^drive_url}}You can send it by replying to this email or with a WeTransfer link.{{/drive_url}}
+
+Once you have everything in, reply with "All done" and we''ll carry on.
+
+The Pitch Lab')
+ON CONFLICT DO NOTHING;

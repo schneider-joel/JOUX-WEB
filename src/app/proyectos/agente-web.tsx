@@ -2,12 +2,13 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import type { ProyectoSeguimiento } from '@/lib/seguimiento'
+import { NOMBRE_ENCARGO, faltaBrief, type ProyectoSeguimiento } from '@/lib/seguimiento'
 
 const hora = (iso: string) => new Date(iso).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid' })
 
-// Agente de primera versión (webs Arkevo): encargada → montándose → lista (vista previa solo para Joel)
-// o «no se pudo montar» con «Reintentar». `detalle` = las notas del agente y el material copiado de Drive.
+// Encargo al agente (diseño, custom o treatment): encargada → montándose → lista (vista previa solo para
+// Joel) o «no se pudo montar» con «Reintentar». Pasada 2+ = se vuelve a montar con material nuevo.
+// `detalle` = las notas del agente y el material copiado de Drive.
 export default function AgenteWeb({ p, detalle = false }: { p: ProyectoSeguimiento; detalle?: boolean }) {
   const router = useRouter()
   const [enviando, setEnviando] = useState(false)
@@ -44,14 +45,19 @@ export default function AgenteWeb({ p, detalle = false }: { p: ProyectoSeguimien
     )
   }
 
-  if (!a) return p.agente_disponible && p.fase === 'en_curso' ? boton('Encargar la primera versión al agente →') : null
+  if (!a) return p.encargo_tipo && p.fase === 'comenzado' && !(p.encargo_tipo === 'custom' && faltaBrief(p.brief))
+    ? boton(`Encargar ${NOMBRE_ENCARGO[p.encargo_tipo]} al agente →`) : null
+  const que = NOMBRE_ENCARGO[a.tipo]
+  const pasada = a.pasada > 1 ? ` · pasada ${a.pasada}` : ''
+  const lista = `${que.charAt(0).toUpperCase()}${que.slice(1)} ${a.tipo === 'treatment' ? 'listo' : 'lista'}`
   return (
     <>
-      {a.estado === 'encargada' && <span className="caps dim trk__agente">Agente · encargada {hora(a.fecha)}</span>}
-      {a.estado === 'montandose' && <span className="caps dim trk__agente">Agente · montando la primera versión</span>}
+      {a.estado === 'encargada' && <span className="caps dim trk__agente">Agente · {que} encargada{a.pasada > 1 ? ` otra vez (material nuevo, pasada ${a.pasada})` : ''} {hora(a.fecha)}</span>}
+      {a.estado === 'montandose' && <span className="caps dim trk__agente">Agente · montando {que}{pasada}</span>}
+      {a.estado !== 'lista' && a.anterior && <a href={a.anterior} target="_blank" rel="noreferrer" className="copy caps trk__recordar">Pasada anterior ↗</a>}
       {a.estado === 'lista' && (a.url
-        ? <a href={a.url} target="_blank" rel="noreferrer" className="copy caps trk__recordar ok">Primera versión lista{a.diseno ? ` · ${a.diseno}` : ''} ↗</a>
-        : <span className="caps trk__agente ok">Primera versión lista</span>)}
+        ? <a href={a.url} target="_blank" rel="noreferrer" className="copy caps trk__recordar ok">{lista}{a.diseno ? ` · ${a.diseno}` : ''}{pasada} ↗</a>
+        : <span className="caps trk__agente ok">{lista}{pasada}</span>)}
       {a.estado === 'error' && (
         <>
           <span className="nota aviso trk__agente">No se pudo montar: {a.motivo}</span>
