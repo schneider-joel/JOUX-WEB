@@ -1530,3 +1530,144 @@ Once you have everything in, reply with "All done" and we''ll carry on.
 
 The Pitch Lab')
 ON CONFLICT DO NOTHING;
+
+-- Alta de Cartela (2026-10-19): cartas digitales para restaurantes, precio cerrado 50/50. Aplicada con el OK de Joel.
+
+-- 1. Marca: precio cerrado 50/50, después de Arkevo.
+INSERT INTO marcas (key, nombre, modo, dominio, orden)
+VALUES ('cartela', 'Cartela', 'cerrado', 'cartela.es', 5);
+
+-- 2. (Opcional) crear_factura_pago: igual que la vigente, salvo el concepto de Cartela,
+--    «Carta digital <plan> (<web>)» en vez de «Web <plan> (<web>)».
+CREATE OR REPLACE FUNCTION crear_factura_pago(p_proyecto INT, p_pago SMALLINT)
+RETURNS facturas LANGUAGE plpgsql AS $$
+DECLARE pr proyectos; m marcas; v_pais TEXT; v_base NUMERIC(10,2); v_numero TEXT; f facturas;
+BEGIN
+  IF p_pago NOT IN (1, 2) THEN RAISE EXCEPTION 'El pago tiene que ser 1 o 2'; END IF;
+  SELECT * INTO pr FROM proyectos WHERE id = p_proyecto FOR UPDATE;
+  IF pr.id IS NULL OR pr.precio_cerrado IS NULL THEN RAISE EXCEPTION 'El proyecto % no es de precio cerrado', p_proyecto; END IF;
+  SELECT * INTO m FROM marcas WHERE key = pr.marca;
+  IF m.modo IS DISTINCT FROM 'cerrado' THEN RAISE EXCEPTION 'La marca % no es de precio cerrado', pr.marca; END IF;
+  IF p_pago = 2 AND NOT EXISTS (SELECT 1 FROM facturas WHERE proyecto_id = pr.id AND pago = 1) THEN
+    RAISE EXCEPTION 'Primero hay que facturar el pago 1'; END IF;
+  SELECT pais INTO v_pais FROM clientes_fiscales WHERE cliente = pr.cliente;
+  IF NOT FOUND OR v_pais IS NULL THEN RAISE EXCEPTION 'Faltan los datos fiscales de %', pr.cliente; END IF;
+  IF v_pais = 'UE' THEN RAISE EXCEPTION 'Cliente de la UE: sin alta en el ROI, consúltalo con el gestor antes de facturar'; END IF;
+  v_base := CASE WHEN p_pago = 1 THEN round(pr.precio_cerrado / 2, 2) ELSE pr.precio_cerrado - round(pr.precio_cerrado / 2, 2) END;
+  -- La prueba nunca llama a siguiente_numero_factura(): la numeración real queda intacta.
+  IF pr.prueba THEN v_numero := 'PRUEBA-' || pr.id || '-' || p_pago;
+  ELSE v_numero := siguiente_numero_factura(); END IF;
+  INSERT INTO facturas (cliente, descripcion, importe, fecha, fecha_vencimiento, estado, origen, proyecto_id,
+                        numero, tipo_factura, idioma, marca, pago, fiscal)
+  VALUES (pr.cliente,
+          concat_ws(' · ', CASE WHEN pr.prueba THEN 'PRUEBA · sin validez fiscal' END, m.nombre,
+                    concat_ws(' ', CASE WHEN m.key = 'cartela' THEN 'Carta digital' ELSE 'Web' END,
+                              nullif(pr.plan, ''), '(' || pr.web || ')'),
+                    CASE p_pago WHEN 1 THEN '50 % al empezar' ELSE '50 % al publicar' END),
+          v_base, CURRENT_DATE, CURRENT_DATE + 30, 'pendiente', 'manual', pr.id,
+          v_numero,
+          CASE WHEN v_pais = 'ES' THEN 'dentro_ue' ELSE 'fuera_ue' END,
+          CASE WHEN v_pais = 'ES' THEN 'es' ELSE 'en' END,
+          m.key, p_pago, NOT pr.prueba)
+  RETURNING * INTO f;
+  RETURN f;
+END $$;
+REVOKE EXECUTE ON FUNCTION crear_factura_pago(INT, SMALLINT) FROM PUBLIC, anon, authenticated;
+
+-- 3. Plantillas de Cartela (solo es), copiadas de las vigentes de Arkevo cambiando «web» por «carta».
+--    Sin prueba.* (el agente de prueba gratis es solo de Arkevo). auto = false: nunca salen solas.
+INSERT INTO plantillas (clave, marca, idioma, remitente, asunto, cuerpo) VALUES
+('proyecto.bienvenida', 'cartela', 'es', 'Cartela <hola@cartela.es>', 'Empezamos con tu carta · lo que necesitamos',
+$t$Hola, {{nombre}}:
+
+¡Empezamos! Esto es lo que necesitamos para montar la carta:
+
+- La carta actual: una foto, un PDF o el enlace, con los precios al día.
+- El logo (SVG o PNG grande) y los colores, si los tenéis.
+- Las fotos de los platos, si las tienes. Si no, las retocamos o te proponemos cómo hacerlas.
+- Los idiomas que quieres y si tenéis menú del día.
+- Los alérgenos de cada plato, si los tienes apuntados.
+
+{{#drive_url}}Hemos preparado una carpeta para que lo subas todo: {{drive_url}}
+
+- Carta actual: la carta que usáis ahora.
+- Logo y marca: el logo y los colores.
+- Fotos: las fotos de los platos y del local.
+- Textos: descripciones, alérgenos, horarios y notas.
+- Otros: lo que no encaje en las demás.
+
+Si no tienes cuenta de Google, responde a este correo con las fotos o con un enlace de WeTransfer.
+
+Cuando lo tengas todo subido, responde a este email con un «Ya está todo» y empezamos: el plazo cuenta desde ese momento.{{/drive_url}}{{^drive_url}}Puedes mandárnoslo respondiendo a este correo o con un enlace de WeTransfer.
+
+Cuando lo tengas todo, responde a este email con un «Ya está todo» y empezamos: el plazo cuenta desde ese momento.{{/drive_url}}
+
+{{#datos_url}}Para preparar la factura del primer pago (50 %), rellena tus datos de facturación aquí (son dos minutos): {{datos_url}}{{/datos_url}}{{#factura_numero}}Te adjuntamos la factura del primer pago (50 %), {{factura_numero}}, por {{factura_total}}. Los datos para la transferencia están en la propia factura.{{#factura_url}} Si no ves el adjunto, la tienes aquí: {{factura_url}}{{/factura_url}}{{/factura_numero}}
+
+El plazo empieza a contar cuando esté todo. Cualquier duda, responde a este correo.
+
+Joel
+Cartela$t$),
+
+('material.recordatorio', 'cartela', 'es', 'Cartela <hola@cartela.es>', 'Para seguir con tu carta',
+$t$Hola, {{nombre}}:
+
+Para cumplir el plazo nos falta parte del material. Lo más importante es una foto de la carta actual; con eso ya podemos empezar. En cuanto lo tengamos, seguimos.
+
+{{#drive_url}}Puedes subirlo a tu carpeta: {{drive_url}}
+Si no tienes cuenta de Google, responde a este correo con las fotos o con un enlace de WeTransfer.
+
+Cuando lo tengas todo subido, responde a este email con un «Ya está todo» y empezamos: el plazo cuenta desde ese momento.{{/drive_url}}{{^drive_url}}Puedes mandárnoslo respondiendo a este correo o con un enlace de WeTransfer.
+
+Cuando lo tengas todo, responde a este email con un «Ya está todo» y empezamos: el plazo cuenta desde ese momento.{{/drive_url}}
+
+Si os va mejor empezar con la carta y añadir el logo y las fotos después, también se puede.
+
+Joel
+Cartela$t$),
+
+('revision.lista', 'cartela', 'es', 'Cartela <hola@cartela.es>', 'Tu carta digital · ronda {{ronda}} de revisión',
+$t$Hola, {{nombre}}:
+
+Aquí está tu carta para revisar: {{url}}
+Es privada y no sale en Google.
+
+Ábrela en el móvil, como la verá un cliente en la mesa, y revisa sobre todo los precios y los alérgenos. Mándanos en un solo correo todo lo que quieras cambiar.
+
+Joel
+Cartela$t$),
+
+('revision.recordatorio', 'cartela', 'es', 'Cartela <hola@cartela.es>', 'Tu carta digital · ¿has podido verla?',
+$t$Hola, {{nombre}}:
+
+Te recordamos que tu carta está lista para revisar: {{url}}
+
+En cuanto nos mandes los cambios, seguimos. Si está todo bien, dínoslo y preparamos la publicación y los QR.
+
+Joel
+Cartela$t$),
+
+('entrega.final', 'cartela', 'es', 'Cartela <hola@cartela.es>', 'Tu carta digital ya está publicada',
+$t$Hola, {{nombre}}:
+
+¡Ya está! Tu carta: {{url}}
+
+- Te mandamos los QR listos para imprimir (mesa, barra y escaparate). Si los quieres en otro tamaño, dínoslo.
+- Para cambiar un precio, un plato o el menú del día, escríbenos a hola@cartela.es o por WhatsApp: lo cambiamos en 24 h laborables. El primer año de cambios va incluido.
+- La factura del segundo 50 % te llega aparte.
+
+Una cosa más: ¿nos escribirías dos o tres frases sobre cómo ha ido? Nos ayuda mucho.
+
+Joel
+Cartela$t$),
+
+('factura.pago', 'cartela', 'es', 'Cartela <hola@cartela.es>', 'Factura del primer pago · tu carta digital',
+$t$Hola, {{nombre}}:
+
+Gracias por los datos. Te adjuntamos la factura del primer pago (50 %), {{factura_numero}}, por {{factura_total}}. Los datos para la transferencia están en la propia factura.{{#factura_url}} Si no ves el adjunto, la tienes aquí: {{factura_url}}{{/factura_url}}
+
+Cualquier duda, responde a este correo.
+
+Joel
+Cartela$t$)
+ON CONFLICT DO NOTHING;

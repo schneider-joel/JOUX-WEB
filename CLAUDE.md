@@ -79,5 +79,5 @@ Panel financiero personal de Joel, autónomo en España: facturación, timesheet
 
 ## Estado actual
 
-- **Cartela** (2026-10-19): código listo (intake `INTAKE_KEY_CARTELA`, remitente, IA con `src/lib/ia/contexto/cartela.md`, subcarpetas de Drive, planes Carta/Casa/Grupo en los formularios). **Pendiente del OK de Joel**: la fila en `marcas`, sus plantillas (`es`) y el concepto «Carta digital <plan>» en `crear_factura_pago()` (SQL preparado, sin aplicar). Fuera de Joux Hub: comprar cartela.es, alias `hola@` en «Enviar como», verificar el dominio en Resend (sin eso no salen los emails de proyecto) y crear `INTAKE_KEY_CARTELA` en Vercel y `.env.local`.
+- **Cartela** (2026-10-19): alta completa en código y en la base (fila en `marcas`, orden 5; plantillas `es` de proyecto.bienvenida, material.recordatorio, revision.lista, revision.recordatorio, entrega.final y factura.pago; `crear_factura_pago()` pone «Carta digital <plan>» en sus facturas). Falta, fuera de Joux Hub: comprar cartela.es, alias `hola@` en «Enviar como», verificar el dominio en Resend (sin eso no salen los emails de proyecto) y crear `INTAKE_KEY_CARTELA` en Vercel y `.env.local`.
 
