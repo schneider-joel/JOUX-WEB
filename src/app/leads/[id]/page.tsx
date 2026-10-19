@@ -189,7 +189,7 @@ export default async function LeadPage({ params }: { params: { id: string } }) {
         )}
 
         <Respuesta leadId={lead.id} borrador={borrador as Borrador | null} remitente={remitenteLead(lead.marca, lead.idioma)}
-          conIa={['arkevo', 'pitchlab', 'custom'].includes(lead.marca)} resumen={lead.resumen_ia} categoria={lead.categoria_ia} />
+          conIa={['arkevo', 'pitchlab', 'custom', 'cartela'].includes(lead.marca)} resumen={lead.resumen_ia} categoria={lead.categoria_ia} />
 
         <section className="block" aria-label="Conversación">
           <p className="label caps"><span>Conversación</span><i className="rule" /></p>

@@ -6,6 +6,8 @@ const REMITENTES: Record<string, { es: string; en: string }> = {
   pitchlab: { es: 'The Pitch Lab <hello@thepitchlab.xyz>', en: 'The Pitch Lab <hello@thepitchlab.xyz>' },
   // Custom Websites es la marca personal: sale de la cuenta principal (decisión de Joel, 2026-10-16).
   custom: { es: 'Joel Schneider <joel@joelschneider.io>', en: 'Joel Schneider <joel@joelschneider.io>' },
+  // Cartas digitales para restaurantes: solo en español, el alias en inglés es el mismo.
+  cartela: { es: 'Cartela <hola@cartela.es>', en: 'Cartela <hola@cartela.es>' },
 }
 
 export const remitenteLead = (marca: string, idioma: string) => {

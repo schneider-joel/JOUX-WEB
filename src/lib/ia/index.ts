@@ -12,7 +12,7 @@ import { notificar } from '@/lib/push'
 // Sonnet 5.5 por decisión de Joel (2026-10-17): más rápido y barato para borradores de email.
 const MODELO = 'claude-sonnet-5-5'
 export const CATEGORIAS = ['precio', 'plazos', 'encargo', 'informacion', 'material', 'spam', 'otro'] as const
-export const MARCAS_CON_IA = ['arkevo', 'pitchlab', 'custom']
+export const MARCAS_CON_IA = ['arkevo', 'pitchlab', 'custom', 'cartela']
 
 const cliente = () => new Anthropic({ timeout: 55_000, maxRetries: 1 })
 

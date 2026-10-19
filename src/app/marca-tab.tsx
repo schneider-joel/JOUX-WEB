@@ -354,6 +354,7 @@ function ModalNuevoCliente({ marca, clientes, demo, onAdd, onClose }: { marca: M
             <label className="caps" htmlFor="nc-plan">Plan</label>
             <input id="nc-plan" list={`planes-${marca.key}`} value={plan} onChange={e => setPlan(e.target.value)} placeholder="Opcional" />
             {marca.key === 'arkevo' && <datalist id={`planes-${marca.key}`}>{['Essential', 'Studio', 'Signature'].map(x => <option key={x} value={x} />)}</datalist>}
+            {marca.key === 'cartela' && <datalist id={`planes-${marca.key}`}>{['Carta', 'Casa', 'Grupo'].map(x => <option key={x} value={x} />)}</datalist>}
           </div>
           <div className="field">
             <label className="caps" htmlFor="nc-precio">Precio (base, sin IVA)</label>

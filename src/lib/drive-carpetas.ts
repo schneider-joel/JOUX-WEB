@@ -5,6 +5,7 @@ export const SUBCARPETAS: Record<string, string[]> = {
   arkevo: ['Fotos', 'Planos', 'Logo y marca', 'Textos', 'Otros'],
   custom: ['Fotos', 'Planos', 'Logo y marca', 'Textos', 'Otros'],
   pitchlab: ['Brief', 'Referencias', 'Texto', 'Otros'],
+  cartela: ['Carta actual', 'Logo y marca', 'Fotos', 'Textos', 'Otros'],
 }
 
 // Las barras del nombre se cambian por guiones: la ruta se crea partiéndola por «/».

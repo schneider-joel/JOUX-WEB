@@ -19,6 +19,7 @@ const FUENTES = [
   { env: 'INTAKE_KEY_THEPITCHLAB', fuente: 'thepitchlab', marcas: ['pitchlab'] },
   { env: 'INTAKE_KEY_ARKEVO', fuente: 'arkevo', marcas: ['arkevo'] },
   { env: 'INTAKE_KEY_PERSONAL', fuente: 'personal', marcas: ['custom'] },
+  { env: 'INTAKE_KEY_CARTELA', fuente: 'cartela', marcas: ['cartela'] },
 ]
 
 const json = (body: unknown, status: number) => NextResponse.json(body, { status })

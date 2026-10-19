@@ -201,6 +201,7 @@ export default function AccionesLead({ lead, marca, clientes, propuesto }: { lea
                 <label className="caps" htmlFor="lg-plan">Plan</label>
                 <input id="lg-plan" list="lg-planes" value={form.plan} onChange={e => set({ plan: e.target.value })} placeholder="Opcional" />
                 {marca.key === 'arkevo' && <datalist id="lg-planes">{['Esencial', 'Estudio', 'Signature', 'Lino', 'Pedra', 'Cota Cero', 'Umbral', 'NAVE', 'Cimbra'].map(x => <option key={x} value={x} />)}</datalist>}
+                {marca.key === 'cartela' && <datalist id="lg-planes">{['Carta', 'Casa', 'Grupo'].map(x => <option key={x} value={x} />)}</datalist>}
               </div>
               <div className="field">
                 <label className="caps" htmlFor="lg-precio">Precio cerrado (base)</label>
