@@ -79,6 +79,7 @@ Panel financiero personal de Joel, autónomo en España: facturación, timesheet
 
 ## Estado actual
 
+- **Rediseño, ficha del lead y resumen** (2026-10-20, rama `redesign-leads`, sin subir): `/leads/[id]` con cabecera nueva, «Te toca» y el panel de conversación compartido (`proyectos/[id]/conversacion.tsx`, texto libre por `POST /api/leads/[id]/mensaje`). El resumen diario (`lib/resumen.ts`) usa `cargarHoy()`; `GET /api/resumen` da la vista previa sin enviar. `cargarHoy()` cuenta también las revisiones comentadas.
 - **Rediseño, fase 5** (2026-10-20, en producción desde 8ecc627): Finanzas › Patrimonio en `/finanzas` (pestaña `patrimonio` de `hub.tsx`, gráfico en `src/app/patrimonio-evolucion.tsx`). Cuentas, ingresos por marca y presupuesto pasan de Hoy a esta pantalla.
 - **Rediseño, fase 4** (2026-10-20, en producción desde 8ecc627): Hoy en `/` (bloque `dashboard` de `hub.tsx`): cifras, patrimonio, «Pendiente», proyectos por etapa y próximas fechas, con datos de `cargarHoy()` (`src/lib/pendientes.ts`, `GET /api/hoy`); debajo, el resumen de siempre. Insignia `hoy` en el menú.
 - **Rediseño, fase 3** (2026-10-20, en producción desde 74c8f53): página de cada marca: `src/app/(app)/(hub)/work/[marca]/page.tsx` (servidor) prepara cifras, tablero por etapa y terminados/perdidos, y el hub los pinta dentro de la pantalla de la marca (`<Hub>{children}</Hub>`), encima de su pestaña de siempre. `queToca()` y `estaParado()` en `src/lib/seguimiento.ts`. `/leads` en tablero (los cerrados aparte).

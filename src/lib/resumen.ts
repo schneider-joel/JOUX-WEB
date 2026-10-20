@@ -4,8 +4,7 @@
 import { supabaseServer as sb } from '@/lib/supabase-server'
 import { enviarEmail } from '@/lib/resend'
 import { notificar } from '@/lib/push'
-import { totalACobrar } from '@/lib/importes'
-import { NOMBRE_EMAIL } from '@/lib/emails'
+import { cargarHoy } from '@/lib/pendientes'
 
 const CLAVE_FECHA = 'resumen_diario_fecha'
 const HORA = 8
@@ -19,84 +18,47 @@ export function ahoraMadrid(d = new Date()) {
     .formatToParts(d).map(x => [x.type, x.value]))
   return { fecha: `${p.year}-${p.month}-${p.day}`, hora: Number(p.hour) }
 }
-const masDias = (fecha: string, n: number) => new Date(Date.parse(`${fecha}T12:00:00Z`) + n * 864e5).toISOString().slice(0, 10)
-const dias = (iso: string) => Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 864e5))
-const euros = (n: number) => n.toLocaleString('es-ES', { style: 'currency', currency: 'EUR', useGrouping: 'always' } as Intl.NumberFormatOptions)
 const plural = (n: number, uno: string, varios: string) => `${n} ${n === 1 ? uno : varios}`
 const fechaCorta = (f: string) => new Date(`${f}T12:00:00Z`).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', timeZone: 'Europe/Madrid' })
+const masDias = (fecha: string, n: number) => new Date(Date.parse(`${fecha}T12:00:00Z`) + n * 864e5).toISOString().slice(0, 10)
 
-const QUE_TOCA: Record<string, string> = { nuevo: 'sin responder', borrador: 'borrador listo', conversacion: 'te ha respondido' }
-
+// Lo mismo que «Pendiente» en Hoy (cargarHoy, lib/pendientes.ts), para que el resumen, Hoy y la insignia
+// del menú digan lo mismo. Más las fechas de los próximos 7 días (vencimientos y recordatorios).
+// El impuesto del trimestre no va aquí: lo calcula el hub en el navegador (impuestos-tab).
 export async function pendienteHoy() {
   const hoy = ahoraMadrid().fecha
-  const [{ data: leads }, { data: borradores }, { data: revisiones }, { data: facturas }, { data: marcas }] = await Promise.all([
-    sb.from('leads').select('id, marca, estado, nombre, email, empresa, recibido_en, ultimo_contacto').in('estado', ['nuevo', 'borrador', 'conversacion']).order('recibido_en'),
-    sb.from('mensajes').select('id, lead_id, proyecto_id, plantilla').eq('direccion', 'saliente').eq('estado', 'borrador'),
-    sb.from('revisiones').select('id, proyecto_id, ronda, estado, comentarios, abierta_en, comentada_en').in('estado', ['abierta', 'comentada']).order('abierta_en'),
-    // Los registros internos del timesheet (fiscal = false) no son facturas reales.
-    sb.from('facturas').select('id, numero, cliente, importe, tipo_factura, fecha, fecha_vencimiento, fiscal').eq('estado', 'pendiente').or('fiscal.is.null,fiscal.eq.true'),
-    sb.from('marcas').select('key, nombre'),
-  ])
-  const nombreMarca = new Map((marcas || []).map(m => [m.key, m.nombre as string]))
-  const idsProyecto = Array.from(new Set([...(borradores || []).map(b => b.proyecto_id), ...(revisiones || []).map(r => r.proyecto_id)].filter((x): x is number => x != null)))
-  const { data: proyectos } = idsProyecto.length ? await sb.from('proyectos').select('id, nombre, cliente').in('id', idsProyecto) : { data: [] }
-  const proyecto = new Map((proyectos || []).map(p => [p.id, p]))
-  const nombreProyecto = (id: number) => { const p = proyecto.get(id); return p ? `${p.cliente} · ${p.nombre}` : `Proyecto ${id}` }
-
+  const { pendientes, fechas } = await cargarHoy()
   const limite = masDias(hoy, 7)
-  const conVence = (facturas || []).map(f => ({ ...f, vence: (f.fecha_vencimiento || f.fecha) as string }))
-  return {
-    hoy,
-    leads: (leads || []).map(l => ({
-      id: l.id, texto: `${l.nombre || l.email}${l.empresa ? ` (${l.empresa})` : ''} · ${nombreMarca.get(l.marca) || l.marca} · ${QUE_TOCA[l.estado]} · hace ${plural(dias(l.estado === 'conversacion' && l.ultimo_contacto ? l.ultimo_contacto : l.recibido_en), 'día', 'días')}`,
-    })),
-    borradoresLeads: (borradores || []).filter(b => b.lead_id).length,
-    borradoresProyectos: (borradores || []).filter(b => !b.lead_id && b.proyecto_id).map(b => ({
-      id: b.id, texto: `${nombreProyecto(b.proyecto_id!)} · ${NOMBRE_EMAIL[b.plantilla || ''] || b.plantilla || 'email'}`,
-    })),
-    comentadas: (revisiones || []).filter(r => r.estado === 'comentada').map(r => ({
-      id: r.id, texto: `${nombreProyecto(r.proyecto_id)} · ${r.ronda} · ${plural(r.comentarios, 'comentario', 'comentarios')} · hace ${plural(dias(r.comentada_en || r.abierta_en), 'día', 'días')}`,
-    })),
-    abiertas: (revisiones || []).filter(r => r.estado === 'abierta').map(r => ({
-      id: r.id, texto: `${nombreProyecto(r.proyecto_id)} · ${r.ronda} · abierta hace ${plural(dias(r.abierta_en), 'día', 'días')}, sin comentarios`,
-    })),
-    vencidas: conVence.filter(f => f.vence < hoy).sort((a, b) => a.vence.localeCompare(b.vence)).map(f => ({
-      id: f.id, texto: `${f.cliente}${f.numero ? ` · ${f.numero}` : ''} · ${euros(totalACobrar(f))} · venció el ${fechaCorta(f.vence)}`,
-    })),
-    estaSemana: conVence.filter(f => f.vence >= hoy && f.vence <= limite).sort((a, b) => a.vence.localeCompare(b.vence)).map(f => ({
-      id: f.id, texto: `${f.cliente}${f.numero ? ` · ${f.numero}` : ''} · ${euros(totalACobrar(f))} · vence el ${fechaCorta(f.vence)}`,
-    })),
-  }
+  return { hoy, pendientes, semana: fechas.filter(f => f.fecha <= limite) }
 }
 type Pendiente = Awaited<ReturnType<typeof pendienteHoy>>
 
-// «2 leads, 1 borrador, 1 factura vencida»: el asunto del email y el texto del push.
+// «2 leads, 1 proyecto, 1 factura vencida»: el asunto del email y el texto del push.
 export function lineaResumen(r: Pendiente) {
-  const borradores = r.borradoresLeads + r.borradoresProyectos.length
+  const de = (letra: string) => r.pendientes.filter(x => x.clave.startsWith(letra)).length
+  const proyectos = de('p') + de('c') + de('v')
   const partes = [
-    r.leads.length && plural(r.leads.length, 'lead', 'leads'),
-    borradores && plural(borradores, 'borrador', 'borradores'),
-    r.comentadas.length && plural(r.comentadas.length, 'revisión por aplicar', 'revisiones por aplicar'),
-    r.abiertas.length && plural(r.abiertas.length, 'revisión sin respuesta', 'revisiones sin respuesta'),
-    r.vencidas.length && plural(r.vencidas.length, 'factura vencida', 'facturas vencidas'),
-    r.estaSemana.length && plural(r.estaSemana.length, 'factura vence esta semana', 'facturas vencen esta semana'),
+    de('l') && plural(de('l'), 'lead', 'leads'),
+    proyectos && plural(proyectos, 'proyecto te espera', 'proyectos te esperan'),
+    de('f') && plural(de('f'), 'factura vencida', 'facturas vencidas'),
+    r.semana.length && plural(r.semana.length, 'fecha esta semana', 'fechas esta semana'),
   ].filter(Boolean) as string[]
   return partes.length ? partes.join(', ') : 'nada pendiente'
 }
 
 function textoEmail(r: Pendiente) {
-  const bloque = (titulo: string, filas: { texto: string }[], enlace: string) =>
-    filas.length ? `${titulo} (${filas.length})\n${filas.map(f => `- ${f.texto}`).join('\n')}\n${WEB}${enlace}` : ''
   const partes = [
-    bloque('Leads esperando respuesta', r.leads, '/pipeline'),
-    r.borradoresLeads ? `Borradores de leads por aprobar: ${r.borradoresLeads} (en la ficha de cada lead)` : '',
-    bloque('Emails de proyectos por aprobar', r.borradoresProyectos, '/proyectos'),
-    bloque('Revisiones comentadas sin aplicar', r.comentadas, '/proyectos'),
-    bloque('Revisiones abiertas sin respuesta del cliente', r.abiertas, '/proyectos'),
-    bloque('Facturas vencidas', r.vencidas, '/'),
-    bloque('Facturas que vencen esta semana', r.estaSemana, '/'),
+    r.pendientes.length ? `Pendiente (${r.pendientes.length})\n${r.pendientes.map(x => `- ${x.texto} · ${x.sub}\n  ${WEB}${x.href}`).join('\n')}` : '',
+    r.semana.length ? `Esta semana\n${r.semana.map(f => `- ${fechaCorta(f.fecha)} · ${f.texto} · ${f.sub}`).join('\n')}` : '',
   ].filter(Boolean)
-  return partes.length ? `Buenos días. Esto espera de ti hoy:\n\n${partes.join('\n\n')}` : 'Buenos días. Hoy no hay nada pendiente.'
+  return partes.length ? `Buenos días. Esto espera de ti hoy:\n\n${partes.join('\n\n')}\n\nHoy: ${WEB}/` : 'Buenos días. Hoy no hay nada pendiente.'
+}
+
+// Vista previa (GET /api/resumen): el asunto y el texto de hoy, sin enviar nada.
+export async function vistaPreviaResumen() {
+  const r = await pendienteHoy()
+  const linea = lineaResumen(r)
+  return { asunto: `Joux · Hoy: ${linea}`, push: linea.charAt(0).toUpperCase() + linea.slice(1), texto: textoEmail(r) }
 }
 
 // Envía el resumen (push + email). Con `forzar` sale siempre, aunque no haya nada (botón de prueba).

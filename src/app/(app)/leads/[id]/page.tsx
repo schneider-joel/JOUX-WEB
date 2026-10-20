@@ -11,8 +11,9 @@ import Bienvenida from './bienvenida'
 import DriveCarpeta from '@/app/(app)/work/drive-carpeta'
 import { SUBCARPETAS } from '@/lib/drive-carpetas'
 import Respuesta, { type Borrador } from './respuesta'
-import EmailHilo from './email-hilo'
 import PedirAjustes from './pedir-ajustes'
+import { BotonChat, PanelChat } from './lead-chat'
+import type { ItemHilo } from '../../proyectos/[id]/ficha'
 import { disenoDelLead, estadoPrueba, urlsFirmadas, type AdjuntoMensaje } from '@/lib/prueba-gratis'
 
 export const dynamic = 'force-dynamic'
@@ -36,7 +37,7 @@ export default async function LeadPage({ params }: { params: { id: string } }) {
 
   const [{ data: eventos }, { data: mensajes }, { data: marca }, { data: clientes }, { data: proyecto }, { data: pago1 }] = await Promise.all([
     sb.from('eventos').select('id, tipo, fuente, datos, created_at').eq('lead_id', lead.id).order('created_at', { ascending: false }),
-    sb.from('mensajes').select('id, direccion, estado, generado_por, remitente, para, asunto, cuerpo, error, enviado_en, created_at, auto, plantilla, adjuntos').eq('lead_id', lead.id).order('created_at', { ascending: false }),
+    sb.from('mensajes').select('id, direccion, estado, generado_por, remitente, para, asunto, cuerpo, error, enviado_en, created_at, auto, plantilla, adjuntos, proyecto_id').eq('lead_id', lead.id).order('created_at', { ascending: false }),
     sb.from('marcas').select('key, nombre, modo').eq('key', lead.marca).maybeSingle(),
     sb.from('clientes_fiscales').select('cliente, identificador, direccion, pais').order('cliente'),
     lead.proyecto_id ? sb.from('proyectos').select('id, nombre, cliente, marca, fase, precio_cerrado, prueba, drive_url, drive_error').eq('id', lead.proyecto_id).maybeSingle() : Promise.resolve({ data: null }),
@@ -64,17 +65,50 @@ export default async function LeadPage({ params }: { params: { id: string } }) {
     ...msgs.filter(m => m.estado === 'enviado' || m.estado === 'recibido').map(m => ({ clave: `m${m.id}`, fecha: m.enviado_en || m.created_at, m })),
     ...((eventos || []) as Evento[]).filter(e => e.tipo !== 'mensaje.enviado' && e.tipo !== 'mensaje.recibido').map(e => ({ clave: `e${e.id}`, fecha: e.created_at, e })),
   ].sort((a, b) => b.fecha.localeCompare(a.fecha))
-  const ultimoEmail = hilo.find(x => 'm' in x)?.clave
+
+  // Panel de conversación (el de la ficha del proyecto): emails y avisos en orden, con sus adjuntos.
+  const remitente = remitenteLead(lead.marca, lead.idioma)
+  // Sin los cambios de estado ni los borradores descartados o regenerados: ruido en una conversación.
+  const hiloPanel: ItemHilo[] = [...hilo].reverse().filter(x => 'm' in x || !['lead.estado', 'ia.borrador', 'mensaje.descartado'].includes(x.e.tipo)).map(x => 'm' in x
+    ? { tipo: 'msg' as const, clave: x.clave, fecha: x.fecha, m: { id: x.m.id, entrante: x.m.direccion === 'entrante', estado: x.m.estado, asunto: x.m.asunto, cuerpo: x.m.cuerpo, error: x.m.error, plantilla: x.m.plantilla || null, auto: !!x.m.auto, deProyecto: !!(x.m as Mensaje & { proyecto_id?: number | null }).proyecto_id && !!x.m.plantilla, de: x.m.remitente, para: x.m.para, adjuntos: adjuntosDe(x.m.id).map(a => ({ nombre: a.nombre, url: a.url || null })) } }
+    : { tipo: 'aviso' as const, clave: x.clave, fecha: x.fecha, texto: textoEvento(x.e) })
+  const nombre = lead.nombre || lead.email
+  const ultimoEntrante = msgs.find(m => m.direccion === 'entrante')
+  // Lo que toca ahora con este lead (los botones de cada cosa están más abajo, en su bloque).
+  const toca: { texto: string; sub: string; href: string; boton: string } | null =
+    proyecto && (marca?.modo === 'cerrado' || MARCAS_TREATMENT.includes(marca?.key || '')) && !bienvenidaEnviada ? { texto: 'Envía la bienvenida', sub: 'Con la carpeta de Drive y, en las webs, la factura del pago 1', href: '#bienvenida', boton: 'Ir a la bienvenida' }
+    : borrador ? { texto: borrador.estado === 'error' ? 'La respuesta no salió: revísala y reintenta' : 'Tienes una respuesta preparada', sub: borrador.asunto || 'Borrador', href: '#respuesta', boton: 'Revisar respuesta' }
+    : prueba?.lista && !prueba.enviada ? { texto: 'La prueba gratis está lista', sub: 'Revísala y envíasela', href: '#prueba', boton: 'Ver la prueba' }
+    : lead.estado === 'nuevo' ? { texto: `Responde a ${nombre}`, sub: 'Todavía no le has contestado', href: '#respuesta', boton: 'Responder' }
+    : lead.estado === 'conversacion' ? { texto: `${nombre} ha respondido`, sub: ultimoEntrante?.asunto || 'Nuevo email', href: '#respuesta', boton: 'Contestar' }
+    : null
 
   return marco(
     <>
-      <header className="page-header lead__head">
-        <div className="page-header__txt">
-          <h1 className="page-title">{lead.nombre || lead.email}</h1>
-          <p className="tags caps">{marca?.nombre || lead.marca} · {hace(lead.recibido_en)}</p>
+      <header className="fx__top lead__head">
+        <div className="fx__tit">
+          <h1 className="lead__h1">{nombre}</h1>
+          <div className="fx__facts">
+            <span className={`fx__tag${['nuevo', 'borrador', 'conversacion'].includes(lead.estado) ? ' aviso' : lead.estado === 'ganado' ? ' ok' : ''}`}>{esEstadoLead(lead.estado) ? ETIQUETA_ESTADO[lead.estado] : lead.estado}</span>
+            <span>{marca?.nombre || lead.marca}</span>
+            {lead.empresa && <><span aria-hidden="true">·</span><span>{lead.empresa}</span></>}
+            <span aria-hidden="true">·</span><span>{hace(lead.recibido_en)}</span>
+          </div>
         </div>
-        <CambiarEstado id={lead.id} estado={lead.estado} />
+        <div className="fx__acts">
+          <BotonChat badge={borrador ? 1 : 0} />
+          {proyecto && <Link className="ghost" href={`/proyectos/${proyecto.id}`}>Proyecto</Link>}
+          <CambiarEstado id={lead.id} estado={lead.estado} />
+        </div>
       </header>
+
+      {toca && (
+        <section className="fx__now lead__head lead__toca" aria-label="Lo que te toca">
+          <span className="fx__ic" aria-hidden="true"><svg className="sh__i" viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></svg></span>
+          <div className="fx__w"><b>{toca.texto}</b><span>{toca.sub}</span></div>
+          <a className="pill pill--sm" href={toca.href}>{toca.boton}</a>
+        </section>
+      )}
 
       <div className="col">
         {proyecto ? (
@@ -89,7 +123,7 @@ export default async function LeadPage({ params }: { params: { id: string } }) {
             </dl>
             {proyecto.prueba && <p className="nota aviso caps">Proyecto de prueba · sus facturas no tienen validez fiscal</p>}
             {/* Webs: bienvenida + carpeta de Drive + factura del pago 1 en un solo email, con vista previa */}
-            {(marca?.modo === 'cerrado' || MARCAS_TREATMENT.includes(marca?.key || '')) && !bienvenidaEnviada && <Bienvenida proyectoId={proyecto.id} />}
+            {(marca?.modo === 'cerrado' || MARCAS_TREATMENT.includes(marca?.key || '')) && !bienvenidaEnviada && <div id="bienvenida"><Bienvenida proyectoId={proyecto.id} /></div>}
             {/* Si la bienvenida pidió los datos fiscales, la factura del pago 1 va en un segundo email */}
             {marca?.modo === 'cerrado' && facturaPendiente && <Bienvenida proyectoId={proyecto.id} clave="factura.pago" />}
           </section>
@@ -100,7 +134,7 @@ export default async function LeadPage({ params }: { params: { id: string } }) {
 
 
         {prueba && (
-          <section className="block" aria-label="Prueba gratis">
+          <section className="block" id="prueba" aria-label="Prueba gratis">
             <p className="label caps"><span>Prueba gratis</span><i className="rule" /></p>
             <ol className="prueba caps">
               {paso(!!prueba.material, `Material${prueba.material ? ` · ${fechaHora(prueba.material)}` : ''}`)}
@@ -158,40 +192,14 @@ export default async function LeadPage({ params }: { params: { id: string } }) {
           </section>
         )}
 
-        <Respuesta leadId={lead.id} borrador={borrador as Borrador | null} remitente={remitenteLead(lead.marca, lead.idioma)}
-          conIa={['arkevo', 'pitchlab', 'custom', 'cartela'].includes(lead.marca)} resumen={lead.resumen_ia} categoria={lead.categoria_ia} />
+        <div id="respuesta">
+          <Respuesta leadId={lead.id} borrador={borrador as Borrador | null} remitente={remitente}
+            conIa={['arkevo', 'pitchlab', 'custom', 'cartela'].includes(lead.marca)} resumen={lead.resumen_ia} categoria={lead.categoria_ia} />
+        </div>
 
         <section className="block" aria-label="Conversación">
-          <p className="label caps"><span>Conversación</span><i className="rule" /></p>
-          {!hilo.length ? <p className="nota">Sin eventos.</p> : (
-            <ul className="hilo">
-              {hilo.map(x => {
-                if ('m' in x) {
-                  const entrante = x.m.direccion === 'entrante'
-                  // «Nombre <email>» → nombre en grande, email aparte.
-                  const de = (entrante ? x.m.remitente : x.m.remitente || x.m.para) || ''
-                  const partes = de.match(/^\s*"?(.*?)"?\s*<([^>]+)>\s*$/)
-                  return (
-                    <EmailHilo key={x.clave} entrante={entrante} abierto={x.clave === ultimoEmail}
-                      etiqueta={entrante ? 'Recibido' : x.m.auto ? 'Enviado automáticamente' : x.m.generado_por === 'joel' ? 'Enviado · editado' : 'Enviado'}
-                      quien={partes?.[1] || de} direccion={partes ? partes[2] : null}
-                      fecha={fechaHora(x.fecha)} asunto={x.m.asunto} cuerpo={x.m.cuerpo} adjuntos={adjuntosDe(x.m.id)} />
-                  )
-                }
-                const alertas = Array.isArray(x.e.datos.alertas) ? (x.e.datos.alertas as unknown[]).map(String) : []
-                return (
-                  <li key={x.clave} className="hilo__evento">
-                    <i className="hilo__punto" aria-hidden="true" />
-                    <span className="hilo__evtxt">
-                      <span>{textoEvento(x.e)}</span>
-                      <span className="hilo__evfecha caps">{fechaHora(x.e.created_at)} · {x.e.fuente}</span>
-                      {alertas.map((a, i) => <span key={i} className="hilo__alerta">⚠ {a}</span>)}
-                    </span>
-                  </li>
-                )
-              })}
-            </ul>
-          )}
+          <p className="label caps"><span>Conversación</span><i className="rule" /><span className="label__m">{msgs.filter(m => m.estado === 'enviado' || m.estado === 'recibido').length} emails</span></p>
+          <BotonChat badge={borrador ? 1 : 0} barra={{ nombre, linea: ultimoEntrante ? `Último suyo: «${ultimoEntrante.asunto || ultimoEntrante.cuerpo.slice(0, 60)}» · ${hace(ultimoEntrante.enviado_en || ultimoEntrante.created_at)}` : hilo.length ? `${hilo.length} cosas en el hilo` : 'Sin emails todavía' }} />
         </section>
 
         <section className="block" aria-label="Contacto">
@@ -219,6 +227,8 @@ export default async function LeadPage({ params }: { params: { id: string } }) {
           </section>
         )}
       </div>
+
+      <PanelChat c={{ nombre, email: lead.email, remitente, leadId: lead.id, hilo: hiloPanel, enviarA: remitente ? `/api/leads/${lead.id}/mensaje` : null, sinEscribir: 'Esta marca no tiene remitente de Gmail.', ocultarBorradores: true }} />
     </>
   )
 }

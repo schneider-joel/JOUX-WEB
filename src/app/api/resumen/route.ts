@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { resumenDiario } from '@/lib/resumen'
+import { resumenDiario, vistaPreviaResumen } from '@/lib/resumen'
 
 export const dynamic = 'force-dynamic'
 // supabase-js usa fetch: sin esto, Next guarda sus respuestas en el Data Cache y la lista sale vieja.
@@ -12,4 +12,9 @@ export async function POST() {
   const r = await resumenDiario({ forzar: true })
   if ('email' in r && r.email?.error) return NextResponse.json({ error: `Email: ${r.email.error}`, push: r.push }, { status: 502 })
   return NextResponse.json(r)
+}
+
+// Vista previa del resumen de hoy (asunto, push y texto), sin enviar nada.
+export async function GET() {
+  return NextResponse.json(await vistaPreviaResumen())
 }

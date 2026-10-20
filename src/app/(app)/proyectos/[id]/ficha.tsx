@@ -15,7 +15,7 @@ import DriveCarpeta from '../../work/drive-carpeta'
 import RefEntrega from '../../work/ref-entrega'
 import Conversacion, { iniciales } from './conversacion'
 
-export type MensajeHilo = { id: number; entrante: boolean; estado: string; asunto: string | null; cuerpo: string; error: string | null; plantilla: string | null; auto: boolean; deProyecto: boolean; de: string | null; para: string | null }
+export type MensajeHilo = { id: number; entrante: boolean; estado: string; asunto: string | null; cuerpo: string; error: string | null; plantilla: string | null; auto: boolean; deProyecto: boolean; de: string | null; para: string | null; adjuntos?: { nombre: string; url: string | null }[] }
 export type ItemHilo = { tipo: 'msg'; clave: string; fecha: string; m: MensajeHilo } | { tipo: 'aviso'; clave: string; fecha: string; texto: string }
 type Enlace = { titulo: string; url: string; estado: string; tono: 'ok' | 'aviso' | null; icono: 'gift' | 'pen' | 'chat' | 'folder' | 'globe' }
 export type DatosFicha = {
@@ -325,7 +325,11 @@ export default function Ficha({ d }: { d: DatosFicha }) {
         </aside>
       </div>
 
-      <Conversacion abierta={chat} onCerrar={() => setChat(false)} d={d} onEmail={abrirEmail} />
+      <Conversacion abierta={chat} onCerrar={() => setChat(false)} onEmail={abrirEmail} c={{
+        nombre: p.contacto || p.cliente, email: p.email, remitente: d.remitente, leadId: d.lead?.id ?? null, hilo: d.hilo,
+        enviarA: d.lead ? `/api/proyectos/${p.id}/mensaje` : null,
+        sinEscribir: d.lead ? 'Esta marca no tiene remitente de Gmail.' : 'Este proyecto no viene de un lead: escríbele desde Gmail.',
+      }} />
     </main>
   )
 }

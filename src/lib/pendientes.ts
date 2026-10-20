@@ -30,7 +30,7 @@ export async function cargarHoy(): Promise<Hoy> {
     sb.from('leads').select('id, nombre, email, empresa, marca, estado, recibido_en, ultimo_contacto').in('estado', ['nuevo', 'borrador', 'conversacion']).order('recibido_en'),
     sb.from('marcas').select('key, nombre'),
     sb.from('facturas').select('id, numero, cliente, importe, fecha, fecha_vencimiento, estado, fiscal, proyecto_id, pago').eq('estado', 'pendiente'),
-    sb.from('revisiones').select('id, proyecto_id, ronda, estado, comentarios, abierta_en, recordatorios').eq('estado', 'abierta'),
+    sb.from('revisiones').select('id, proyecto_id, ronda, estado, comentarios, abierta_en, comentada_en, recordatorios').in('estado', ['abierta', 'comentada']),
     sb.from('facturas').select('proyecto_id').eq('pago', 1).eq('estado', 'cobrada'),
   ])
   const nombreMarca = new Map((marcas || []).map(m => [m.key, m.nombre as string]))
@@ -59,6 +59,13 @@ export async function cargarHoy(): Promise<Hoy> {
     pendientes.push({ clave: `p${p.id}`, texto: toca, sub: `${p.cliente} · ${nombreMarca.get(p.marca || '') || p.marca}`, href: `/proyectos/${p.id}`, urgencia: (p.borradores.length || p.agente ? 150 : 100) + diasDesde(p.desde) })
   }
 
+  // Revisiones que el cliente ya ha comentado: toca aplicar los cambios.
+  const deProyecto = new Map(seg.lista.map(p => [p.id, p]))
+  for (const r of (rondas || []).filter(r => r.estado === 'comentada')) {
+    const p = deProyecto.get(r.proyecto_id)
+    pendientes.push({ clave: `v${r.id}`, texto: `Aplicar ${r.comentarios} comentario${r.comentarios === 1 ? '' : 's'} de ${r.ronda}`, sub: p ? `${p.cliente} · ${nombreMarca.get(p.marca || '') || p.marca}` : `Proyecto ${r.proyecto_id}`, href: `/proyectos/${r.proyecto_id}`, urgencia: 160 + diasDesde(r.comentada_en || r.abierta_en) })
+  }
+
   // Leads que esperan a Joel (los mismos que cuenta el menú).
   for (const l of leads || []) {
     const desde = l.estado === 'conversacion' && l.ultimo_contacto ? l.ultimo_contacto : l.recibido_en
@@ -82,11 +89,10 @@ export async function cargarHoy(): Promise<Hoy> {
     const vence = f.fecha_vencimiento || f.fecha
     if (vence >= hoy && vence <= hasta) fechas.push({ clave: `f${f.id}`, fecha: vence, texto: `Vence ${f.numero || 'una factura'}`, sub: `${f.cliente} · ${eur(Number(f.importe))}`, href: '/finanzas/facturas' })
   }
-  const nombreProy = new Map(seg.lista.map(p => [p.id, p]))
   for (const r of rondas || []) {
-    if (r.comentarios > 0 || r.recordatorios >= 2) continue
+    if (r.estado !== 'abierta' || r.comentarios > 0 || r.recordatorios >= 2) continue
     const cuando = masDias(r.abierta_en, 3 * (r.recordatorios + 1)).slice(0, 10)
-    const p = nombreProy.get(r.proyecto_id)
+    const p = deProyecto.get(r.proyecto_id)
     if (cuando <= hasta) fechas.push({ clave: `r${r.id}`, fecha: cuando < hoy ? hoy : cuando, texto: `Recordatorio de ${r.ronda}`, sub: p ? `${p.cliente} · si no comenta` : 'si no comenta', href: p ? `/proyectos/${p.id}` : undefined })
   }
   fechas.sort((a, b) => a.fecha.localeCompare(b.fecha))

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { NOMBRE_EMAIL } from '@/lib/emails'
 import { marcasJoel } from '@/lib/remitentes'
-import type { DatosFicha, MensajeHilo } from './ficha'
+import type { ItemHilo, MensajeHilo } from './ficha'
 
 export const iniciales = (n: string) => n.split(/\s+/).filter(Boolean).slice(0, 2).map(x => x[0]!.toUpperCase()).join('')
 const fechaHora = (iso: string) => new Date(iso).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid' }).replace('.', '')
@@ -14,7 +14,11 @@ const fechaHora = (iso: string) => new Date(iso).toLocaleString('es-ES', { day: 
 // - borradores de una plantilla del proyecto → se revisan en el panel de email de la ficha (el de siempre);
 // - respuesta preparada para el lead (IA o la que falló) → se edita aquí y sale por Gmail como en la ficha del lead;
 // - texto libre → POST /api/proyectos/<id>/mensaje, por Gmail en el mismo hilo.
-export default function Conversacion({ abierta, onCerrar, d, onEmail }: { abierta: boolean; onCerrar: () => void; d: DatosFicha; onEmail: (clave: string, mensaje?: number) => void }) {
+// Lo usan la ficha del proyecto y la del lead. `enviarA`: dónde se manda el texto libre (proyecto o lead);
+// `sinEscribir`: por qué no se puede escribir (sin lead, sin remitente…). `ocultarBorradores`: en la ficha del
+// lead la respuesta preparada se edita en su bloque «Respuesta», no aquí.
+export type DatosConversacion = { nombre: string; email: string | null; remitente: string | null; leadId: number | null; hilo: ItemHilo[]; enviarA: string | null; sinEscribir: string; ocultarBorradores?: boolean }
+export default function Conversacion({ abierta, onCerrar, c, onEmail }: { abierta: boolean; onCerrar: () => void; c: DatosConversacion; onEmail?: (clave: string, mensaje?: number) => void }) {
   const router = useRouter()
   const [filtro, setFiltro] = useState<'todo' | 'msg' | 'aviso'>('todo')
   const [texto, setTexto] = useState('')
@@ -33,24 +37,24 @@ export default function Conversacion({ abierta, onCerrar, d, onEmail }: { abiert
     return () => document.removeEventListener('keydown', esc)
   }, [abierta, onCerrar])
 
-  const nombre = d.p.contacto || d.p.cliente
-  const puedeEscribir = !!d.lead && !!d.remitente
-  const lista = d.hilo.filter(x => filtro === 'todo' || x.tipo === filtro)
+  const nombre = c.nombre
+  const puedeEscribir = !!c.enviarA && !!c.remitente
+  const lista = c.hilo.filter(x => (filtro === 'todo' || x.tipo === filtro) && !(c.ocultarBorradores && x.tipo === 'msg' && !x.m.entrante && !x.m.deProyecto && (x.m.estado === 'borrador' || x.m.estado === 'error')))
 
   const enviar = async () => {
     if (!texto.trim()) return
-    if (!confirm(`¿Enviar este email a ${d.p.email || nombre} desde ${d.remitente}?`)) return
+    if (!c.enviarA || !confirm(`¿Enviar este email a ${c.email || nombre} desde ${c.remitente}?`)) return
     setOcupado('enviar'); setError('')
-    const r = await fetch(`/api/proyectos/${d.p.id}/mensaje`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cuerpo: texto }) }).catch(() => null)
+    const r = await fetch(c.enviarA, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cuerpo: texto }) }).catch(() => null)
     const j = await r?.json().catch(() => ({}))
     setOcupado(null)
     if (!r?.ok) { setError(j?.error || 'No se pudo enviar'); return }
     setTexto(''); setNota('Enviado'); router.refresh()
   }
   const borradorIa = async () => {
-    if (!d.lead) return
+    if (!c.leadId) return
     setOcupado('ia'); setError('')
-    const r = await fetch(`/api/leads/${d.lead.id}/borrador`, { method: 'POST' }).catch(() => null)
+    const r = await fetch(`/api/leads/${c.leadId}/borrador`, { method: 'POST' }).catch(() => null)
     const j = await r?.json().catch(() => ({}))
     setOcupado(null)
     if (!r?.ok) { setError(j?.error || 'No se pudo preparar el borrador'); return }
@@ -63,7 +67,7 @@ export default function Conversacion({ abierta, onCerrar, d, onEmail }: { abiert
       <aside ref={panelRef} id="fx-chat" className={`fx__drawer${abierta ? ' is-on' : ''}`} role="dialog" aria-modal="false" aria-labelledby="fx-chat-t" tabIndex={-1} aria-hidden={!abierta}>
         <div className="fx__dh">
           <span className="fx__av" aria-hidden="true">{iniciales(nombre)}</span>
-          <div className="fx__tx"><b id="fx-chat-t">{nombre}</b><span>{d.p.email || 'sin email'}{d.remitente ? ` · desde ${d.remitente}` : ''}</span></div>
+          <div className="fx__tx"><b id="fx-chat-t">{nombre}</b><span>{c.email || 'sin email'}{c.remitente ? ` · desde ${c.remitente}` : ''}</span></div>
           <button type="button" className="fx__x" onClick={onCerrar} aria-label="Cerrar conversación">✕</button>
         </div>
         <div className="seg caps fx__seg" role="group" aria-label="Filtrar">
@@ -87,7 +91,7 @@ export default function Conversacion({ abierta, onCerrar, d, onEmail }: { abiert
                 <button type="submit" className="pill pill--sm" disabled={!!ocupado || !texto.trim()}>{ocupado === 'enviar' ? 'Enviando…' : 'Enviar'}</button>
               </div>
             </>
-          ) : <p className="nota">{d.lead ? 'Esta marca no tiene remitente de Gmail.' : 'Este proyecto no viene de un lead: escríbele desde Gmail.'}</p>}
+          ) : <p className="nota">{c.sinEscribir}</p>}
         </form>
       </aside>
     </>
@@ -95,7 +99,7 @@ export default function Conversacion({ abierta, onCerrar, d, onEmail }: { abiert
 }
 
 // Un email del hilo. Las respuestas preparadas para el lead se editan y se envían aquí mismo.
-function Mensaje({ m, fecha, nombre, onEmail }: { m: MensajeHilo; fecha: string; nombre: string; onEmail: (clave: string, mensaje?: number) => void }) {
+function Mensaje({ m, fecha, nombre, onEmail }: { m: MensajeHilo; fecha: string; nombre: string; onEmail?: (clave: string, mensaje?: number) => void }) {
   const router = useRouter()
   const pendiente = !m.entrante && (m.estado === 'borrador' || m.estado === 'error')
   const [editar, setEditar] = useState(false)
@@ -110,6 +114,7 @@ function Mensaje({ m, fecha, nombre, onEmail }: { m: MensajeHilo; fecha: string;
       <div className="fx__meta"><span>{m.entrante ? nombre : m.plantilla ? NOMBRE_EMAIL[m.plantilla] || 'Email' : 'Tú'}{m.auto ? ' · automático' : ''}</span><span>{fechaHora(fecha)}</span></div>
       {m.asunto && <b>{m.asunto}</b>}
       <p>{m.cuerpo}</p>
+      {!!m.adjuntos?.length && <span className="fx__adj">{m.adjuntos.map((a, i) => a.url ? <a key={i} href={a.url} target="_blank" rel="noopener noreferrer" className="fx__tag">{a.nombre}</a> : <span key={i} className="fx__tag">{a.nombre}</span>)}</span>}
     </div>
   )
 
@@ -119,7 +124,7 @@ function Mensaje({ m, fecha, nombre, onEmail }: { m: MensajeHilo; fecha: string;
       <span className="fx__dm">Borrador · {NOMBRE_EMAIL[m.plantilla || ''] || m.plantilla}</span>
       {m.asunto && <b>{m.asunto}</b>}
       {m.error && <span className="nota error">{m.error}</span>}
-      <div className="fx__row"><button type="button" className="pill pill--sm" onClick={() => onEmail(m.plantilla || '', m.id)}>Revisar y enviar</button></div>
+      <div className="fx__row"><button type="button" className="pill pill--sm" onClick={() => onEmail?.(m.plantilla || '', m.id)}>Revisar y enviar</button></div>
     </div>
   )
 
