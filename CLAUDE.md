@@ -79,5 +79,6 @@ Panel financiero personal de Joel, autónomo en España: facturación, timesheet
 
 ## Estado actual
 
+- **Rediseño de la interfaz, fase 1** (2026-10-20, rama `redesign`, sin pasar a `main`): marco nuevo (`src/app/app-shell.tsx`) con barra lateral Inicio · Work (Leads, Proyectos) · Marcas · Finanzas · Compartidos/Ajustes, migas y barra inferior en el móvil. Las pestañas del Overview son rutas (`src/app/rutas.ts`): `/finanzas/{facturas,compras,impuestos,bancos,presupuesto,clientes}`, `/work/<marca>`, `/compartidos`; `/pipeline` → `/leads`, `/proyectos` → `/work`; `/?tab=…` redirige desde `(app)/(hub)/page.tsx`. El antiguo `page.tsx` es `src/app/hub.tsx`, montado una vez en `(app)/(hub)/layout.tsx`. Plan: `../plan-interfaz.md`.
 - **Cartela** (2026-10-19): alta completa en código y en la base (fila en `marcas`, orden 5; plantillas `es` de proyecto.bienvenida, material.recordatorio, revision.lista, revision.recordatorio, entrega.final y factura.pago; `crear_factura_pago()` pone «Carta digital <plan>» en sus facturas). Falta, fuera de Joux Hub: comprar cartela.es, alias `hola@` en «Enviar como», verificar el dominio en Resend (sin eso no salen los emails de proyecto) y crear `INTAKE_KEY_CARTELA` en Vercel y `.env.local`.
 

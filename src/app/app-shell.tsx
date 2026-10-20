@@ -81,6 +81,10 @@ function Menu({ datos, marcaQ }: { datos: DatosMenu; marcaQ: string | null }) {
         <span className="sh__h caps">Work</span>
         <Entrada it={{ href: '/leads', label: 'Leads', icono: I.inbox, n: leads, activo: ruta.startsWith('/leads') && !marcaQ }} />
         <Entrada it={{ href: '/work', label: 'Proyectos', icono: I.flag, activo: ruta === '/work' }} />
+      </nav>
+      {/* Las marcas, aparte de Leads y Proyectos (que son de todas): cada una con su pantalla. */}
+      <nav className="sh__grp" aria-label="Marcas">
+        <span className="sh__h caps">Marcas</span>
         {marcas.map(m => {
           const web = esAgencia(m)
           const abierta = marcaAbierta === m.key
@@ -118,7 +122,7 @@ function Migas({ marcas, marcaQ }: { marcas: Marca[]; marcaQ: string | null }) {
     ruta === '/' ? [{ t: 'Inicio' }, { t: 'Hoy' }]
     : f ? [{ t: 'Finanzas' }, { t: f.label }]
     : ruta === '/work' ? [{ t: 'Work' }, { t: 'Proyectos' }]
-    : ruta.startsWith('/work/') ? [{ t: 'Work' }, { t: nombre(ruta.split('/')[2]) || '' }]
+    : ruta.startsWith('/work/') ? [{ t: 'Marcas' }, { t: nombre(ruta.split('/')[2]) || '' }]
     : ruta === '/leads' ? [{ t: 'Work' }, { t: 'Leads', href: marcaQ ? '/leads' : undefined }, ...(marcaQ ? [{ t: nombre(marcaQ) || '' }] : [])]
     : ruta.startsWith('/leads/') ? [{ t: 'Work' }, { t: 'Leads', href: '/leads' }, { t: `#${ruta.split('/')[2]}` }]
     : ruta === '/compartidos' ? [{ t: 'Compartidos' }]

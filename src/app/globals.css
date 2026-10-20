@@ -1092,10 +1092,11 @@ div.ajustes { display: flex; flex-direction: column; gap: 48px; }
 
 @media (max-width: 899px) {
   .sh__side { display: none; }
-  .sh__cuerpo { margin-left: 0; padding: calc(14px + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) calc(96px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
+  /* 22 px a los lados, como antes: algunas tiras (filtros de Facturas) sangran justo eso. */
+  .sh__cuerpo { margin-left: 0; padding: calc(14px + env(safe-area-inset-top, 0px)) max(22px, env(safe-area-inset-right, 0px)) calc(96px + env(safe-area-inset-bottom, 0px)) max(22px, env(safe-area-inset-left, 0px)); }
   .sh__top { margin-bottom: 20px; }
   .sh__solo-ancho { display: none; }
-  .sh__hermanas { display: flex; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -16px 28px; padding: 0 16px; }
+  .sh__hermanas { display: flex; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -22px 28px; padding: 0 22px; }
   .sh__hermanas::-webkit-scrollbar { display: none; }
   .sh__hermanas .chip { flex: none; }
   .sh__barra { display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; justify-content: space-around;
