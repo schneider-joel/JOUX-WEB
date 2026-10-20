@@ -697,11 +697,10 @@ export default function Hub({ children }: { children?: React.ReactNode }) {
           const grupos = [
             ...cuentas.filter(c => !c.padre_id).map(c => {
               const hijos = cuentas.filter(h => h.padre_id === c.id)
-              return { clave: `c${c.id}`, nombre: c.nombre, color: c.color, total: aEuros(c) + hijos.reduce((t, h) => t + aEuros(h), 0), detalle: hijos.map(h => `${h.nombre} €${fmt(aEuros(h))}`).join(' · '), usd: c.moneda === 'USD' }
+              return { clave: `c${c.id}`, nombre: c.nombre, color: c.color, total: aEuros(c) + hijos.reduce((t, h) => t + aEuros(h), 0), detalle: '', hijos: hijos.map(h => ({ nombre: h.nombre, total: aEuros(h) })), usd: c.moneda === 'USD' }
             }),
-            ...(totalCrypto > 0 ? [{ clave: 'crypto', nombre: 'Cripto', color: '#8A8A87', total: totalCrypto, detalle: crypto.map(c => `${c.cantidad} ${c.symbol}`).join(' · '), usd: false }] : []),
+            ...(totalCrypto > 0 ? [{ clave: 'crypto', nombre: 'Cripto', color: '#8A8A87', total: totalCrypto, detalle: crypto.map(c => `${c.cantidad} ${c.symbol}`).join(' · '), hijos: [] as { nombre: string; total: number }[], usd: false }] : []),
           ].sort((a, b) => b.total - a.total)
-          const mayor = Math.max(1, ...grupos.map(g => g.total))
           // Ingresos y gastos por mes (movimientos del banco): cobros e ingresos frente a gastos menos reembolsos.
           const meses6 = ultimosMeses(6)
           const porMes = meses6.map(m => {
@@ -721,26 +720,33 @@ export default function Hub({ children }: { children?: React.ReactNode }) {
               <div className="fx__kpi"><span className="fx__l">En 12 meses</span><span className="fx__v">{delta12 === null ? '—' : `${delta12 >= 0 ? '+' : '−'}€${fmt(Math.abs(delta12))}`}</span><span className="fx__s">{base ? `desde el ${fmtDate(base.fecha)}${Number(base.total) > 0 && delta12 !== null ? ` · ${delta12 >= 0 ? '+' : ''}${(delta12 / Number(base.total) * 100).toFixed(1)} %` : ''}` : 'Sin historial'}</span></div>
             </section>
 
+            {/* Dónde está el dinero: el reparto en una barra y una tarjeta por banco (con sus apartados) y la cripto */}
+            <section className="fx__card" aria-labelledby="pt-donde">
+              <header><h2 id="pt-donde">Dónde está el dinero</h2><button type="button" className="copy caps" onClick={() => setModal({ type: 'editCuentas' })}>Editar cuentas →</button></header>
+              <div className="pt__reparto" role="img" aria-label={grupos.map(g => `${g.nombre} ${pct(g.total)}`).join(', ')}>
+                {grupos.filter(g => g.total > 0).map(g => <i key={g.clave} style={{ flex: g.total, background: g.color || 'var(--muted)' }} title={`${g.nombre} · €${fmt(g.total)} · ${pct(g.total)}`} />)}
+              </div>
+              <div className="pt__bancos">
+                {grupos.map(g => (
+                  <div key={g.clave} className="pt__banco">
+                    <span className="pt__bn"><i style={{ background: g.color || 'var(--muted)' }} />{g.nombre}{g.usd && !/usd/i.test(g.nombre) && <small className="caps dim">USD</small>}</span>
+                    <span className="pt__bv">€{fmt(g.total)}</span>
+                    <span className="pt__bp">{pct(g.total)} del total</span>
+                    {g.hijos.length > 0 && (
+                      <ul className="pt__aps">
+                        {g.hijos.map(h => <li key={h.nombre}><span>{h.nombre}</span><span className="num">€{fmt(h.total)}</span></li>)}
+                      </ul>
+                    )}
+                    {g.detalle && !g.hijos.length && <small className="pt__det">{g.detalle}</small>}
+                  </div>
+                ))}
+              </div>
+            </section>
+
             <section className="fx__card" aria-labelledby="pt-evo">
               <header><h2 id="pt-evo">Evolución del patrimonio</h2><span className="caps dim">un punto por día</span></header>
               <PatrimonioEvolucion snapshots={snapshots} actual={totalPatrimonio} hoy={hoyISO} />
             </section>
-
-            <div className="pt__g">
-              <section className="fx__card" aria-labelledby="pt-donde">
-                <header><h2 id="pt-donde">Dónde está el dinero</h2><span className="caps dim">€{fmt(totalPatrimonio)}</span></header>
-                <ul className="pt__barras">
-                  {grupos.map(g => (
-                    <li key={g.clave}>
-                      <span className="pt__bn"><i style={{ background: g.color || 'var(--muted)' }} />{g.nombre}{g.usd && <small className="dim"> · USD</small>}</span>
-                      <span className="num">€{fmt(g.total)} <small className="dim">{pct(g.total)}</small></span>
-                      <span className="pt__tr"><i style={{ width: `${g.total / mayor * 100}%` }} /></span>
-                      {g.detalle && <small className="pt__det">{g.detalle}</small>}
-                    </li>
-                  ))}
-                </ul>
-                <button type="button" className="copy caps" onClick={() => setModal({ type: 'editCuentas' })}>Editar cuentas →</button>
-              </section>
 
               <section className="fx__card" aria-labelledby="pt-ig">
                 <header><h2 id="pt-ig">Ingresos y gastos</h2><span className="caps dim">últimos 6 meses · banco</span></header>
@@ -756,7 +762,6 @@ export default function Hub({ children }: { children?: React.ReactNode }) {
                   <p className="legend caps pt__ley"><span><i className="sw" />Ingresos €{fmt(porMes.reduce((t, x) => t + x.ingresos, 0))}</span><span><i className="sw sw--g" />Gastos €{fmt(porMes.reduce((t, x) => t + x.gastos, 0))}</span></p>
                 </>}
               </section>
-            </div>
 
             {/* Impuestos del trimestre: lo que toca pagar y lo apartado para ello */}
             {pago && (
