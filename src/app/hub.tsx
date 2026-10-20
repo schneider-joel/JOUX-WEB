@@ -711,12 +711,23 @@ export default function Hub({ children }: { children?: React.ReactNode }) {
           })
           const tope = Math.max(1, ...porMes.flatMap(x => [x.ingresos, x.gastos]))
           const irpf = cuentas.find(c => c.tipo === 'irpf')
+          // Proyección a 30 días (estimación sencilla): hoy + facturas que vencen en 30 días − impuesto si vence
+          // en ese plazo − la media de gastos de los 3 meses completos anteriores (banco).
+          const en30 = (() => { const d = new Date(hoyISO + 'T00:00:00'); d.setDate(d.getDate() + 30); return d.toISOString().slice(0, 10) })()
+          const cobros30 = facturasPendientes.filter(f => (f.fecha_vencimiento || f.fecha) <= en30)
+          const cobrosPrevistos = cobros30.reduce((t, f) => t + totalACobrar(f), 0)
+          const impuesto30 = pago && pago.plazo <= en30 ? pago.total : 0
+          const mesesGasto = porMes.slice(-4, -1).filter(x => x.gastos > 0)
+          const gastoMedio = mesesGasto.length ? mesesGasto.reduce((t, x) => t + x.gastos, 0) / mesesGasto.length : 0
+          const proyeccion = totalPatrimonio + cobrosPrevistos - impuesto30 - gastoMedio
+          const vencidasPt = facturasPendientes.filter(f => (f.fecha_vencimiento || f.fecha) < hoyISO).length
           return (
           <div className="col pt">
-            <section className="fx__kpis" aria-label="Resumen del patrimonio">
+            <section className="fx__kpis pt__kpis" aria-label="Resumen del patrimonio">
               <div className="fx__kpi"><span className="fx__l">Patrimonio total</span><span className="fx__v">€{fmt(totalPatrimonio)}</span><span className="fx__s">{deltaMes !== null ? `${deltaMes >= 0 ? '+' : '−'}€${fmt(Math.abs(deltaMes))} desde el mes pasado` : 'Registrando historial'}</span></div>
               <div className="fx__kpi"><span className="fx__l">Liquidez</span><span className="fx__v">€{fmt(totalLiquidez)}</span><span className="fx__s">{pct(totalLiquidez)} del total</span></div>
               <div className="fx__kpi"><span className="fx__l">Cripto</span><span className="fx__v">€{fmt(totalCrypto)}</span><span className="fx__s">{pct(totalCrypto)} del total</span></div>
+              <Link href="/finanzas/facturas" className="fx__kpi hoy__k"><span className="fx__l">Pendiente de cobro</span><span className="fx__v">€{fmt(totalPendiente)}</span><span className={`fx__s${vencidasPt ? ' aviso' : ''}`}>{vencidasPt ? `${vencidasPt} vencida${vencidasPt === 1 ? '' : 's'} · ` : ''}{facturasPendientes.length} facturas</span></Link>
               <div className="fx__kpi"><span className="fx__l">En 12 meses</span><span className="fx__v">{delta12 === null ? '—' : `${delta12 >= 0 ? '+' : '−'}€${fmt(Math.abs(delta12))}`}</span><span className="fx__s">{base ? `desde el ${fmtDate(base.fecha)}${Number(base.total) > 0 && delta12 !== null ? ` · ${delta12 >= 0 ? '+' : ''}${(delta12 / Number(base.total) * 100).toFixed(1)} %` : ''}` : 'Sin historial'}</span></div>
             </section>
 
@@ -731,13 +742,8 @@ export default function Hub({ children }: { children?: React.ReactNode }) {
                   <div key={g.clave} className="pt__banco">
                     <span className="pt__bn"><i style={{ background: g.color || 'var(--muted)' }} />{g.nombre}{g.usd && !/usd/i.test(g.nombre) && <small className="caps dim">USD</small>}</span>
                     <span className="pt__bv">€{fmt(g.total)}</span>
-                    <span className="pt__bp">{pct(g.total)} del total</span>
-                    {g.hijos.length > 0 && (
-                      <ul className="pt__aps">
-                        {g.hijos.map(h => <li key={h.nombre}><span>{h.nombre}</span><span className="num">€{fmt(h.total)}</span></li>)}
-                      </ul>
-                    )}
-                    {g.detalle && !g.hijos.length && <small className="pt__det">{g.detalle}</small>}
+                    <span className="pt__bp">{pct(g.total)}</span>
+                    {(g.hijos.length > 0 || g.detalle) && <small className="pt__det" title={g.hijos.map(h => `${h.nombre} €${fmt(h.total)}`).join(' · ') || g.detalle}>{g.hijos.length ? g.hijos.map(h => `${h.nombre} €${fmt(h.total)}`).join(' · ') : g.detalle}</small>}
                   </div>
                 ))}
               </div>
@@ -745,7 +751,17 @@ export default function Hub({ children }: { children?: React.ReactNode }) {
 
             <section className="fx__card" aria-labelledby="pt-evo">
               <header><h2 id="pt-evo">Evolución del patrimonio</h2><span className="caps dim">un punto por día</span></header>
-              <PatrimonioEvolucion snapshots={snapshots} actual={totalPatrimonio} hoy={hoyISO} />
+              <PatrimonioEvolucion snapshots={snapshots} actual={totalPatrimonio} hoy={hoyISO} proyeccion={{ fecha: en30, valor: proyeccion }} />
+              <div className="pt__proy">
+                <span className="caps dim">En 30 días · estimado</span>
+                <b>€{fmt(proyeccion)}</b>
+                <span className="pt__pd">
+                  <span>Hoy €{fmt(totalPatrimonio)}</span>
+                  <span>+ cobros previstos €{fmt(cobrosPrevistos)} <small className="dim">({cobros30.length} factura{cobros30.length === 1 ? '' : 's'} que vencen)</small></span>
+                  {impuesto30 > 0 && <span>− impuestos T{pago!.q} €{fmt(impuesto30)} <small className="dim">(si aún no está pagado)</small></span>}
+                  <span>− gasto medio €{fmt(gastoMedio)} <small className="dim">({mesesGasto.length ? `media de ${mesesGasto.length} meses del banco` : 'sin datos del banco'})</small></span>
+                </span>
+              </div>
             </section>
 
               <section className="fx__card" aria-labelledby="pt-ig">

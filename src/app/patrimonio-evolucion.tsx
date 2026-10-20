@@ -14,7 +14,8 @@ const mesCorto = (iso: string) => new Date(iso + 'T00:00:00').toLocaleDateString
 type Periodo = '3m' | '12m' | 'todo'
 const MESES: Record<Periodo, number | null> = { '3m': 3, '12m': 12, todo: null }
 
-export default function PatrimonioEvolucion({ snapshots, actual, hoy }: { snapshots: PatrimonioSnapshot[]; actual: number; hoy: string }) {
+// `proyeccion`: el valor estimado dentro de 30 días, en línea discontinua desde hoy.
+export default function PatrimonioEvolucion({ snapshots, actual, hoy, proyeccion }: { snapshots: PatrimonioSnapshot[]; actual: number; hoy: string; proyeccion?: { fecha: string; valor: number } }) {
   const [periodo, setPeriodo] = useState<Periodo>('12m')
   const [sel, setSel] = useState<number | null>(null)
   const caja = useRef<HTMLDivElement>(null)
@@ -37,8 +38,8 @@ export default function PatrimonioEvolucion({ snapshots, actual, hoy }: { snapsh
 
   const h = 240, pl = 52, pr = 12, pt = 12, pb = 26
   const t = (iso: string) => new Date(iso + 'T00:00:00').getTime()
-  const t0 = puntos.length ? t(puntos[0].fecha) : 0, t1 = puntos.length ? t(puntos[puntos.length - 1].fecha) : 1
-  const vals = puntos.map(p => p.v)
+  const t0 = puntos.length ? t(puntos[0].fecha) : 0, t1 = proyeccion ? t(proyeccion.fecha) : puntos.length ? t(puntos[puntos.length - 1].fecha) : 1
+  const vals = [...puntos.map(p => p.v), ...(proyeccion ? [proyeccion.valor] : [])]
   const bruto = { min: Math.min(...vals), max: Math.max(...vals) }
   const margen = Math.max(500, (bruto.max - bruto.min) * 0.15)
   const mn = Math.max(0, Math.floor((bruto.min - margen) / 1000) * 1000), mx = Math.ceil((bruto.max + margen) / 1000) * 1000
@@ -77,6 +78,11 @@ export default function PatrimonioEvolucion({ snapshots, actual, hoy }: { snapsh
             {marcas.filter((_, i) => i % cada === 0).map(m => <text key={m} className="pt__ax" x={x(m)} y={h - 6} textAnchor="middle">{mesCorto(m)}</text>)}
             <path className="pt__area" d={`${d} L${x(puntos[puntos.length - 1].fecha)},${y(mn)} L${x(puntos[0].fecha)},${y(mn)} Z`} />
             <path className="pt__ln" d={d} />
+            {proyeccion && <>
+              <line className="pt__proyl" x1={x(hoy)} y1={y(actual)} x2={x(proyeccion.fecha)} y2={y(proyeccion.valor)} />
+              <circle className="pt__proyp" r="4" cx={x(proyeccion.fecha)} cy={y(proyeccion.valor)} />
+              <text className="pt__ax" x={x(proyeccion.fecha)} y={y(proyeccion.valor) - 10} textAnchor="end">+30 d</text>
+            </>}
             <circle className="pt__fin" r="4.5" cx={x(puntos[puntos.length - 1].fecha)} cy={y(puntos[puntos.length - 1].v)} />
             {p && <><line className="pt__cruz" x1={x(p.fecha)} x2={x(p.fecha)} y1={pt} y2={h - pb} /><circle className="pt__fin" r="4" cx={x(p.fecha)} cy={y(p.v)} /></>}
           </svg>
