@@ -935,6 +935,14 @@ button.fila--btn { width: 100%; background: none; border: 0; padding: 0; font: i
 .trk__cab { color: var(--dim); padding-bottom: 10px; border-bottom: 1px solid var(--line); }
 .trk__cabfases { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); text-align: center; }
 .trk__lista { list-style: none; display: flex; flex-direction: column; }
+/* Cada fila es un enlace a la ficha del proyecto: se toca entera. */
+.trk__p.trk__fila { grid-template-columns: 210px minmax(0, 1fr) 210px 14px; color: inherit; text-decoration: none; border-radius: 10px; margin: 0 -12px; padding-left: 12px; padding-right: 12px; transition: background-color .15s var(--ease-out); }
+.trk__fila .trk__nodo { cursor: inherit; }
+.trk__ir { color: var(--dim); font-size: 20px; line-height: 1; }
+.trk__toca { display: inline-flex; align-items: center; gap: 7px; color: var(--amber); font-size: 13.5px; }
+.trk__toca i { width: 6px; height: 6px; border-radius: 50%; background: var(--amber); flex: none; }
+@media (hover: hover) and (pointer: fine) { .trk__fila:hover { background: var(--hover); } .trk__fila:hover .trk__ir { color: var(--text); } }
+@media (max-width: 900px) { .trk__p.trk__fila { grid-template-columns: minmax(0, 1fr) 14px; margin: 0; padding-left: 0; padding-right: 0; } .trk__fila .trk__q, .trk__fila .trk__linea, .trk__fila .trk__ahora { grid-column: 1; } .trk__fila .trk__ir { grid-column: 2; grid-row: 1 / span 3; align-self: center; } }
 .trk__p { padding: 22px 0; border-bottom: 1px solid var(--line); row-gap: 14px; }
 .trk__q { display: flex; flex-direction: column; gap: 3px; min-width: 0; background: none; border: 0; padding: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
 .trk__c { font-size: 16px; letter-spacing: -.01em; }
@@ -1271,3 +1279,11 @@ div.ajustes { display: flex; flex-direction: column; gap: 48px; }
   .fx__scrim { z-index: 39; }
 }
 @media (prefers-reduced-motion: reduce) { .fx__drawer, .fx__scrim { transition: none; } }
+
+/* Esqueleto de carga entre páginas ((app)/loading.tsx) */
+.sh__cargando { display: flex; flex-direction: column; gap: 16px; padding-top: 8px; }
+.sh__cl { display: block; height: 14px; border-radius: 6px; background: var(--hover); animation: sh-late 1.2s var(--ease-out) infinite alternate; }
+.sh__cl:first-child { height: 26px; }
+.sh__cl--b { height: 120px; width: 100%; margin: 12px 0; }
+@keyframes sh-late { from { opacity: .45; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .sh__cl { animation: none; } }

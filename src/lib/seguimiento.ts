@@ -84,3 +84,18 @@ export function faltaBrief(b: Partial<Brief> | null | undefined): string | null 
 export const ESTADO_RONDA = { abierta: 'esperando comentarios', comentada: 'comentada', cerrada: 'cerrada' } as const
 
 export const diasDesde = (iso: string) => Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86400000))
+
+// «Comenzar» un proyecto con agente que aún no tiene encargo en marcha (ni hecho).
+export const encargaAgente = (p: ProyectoSeguimiento, fase: FaseProyecto) =>
+  fase === 'comenzado' && !!p.encargo_tipo && (!p.agente || p.agente.estado === 'error')
+// Qué pasa al pulsar «Comenzar», en la confirmación.
+export function alComenzar(p: ProyectoSeguimiento) {
+  if (!p.encargo_tipo) return 'sin agente: la haces tú'
+  if (p.agente && p.agente.estado !== 'error') return 'el encargo ya existe'
+  if (p.encargo_tipo === 'custom' && faltaBrief(p.brief)) return 'el agente espera tu brief de dirección (se pide al comenzar)'
+  if (p.encargo_tipo === 'treatment') return 'el agente empieza el treatment con el material de Drive'
+  if (p.encargo_tipo === 'custom') return 'el agente de custom empieza con tu brief'
+  return 'el agente monta la primera versión con el material que haya'
+}
+// Se puede «Comenzar» desde las etapas de antes (sin etapa, confirmado o material).
+export const antesDeComenzar = (p: ProyectoSeguimiento) => !p.fase || p.fase === 'confirmado' || p.fase === 'material'

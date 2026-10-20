@@ -18,27 +18,20 @@ export async function cargarSeguimiento(filtro: { id?: number } = {}) {
   const proyectos = (crudos || []).filter(p => filtro.id != null || webs.includes(p.marca || '') || p.fase)
   const ids = proyectos.map(p => p.id)
   const leadIds = proyectos.map(p => p.lead_id).filter((x): x is number => !!x)
-  const { data: leads } = leadIds.length ? await sb.from('leads').select('id, interes, campos').in('id', leadIds) : { data: [] }
-  const { data: plantillas } = await sb.from('plantillas').select('clave, marca')
-  const { data: eventos } = ids.length
-    ? await sb.from('eventos').select('proyecto_id, tipo, datos, created_at').in('proyecto_id', ids).in('tipo', ['proyecto.fase', 'lead.ganado', 'material.completo']).order('created_at')
-    : { data: [] }
-  // Los emails salen de `mensajes` (no de los eventos) para saber si Resend avisó luego de un rebote.
-  const { data: mensajes } = ids.length
-    ? await sb.from('mensajes').select('proyecto_id, plantilla, estado, error, enviado_en, auto').in('proyecto_id', ids).eq('direccion', 'saliente').not('enviado_en', 'is', null).order('enviado_en')
-    : { data: [] }
-  const { data: borradores } = ids.length
-    ? await sb.from('mensajes').select('id, proyecto_id, plantilla, error').in('proyecto_id', ids).eq('estado', 'borrador').order('created_at')
-    : { data: [] }
-  const { data: rondas } = ids.length
-    ? await sb.from('revisiones').select('proyecto_id, ronda, estado, comentarios, abierta_en, url').in('proyecto_id', ids).order('abierta_en')
-    : { data: [] }
-
-  // Agente de primera versión y copia del material de Drive que usa.
-  const agentes = await estadosAgente(ids)
-  const { data: copias } = ids.length
-    ? await sb.from('drive_copias').select('proyecto_id, ruta, copiado_en, error').in('proyecto_id', ids)
-    : { data: [] }
+  // Todo a la vez: la base está en Irlanda y cada consulta cuesta un viaje (antes iban una detrás de otra).
+  const vacio = Promise.resolve({ data: [] as never[] })
+  const [{ data: leads }, { data: plantillas }, { data: eventos }, { data: mensajes }, { data: borradores }, { data: rondas }, agentes, { data: copias }] = await Promise.all([
+    leadIds.length ? sb.from('leads').select('id, interes, campos').in('id', leadIds) : vacio,
+    sb.from('plantillas').select('clave, marca'),
+    ids.length ? sb.from('eventos').select('proyecto_id, tipo, datos, created_at').in('proyecto_id', ids).in('tipo', ['proyecto.fase', 'lead.ganado', 'material.completo']).order('created_at') : vacio,
+    // Los emails salen de `mensajes` (no de los eventos) para saber si Resend avisó luego de un rebote.
+    ids.length ? sb.from('mensajes').select('proyecto_id, plantilla, estado, error, enviado_en, auto').in('proyecto_id', ids).eq('direccion', 'saliente').not('enviado_en', 'is', null).order('enviado_en') : vacio,
+    ids.length ? sb.from('mensajes').select('id, proyecto_id, plantilla, error').in('proyecto_id', ids).eq('estado', 'borrador').order('created_at') : vacio,
+    ids.length ? sb.from('revisiones').select('proyecto_id, ronda, estado, comentarios, abierta_en, url').in('proyecto_id', ids).order('abierta_en') : vacio,
+    // Agente de primera versión y copia del material de Drive que usa.
+    estadosAgente(ids),
+    ids.length ? sb.from('drive_copias').select('proyecto_id, ruta, copiado_en, error').in('proyecto_id', ids) : vacio,
+  ])
 
   const lista: ProyectoSeguimiento[] = proyectos.map(p => {
     const propios = (eventos || []).filter(e => e.proyecto_id === p.id)

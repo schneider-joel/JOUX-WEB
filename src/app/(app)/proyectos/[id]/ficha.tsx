@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ETIQUETA_FASE, type FaseProyecto } from '@/lib/leads'
-import { AHORA, DIAS_ALERTA, NOMBRE_ENCARGO, diasDesde, faltaBrief, type ProyectoSeguimiento } from '@/lib/seguimiento'
+import { AHORA, DIAS_ALERTA, NOMBRE_ENCARGO, alComenzar, antesDeComenzar, diasDesde, encargaAgente, faltaBrief, type ProyectoSeguimiento } from '@/lib/seguimiento'
 import { EMAIL_AL_ENTRAR, EMAIL_RECORDATORIO, NOMBRE_EMAIL } from '@/lib/emails'
 import { SUBCARPETAS } from '@/lib/drive-carpetas'
 import { ETIQUETA_PAGO, type Pago } from '@/lib/marcas'
@@ -13,7 +13,6 @@ import AgenteWeb from '../../work/agente-web'
 import BriefPanel from '../../work/brief'
 import DriveCarpeta from '../../work/drive-carpeta'
 import RefEntrega from '../../work/ref-entrega'
-import { alComenzar, antesDeComenzar, encargaAgente } from '../../work/seguimiento'
 import Conversacion, { iniciales } from './conversacion'
 
 export type MensajeHilo = { id: number; entrante: boolean; estado: string; asunto: string | null; cuerpo: string; error: string | null; plantilla: string | null; auto: boolean; deProyecto: boolean; de: string | null; para: string | null }
@@ -300,7 +299,7 @@ export default function Ficha({ d }: { d: DatosFicha }) {
             <section className="fx__card" id="fx-agente" aria-labelledby="fx-ag">
               <header><h2 id="fx-ag">{I.bot}Agente</h2><span className="caps dim">{s.encargo_tipo ? NOMBRE_ENCARGO[s.encargo_tipo] : 'Lo haces tú'}</span></header>
               <div className="fx__agente">
-                {s.agente ? <AgenteWeb p={s} detalle /> : <p className="nota">{s.encargo_tipo ? 'Sin encargo todavía: empieza al pulsar «Comenzar».' : 'Esta marca no tiene agente.'}</p>}
+                {s.agente ? <><AgenteWeb p={s} /><AgenteWeb p={s} detalle /></> : s.encargo_tipo && s.fase === 'comenzado' ? <AgenteWeb p={s} /> : <p className="nota">{s.encargo_tipo ? 'Sin encargo todavía: empieza al pulsar «Comenzar».' : 'Esta marca no tiene agente.'}</p>}
                 <RefEntrega proyectoId={p.id} valor={s.ref_entrega} />
                 {s.encargo_tipo === 'custom' && !verBrief && <button type="button" className="copy caps" onClick={() => setVerBrief(true)}>{s.brief ? 'Ver el brief' : 'Escribir el brief'} →</button>}
               </div>

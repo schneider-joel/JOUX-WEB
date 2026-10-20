@@ -22,17 +22,15 @@ export default async function ProyectoPage({ params }: { params: { id: string } 
   const { data: p } = await sb.from('proyectos').select('*').eq('id', id).maybeSingle()
   if (!p) notFound()
 
-  const [seg, { data: marca }, { data: cliente }, { data: facturas }, { data: dias }, { data: lead }] = await Promise.all([
+  // Mensajes y eventos del proyecto y de su lead (la conversación empieza antes de ganarlo). Todo a la vez.
+  const deAmbos = p.lead_id ? `proyecto_id.eq.${id},lead_id.eq.${p.lead_id}` : `proyecto_id.eq.${id}`
+  const [seg, { data: marca }, { data: cliente }, { data: facturas }, { data: dias }, { data: lead }, { data: mensajes }, { data: eventos }] = await Promise.all([
     cargarSeguimiento({ id }),
     sb.from('marcas').select('key, nombre, modo').eq('key', p.marca || '').maybeSingle(),
     sb.from('clientes_fiscales').select('*').eq('cliente', p.cliente).maybeSingle(),
     sb.from('facturas').select('id, numero, fecha, importe, estado, pago, fiscal, tipo_factura, proyecto_id').eq('proyecto_id', id).order('fecha'),
     sb.from('dias_trabajados').select('fecha, total_day').eq('proyecto_id', id).order('fecha'),
     p.lead_id ? sb.from('leads').select('id, nombre, email, empresa, marca, idioma, gmail_hilo').eq('id', p.lead_id).maybeSingle() : Promise.resolve({ data: null }),
-  ])
-  // Mensajes y eventos del proyecto y de su lead (la conversación empieza antes de ganarlo).
-  const deAmbos = lead ? `proyecto_id.eq.${id},lead_id.eq.${lead.id}` : `proyecto_id.eq.${id}`
-  const [{ data: mensajes }, { data: eventos }] = await Promise.all([
     sb.from('mensajes').select('id, direccion, estado, generado_por, remitente, para, asunto, cuerpo, error, enviado_en, created_at, auto, plantilla, proyecto_id, lead_id').or(deAmbos).order('created_at'),
     sb.from('eventos').select('id, tipo, fuente, datos, created_at').or(deAmbos).order('created_at'),
   ])
