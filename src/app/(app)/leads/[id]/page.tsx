@@ -7,7 +7,7 @@ import { MARCAS_TREATMENT } from '@/lib/seguimiento'
 import CambiarEstado from './cambiar-estado'
 import AccionesLead from './ganado'
 import Bienvenida from './bienvenida'
-import DriveCarpeta from '@/app/proyectos/drive-carpeta'
+import DriveCarpeta from '@/app/(app)/work/drive-carpeta'
 import { SUBCARPETAS } from '@/lib/drive-carpetas'
 import Respuesta, { type Borrador } from './respuesta'
 import EmailHilo from './email-hilo'
@@ -53,15 +53,8 @@ export default async function LeadPage({ params }: { params: { id: string } }) {
   const { data } = Number.isInteger(id) ? await sb.from('leads').select('*').eq('id', id).maybeSingle() : { data: null }
   const lead = data as Lead | null
 
-  const marco = (hijos: React.ReactNode) => (
-    <div className="app">
-      <header className="frame frame--top caps">
-        <Link href="/" className="mark" style={{ textDecoration: 'none' }}>JOUX HUB</Link>
-        <Link href="/pipeline" className="copy">← Pipeline</Link>
-      </header>
-      <main className="main main--col">{hijos}</main>
-    </div>
-  )
+  // El menú y las migas los pone el marco del hub ((app)/layout.tsx).
+  const marco = (hijos: React.ReactNode) => <main className="main main--col">{hijos}</main>
   if (!lead) return marco(<p className="empty">Este lead no existe.</p>)
 
   const [{ data: eventos }, { data: mensajes }, { data: marca }, { data: clientes }, { data: proyecto }, { data: pago1 }] = await Promise.all([
@@ -111,7 +104,7 @@ export default async function LeadPage({ params }: { params: { id: string } }) {
           <section className="block" aria-label="Proyecto">
             <p className="label caps"><span>Proyecto</span><i className="rule" /></p>
             <dl className="meta lead__meta">
-              <div><dt>Proyecto</dt><dd><Link href={`/pipeline${lead.marca ? `?marca=${lead.marca}` : ''}`}>{proyecto.nombre}</Link></dd></div>
+              <div><dt>Proyecto</dt><dd><Link href={`/leads${lead.marca ? `?marca=${lead.marca}` : ''}`}>{proyecto.nombre}</Link></dd></div>
               <div><dt>Cliente</dt><dd>{proyecto.cliente}</dd></div>
               <div><dt>Fase</dt><dd>{esFaseProyecto(proyecto.fase) ? ETIQUETA_FASE[proyecto.fase] : '—'}</dd></div>
               {pago1 && <div><dt>Pago 1</dt><dd><a href={`/invoice/${pago1.id}`} target="_blank" rel="noopener noreferrer">{pago1.numero || 'Factura'}</a></dd></div>}

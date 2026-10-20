@@ -2,9 +2,9 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import ComprasTab from './compras-tab'
-import NotificacionesBoton from './notificaciones-boton'
-import ModoPrivado from './modo-privado'
-import { EstadoBancos, Menu, Reloj, TemaBoton } from './marco'
+import { usePathname, useRouter } from 'next/navigation'
+import { usePublicarMarco } from './app-shell'
+import { rutaDeTab, tabDeRuta } from './rutas'
 import ImpuestosTab, { proximoPago, claveReal, type Reales } from './impuestos-tab'
 import CuentasCard from './cuentas-card'
 import MarcaCard from './marca-card'
@@ -191,24 +191,24 @@ function IngresosChart({ facturas }: { facturas: Factura[] }) {
   )
 }
 
-export default function Home() {
-  const [tab, setTab] = useState<Tab>('dashboard')
-  // Última subpestaña abierta de cada sección (p. ej. volver a Compras dentro de Facturación).
-  const [ultimaPestana, setUltimaPestana] = useState<Record<string, Tab>>({})
-  useEffect(() => {
-    const sec = tab.startsWith('ts:') ? 'treatments' : tab.startsWith('mk:') ? 'webs' : ['facturas', 'compras', 'impuestos', 'clientes'].includes(tab) ? 'facturacion' : null
-    if (sec) setUltimaPestana(u => (u[sec] === tab ? u : { ...u, [sec]: tab }))
-  }, [tab])
-  // Vuelta de la conexión con un banco: /?tab=bancos&ok=1 o &error=...
+// Las pantallas del antiguo Overview. Desde el rediseño (fase 1) cada pestaña es una ruta (ver rutas.ts) y
+// este componente vive en el layout de (app)/(hub): se monta una vez y pinta la pantalla de la ruta.
+export default function Hub() {
+  const ruta = usePathname()
+  const router = useRouter()
+  const publicarMarco = usePublicarMarco()
+  const [marcas, setMarcas] = useState<Marca[]>([])
+  // Pestaña = ruta. /work/<key> es `mk:` si la marca es de webs (precio cerrado) y `ts:` si es de treatments.
+  const tab = tabDeRuta(ruta, k => (demoMarcasActivo() ? DEMO_MARCAS : marcas).some(m => m.key === k && esAgencia(m))) as Tab
+  const setTab = (t: Tab) => { const r = rutaDeTab(t); if (r && r !== ruta) router.push(r) }
+  // Vuelta de la conexión con un banco: /?tab=bancos&ok=1 o &error=... llega (redirigida por la página
+  // de /) como /finanzas/bancos?ok=1 o ?error=...
   const [mensajeBanco, setMensajeBanco] = useState<{ ok?: boolean; error?: string } | null>(null)
   useEffect(() => {
     const p = new URLSearchParams(window.location.search)
-    // Al tocar una notificación de cobro: /?tab=facturas
-    if (p.get('tab') === 'facturas') { setTab('facturas'); window.history.replaceState(null, '', '/'); return }
-    if (p.get('tab') !== 'bancos') return
-    setTab('bancos')
-    if (p.get('ok') || p.get('error')) setMensajeBanco({ ok: !!p.get('ok'), error: p.get('error') || undefined })
-    window.history.replaceState(null, '', '/')
+    if (window.location.pathname !== '/finanzas/bancos' || !(p.get('ok') || p.get('error'))) return
+    setMensajeBanco({ ok: !!p.get('ok'), error: p.get('error') || undefined })
+    window.history.replaceState(null, '', '/finanzas/bancos')
   }, [])
   // Proyecto que se abrió desde «Proyectos activos»: su pestaña lo muestra desplegado y se baja hasta él.
   const [abrirProyecto, setAbrirProyecto] = useState<number | null>(null)
@@ -234,7 +234,6 @@ export default function Home() {
   const [dias, setDias] = useState<DiaTrabajado[]>([])
   const [clientesFiscales, setClientesFiscales] = useState<ClienteFiscal[]>([])
   const [compras, setCompras] = useState<Compra[]>([])
-  const [marcas, setMarcas] = useState<Marca[]>([])
   const [cuotaAutonomo, setCuotaAutonomo] = useState(0)
   const [impuestosReales, setImpuestosReales] = useState<Reales>({})
   const [snapshots, setSnapshots] = useState<PatrimonioSnapshot[]>([])
@@ -444,8 +443,12 @@ export default function Home() {
     loadData()
   }
 
+  // El marco enseña el estado de los bancos y «Actualizar» (antes, en las esquinas de esta pantalla).
+  useEffect(() => { publicarMarco({ bancosSync, actualizar: loadData, datos: lastUpdated }) }, [publicarMarco, bancosSync, loadData, lastUpdated])
+  useEffect(() => () => publicarMarco({ actualizar: undefined, datos: undefined }), [publicarMarco])
+
   if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', color: 'var(--text3)', gap: 10, fontSize: 13 }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '50vh', color: 'var(--text3)', gap: 10, fontSize: 13 }}>
       <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--accent)', boxShadow: '0 0 12px var(--accent-glow)' }} />
       Cargando...
     </div>
@@ -527,11 +530,8 @@ export default function Home() {
     { id: 'bancos', label: 'Bancos', icon: Icon.link, tabs: [{ id: 'bancos', label: 'Bancos' }] },
     { id: 'compartidos', label: 'Compartidos', icon: Icon.users, tabs: [{ id: 'compartidos', label: 'Compartidos' }] },
   ]
-  const seccionActiva = secciones.find(s => s.tabs.some(t => t.id === tab)) || secciones[0]
-  const abrirSeccion = (s: Seccion) => {
-    const ultimo = ultimaPestana[s.id]
-    setTab(ultimo && s.tabs.some(t => t.id === ultimo) ? ultimo : s.tabs[0]?.id || 'dashboard')
-  }
+  // Insignias del menú: las mismas que tenían las pestañas (pagos pendientes de cada web, treatments activos, facturas pendientes).
+  const insignias = Object.fromEntries(secciones.flatMap(s => s.tabs).filter(t => t.badge).map(t => [t.id, t.badge!]))
   const marcaTsActiva = tab.startsWith('ts:') ? marcasTs.find(m => `ts:${m.key}` === tab) || null : null
   const proyectosMarcaTs = marcaTsActiva ? proyectosTs.filter(p => marcaTsDe(p) === marcaTsActiva.key) : []
   const gruposMarcaTs = gruposTimesheet(proyectosMarcaTs).filter(g => proyectosMarcaTs.some(p => g.clientes.includes(p.cliente)))
@@ -550,19 +550,8 @@ export default function Home() {
     : marcaActiva ? [marcaActiva.nombre, 'Webs de precio cerrado · 50 % al empezar, 50 % al publicar'] : titulos[tab] || ['', '']
 
   return (
-    <div className="app">
-      {/* Esquinas y menú, como joelschneider.io */}
-      <header className="frame frame--top caps">
-        <span className="mark">JOUX HUB</span>
-        <span className="frame__r">
-          <EstadoBancos sync={bancosSync} />
-          <NotificacionesBoton onIr={t => setTab(t as Tab)} />
-        </span>
-      </header>
-
-      <Menu items={secciones.map(s => ({ id: s.id, label: s.label, badge: s.tabs.reduce((t, x) => t + (x.badge || 0), 0), tranquilo: s.id === 'treatments' }))}
-        activa={seccionActiva.id} onAbrir={id => { const s = secciones.find(x => x.id === id); if (s) abrirSeccion(s) }} />
-
+    <>
+      <PublicarInsignias insignias={insignias} />
       {/* Las pantallas ya migradas van en la columna de la maqueta (724 px) */}
       <main className={`main${['dashboard', 'facturas', 'compras', 'impuestos', 'clientes', 'bancos', 'compartidos'].includes(tab) || tab.startsWith('ts:') || tab.startsWith('mk:') ? ' main--col' : ''}`}>
         <header className="page-header">
@@ -575,16 +564,6 @@ export default function Home() {
             {tab === 'clientes' && <button className="pill" onClick={() => setModal({ type: 'editCliente' })}><Icon.plus />Nuevo cliente</button>}
           </div>
         </header>
-
-        {seccionActiva.tabs.length > 1 && (
-          <nav className="subnav chips__row" aria-label={seccionActiva.label}>
-            {seccionActiva.tabs.map(t => (
-              <button key={t.id} type="button" className="chip" aria-pressed={tab === t.id} onClick={() => setTab(t.id)}>
-                <span>{t.label}{!!t.badge && <b className={seccionActiva.id === 'treatments' ? 'dim' : undefined}>{t.badge}</b>}</span>
-              </button>
-            ))}
-          </nav>
-        )}
 
         {/* Overview: lo justo de cada sección, como la web; el detalle está en su pantalla */}
         {tab === 'dashboard' && (() => {
@@ -848,18 +827,16 @@ export default function Home() {
           </div>
         )}
       </main>
-
-      <footer className="frame frame--bottom caps">
-        <span>Valencia <Reloj />{lastUpdated && <><span className="sep">/</span>Datos {lastUpdated}</>}</span>
-        <span className="frame__r">
-          <button type="button" className="tgl hit" onClick={() => loadData()} title="Volver a cargar los datos"><Icon.refresh />Actualizar</button>
-          <a href="/ajustes" className="tgl hit" title="Resumen diario y envíos automáticos">Ajustes</a>
-          <ModoPrivado />
-          <TemaBoton />
-        </span>
-      </footer>
-    </div>
+    </>
   )
+}
+
+// Pasa las insignias al marco cuando cambian (va como componente porque se calculan después de cargar).
+function PublicarInsignias({ insignias }: { insignias: Record<string, number> }) {
+  const publicar = usePublicarMarco()
+  const clave = JSON.stringify(insignias)
+  useEffect(() => { publicar({ insignias: JSON.parse(clave) }) }, [publicar, clave])
+  return null
 }
 
 

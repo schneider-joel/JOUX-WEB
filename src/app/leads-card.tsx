@@ -20,7 +20,7 @@ export default function LeadsCard() {
     <section className="block" aria-label="Leads">
       <p className="label caps">
         <span>Leads{nuevos.length ? ` · ${nuevos.length} pendiente${nuevos.length === 1 ? '' : 's'}` : ''}</span><i className="rule" />
-        <Link href="/pipeline" className="label__m copy">Pipeline →</Link>
+        <Link href="/leads" className="label__m copy">Leads →</Link>
       </p>
       {nuevos.length === 0 ? <p className="nota">No hay leads pendientes.</p> : (
         <ul className="list focus">

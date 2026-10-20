@@ -1,4 +1,3 @@
-import Link from 'next/link'
 import { supabaseServer as sb } from '@/lib/supabase-server'
 import { leerAutonomia, sinCambios } from '@/lib/autonomia'
 import { CATEGORIAS, MARCAS_CON_IA } from '@/lib/ia'
@@ -66,11 +65,7 @@ export default async function AjustesPage() {
   const ultimo = resumen as { datos: { linea?: string; vacio?: boolean; prueba?: boolean }; created_at: string } | null
 
   return (
-    <div className="app">
-      <header className="frame frame--top caps">
-        <Link href="/" className="mark" style={{ textDecoration: 'none' }}>JOUX HUB</Link>
-        <Link href="/" className="copy">← Overview</Link>
-      </header>
+    <>
       <main className="main">
         <header className="page-header ajustes">
           <div className="page-header__txt">
@@ -133,6 +128,6 @@ export default async function AjustesPage() {
         </section>
         </div>
       </main>
-    </div>
+    </>
   )
 }
