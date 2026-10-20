@@ -967,6 +967,12 @@ button.fila--btn { width: 100%; background: none; border: 0; padding: 0; font: i
 .trk__agente { display: block; margin-top: 4px; }
 .trk__nota { flex: 1 1 260px; }
 .trk__acc { display: flex; gap: 18px; flex-wrap: wrap; justify-content: flex-end; white-space: nowrap; flex: none; }
+/* Un error largo (p. ej. el de Drive) salta de línea y se corta a dos; no empuja el resto fuera de la pantalla. */
+.trk__acc { flex: 0 1 auto; min-width: 0; white-space: normal; align-items: baseline; }
+.trk__acc > a, .trk__acc > button { white-space: nowrap; }
+.trk__acc .trk__drive { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline; min-width: 0; }
+.trk__acc .trk__drive .nota { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; max-width: 520px; }
+.trk__ficha { color: var(--text); }
 .trk__drive { display: inline-flex; gap: 10px; align-items: baseline; flex-wrap: wrap; white-space: normal; }
 /* Ref de revisión (slug de arkevo-revision o carpeta de Pitchview) */
 .trk__ref { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }

@@ -23,7 +23,7 @@ export default function DriveCarpeta({ proyectoId, url, error }: { proyectoId: n
 
   return (
     <span className="trk__drive">
-      {fallo && <span className="nota aviso">Drive: {fallo}</span>}
+      {fallo && <span className="nota aviso" title={fallo}>Drive: {fallo}</span>}
       <button type="button" className="copy caps" disabled={creando} onClick={crear}>
         {creando ? 'Creando carpeta…' : fallo ? 'Reintentar' : 'Crear carpeta de Drive'}
       </button>

@@ -144,6 +144,7 @@ export default function Seguimiento({ proyectos, marcas }: { proyectos: Proyecto
                     </button>
                   ))}
                   {aviso?.id === p.id && <span className="nota trk__agente">{aviso.texto}</span>}
+                  <Link href={`/proyectos/${p.id}`} className="copy caps trk__recordar trk__ficha">Abrir ficha →</Link>
                   {antesDeComenzar(p) && !pend && (
                     <button type="button" className={`copy caps trk__recordar${p.material_completo ? ' ok' : ''}`} onClick={() => { setError(''); setMover({ id: p.id, fase: 'comenzado' }) }}>
                       {p.material_completo ? 'Material completo · ' : ''}Comenzar{p.encargo_tipo ? ` · ${NOMBRE_ENCARGO[p.encargo_tipo]} al agente` : ''} →
@@ -210,7 +211,6 @@ export default function Seguimiento({ proyectos, marcas }: { proyectos: Proyecto
                         <button key={c} type="button" className="copy caps" onClick={() => setEmail({ id: p.id, clave: c })}>✉ {NOMBRE_EMAIL[c]}</button>
                       ))}
                       {(p.drive_url || SUBCARPETAS[p.marca || '']) && <DriveCarpeta proyectoId={p.id} url={p.drive_url} error={p.drive_error} />}
-                      <Link href={`/proyectos/${p.id}`} className="copy caps">Abrir la ficha →</Link>
                       {p.lead_id && <Link href={`/leads/${p.lead_id}`} className="copy caps">Ver el lead →</Link>}
                     </span>
                   </div>
