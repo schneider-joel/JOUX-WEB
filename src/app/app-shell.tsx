@@ -75,7 +75,7 @@ function Menu({ datos, marcaQ }: { datos: DatosMenu; marcaQ: string | null }) {
     <>
       <nav className="sh__grp" aria-label="Inicio">
         <span className="sh__h caps">Inicio</span>
-        <Entrada it={{ href: '/', label: 'Hoy', icono: I.home, activo: ruta === '/' }} />
+        <Entrada it={{ href: '/', label: 'Hoy', icono: I.home, n: insignias.hoy, activo: ruta === '/' }} />
       </nav>
       <nav className="sh__grp" aria-label="Work">
         <span className="sh__h caps">Work</span>
@@ -194,7 +194,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   // Barra inferior del móvil: Hoy · Work · Leads · Finanzas · Más.
   const abajo = [
-    { href: '/', label: 'Hoy', icono: I.home, on: ruta === '/' },
+    { href: '/', label: 'Hoy', icono: I.home, on: ruta === '/', n: pub.insignias?.hoy },
     { href: '/work', label: 'Work', icono: I.cube, on: ruta.startsWith('/work') || ruta.startsWith('/proyectos/') },
     { href: '/leads', label: 'Leads', icono: I.inbox, on: ruta.startsWith('/leads'), n: leads },
     { href: '/finanzas/facturas', label: 'Finanzas', icono: I.euro, on: ruta.startsWith('/finanzas'), n: pub.insignias?.facturas },

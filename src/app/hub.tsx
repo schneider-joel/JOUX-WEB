@@ -8,8 +8,8 @@ import { rutaDeTab, tabDeRuta } from './rutas'
 import ImpuestosTab, { proximoPago, claveReal, type Reales } from './impuestos-tab'
 import CuentasCard from './cuentas-card'
 import MarcaCard from './marca-card'
-import LeadsCard from './leads-card'
-import ProyectosActivosCard, { type ProyectoActivo } from './proyectos-activos-card'
+import Link from 'next/link'
+import type { Hoy } from '@/lib/pendientes'
 import { totalACobrar, desglose, desgloseFactura } from '@/lib/importes'
 import MarcaTab, { type AccionesAgencia } from './marca-tab'
 import { DEMO_FACTURAS, DEMO_MARCAS, DEMO_PROYECTOS, aProyectoAgencia, facturaSueltaAAgencia, demoMarcasActivo, esAgencia, porOrden, type Marca } from '@/lib/marcas'
@@ -30,6 +30,8 @@ const lineaImpuestos = (f: { importe: number; tipo_factura?: string | null }) =>
   const d = desgloseFactura(f)
   return d ? ` · base €${fmt2(d.base)} + IVA €${fmt2(d.iva)} − ret. €${fmt2(d.ret)}` : ''
 }
+// Hoy: saludo según la hora de Valencia.
+const saludo = () => { const h = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Madrid', hour: '2-digit', hourCycle: 'h23' }).format(new Date())); return h < 6 ? 'Buenas noches, Joel' : h < 14 ? 'Buenos días, Joel' : h < 21 ? 'Buenas tardes, Joel' : 'Buenas noches, Joel' }
 const fmtDate = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })
 const fmtMes = (ym: string) => new Date(ym + '-01T00:00:00').toLocaleDateString('es-ES', { month: 'short' }).replace('.', '')
 const barColor = (pct: number) => pct >= 90 ? '#f87171' : pct >= 70 ? '#fbbf24' : '#4ade80'
@@ -296,6 +298,9 @@ export default function Hub({ children }: { children?: React.ReactNode }) {
   }, [])
 
   useEffect(() => { loadData() }, [loadData])
+  // Hoy: lo pendiente, proyectos por etapa y próximas fechas (lib/pendientes.ts). Se vuelve a pedir al actualizar.
+  const [hoy, setHoy] = useState<Hoy | null>(null)
+  useEffect(() => { fetch('/api/hoy').then(r => r.ok ? r.json() : null).then(j => { if (j) setHoy(j) }).catch(() => {}) }, [lastUpdated])
 
   // Al abrir el hub, si los bancos llevan más de 3 h sin sincronizar, se
   // sincronizan en segundo plano (los bancos permiten ~4 lecturas al día).
@@ -497,22 +502,6 @@ export default function Hub({ children }: { children?: React.ReactNode }) {
     id: `ts:${m.key}` as Tab, label: m.nombre,
     badge: proyectosTs.filter(p => marcaTsDe(p) === m.key && p.status === 'activo').length,
   }))
-  // Overview › Proyectos activos: webs y treatments con status «activo», por orden de marca y cliente.
-  const nombreMarca = (k: string) => marcasLista.find(m => m.key === k)?.nombre || k
-  const proyectosActivos: (ProyectoActivo & { tab: Tab })[] = proyectos.filter(p => p.status === 'activo').map(p => {
-    const agencia = deAgencia(p)
-    const marca = agencia ? p.marca! : marcaTsDe(p)
-    const base = agencia ? Number(p.precio_cerrado || 0) : dias.filter(d => d.proyecto_id === p.id).reduce((s, d) => s + Number(d.total_day), 0)
-    return {
-      id: p.id, nombre: agencia ? p.web || p.nombre : p.nombre, cliente: p.cliente, marca: nombreMarca(marca),
-      importe: base || null, cerrado: agencia && p.precio_cerrado != null,
-      conFiscales: clientesFiscales.some(c => c.cliente === p.cliente),
-      tab: `${agencia ? 'mk' : 'ts'}:${marca}` as Tab,
-    }
-  }).sort((a, b) => {
-    const orden = (n: string) => marcasLista.findIndex(m => m.nombre === n)
-    return orden(a.marca) - orden(b.marca) || a.cliente.localeCompare(b.cliente, 'es')
-  })
   // Badge = pagos pendientes de cobro de la marca.
   const marcasTabs = agencias.map(m => ({ id: `mk:${m.key}` as Tab, label: m.nombre, badge: proyectosAgencia.filter(p => p.marca === m.key).flatMap(p => p.pagos).filter(x => x.estado === 'pendiente').length }))
   const secciones: Seccion[] = [
@@ -530,13 +519,16 @@ export default function Hub({ children }: { children?: React.ReactNode }) {
     { id: 'bancos', label: 'Bancos', icon: Icon.link, tabs: [{ id: 'bancos', label: 'Bancos' }] },
     { id: 'compartidos', label: 'Compartidos', icon: Icon.users, tabs: [{ id: 'compartidos', label: 'Compartidos' }] },
   ]
+  // Hoy cuenta el impuesto del trimestre como pendiente si vence en 15 días (igual que su lista).
+  const pagoT = proximoPago(facturasFiscales, compras, cuotaAutonomo, impuestosReales)
+  const impuestoCerca = !!pagoT && (new Date(pagoT.plazo + 'T00:00:00').getTime() - new Date(hoyLocal() + 'T00:00:00').getTime()) / 86400000 <= 15
   // Insignias del menú: las mismas que tenían las pestañas (pagos pendientes de cada web, treatments activos, facturas pendientes).
   const insignias = Object.fromEntries(secciones.flatMap(s => s.tabs).filter(t => t.badge).map(t => [t.id, t.badge!]))
   const marcaTsActiva = tab.startsWith('ts:') ? marcasTs.find(m => `ts:${m.key}` === tab) || null : null
   const proyectosMarcaTs = marcaTsActiva ? proyectosTs.filter(p => marcaTsDe(p) === marcaTsActiva.key) : []
   const gruposMarcaTs = gruposTimesheet(proyectosMarcaTs).filter(g => proyectosMarcaTs.some(p => g.clientes.includes(p.cliente)))
   const titulos: Record<string, [string, string]> = {
-    dashboard: ['Overview', 'Patrimonio, cuentas y facturación'],
+    dashboard: [saludo(), new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })],
     facturas: ['Facturas', `${facturasPendientes.length} pendientes · €${fmt(totalPendiente)} por cobrar`],
     presupuesto: ['Presupuesto', 'Gastos del mes'],
     clientes: ['Clientes', `${clientesFiscales.length} con datos fiscales guardados`],
@@ -551,9 +543,9 @@ export default function Hub({ children }: { children?: React.ReactNode }) {
 
   return (
     <>
-      <PublicarInsignias insignias={insignias} />
+      <PublicarInsignias insignias={hoy ? { ...insignias, hoy: hoy.pendientes.length + (impuestoCerca ? 1 : 0) } : insignias} />
       {/* Las pantallas ya migradas van en la columna de la maqueta (724 px) */}
-      <main className={`main${['dashboard', 'facturas', 'compras', 'impuestos', 'clientes', 'bancos', 'compartidos'].includes(tab) || tab.startsWith('ts:') || tab.startsWith('mk:') ? ' main--col' : ''}`}>
+      <main className={`main${['facturas', 'compras', 'impuestos', 'clientes', 'bancos', 'compartidos'].includes(tab) || tab.startsWith('ts:') || tab.startsWith('mk:') ? ' main--col' : ''}`}>
         <header className="page-header">
           <div className="page-header__txt">
             <h1 className="page-title">{titulo}</h1>
@@ -569,47 +561,103 @@ export default function Hub({ children }: { children?: React.ReactNode }) {
         {(marcaActiva || marcaTsActiva) && children}
 
         {/* Overview: lo justo de cada sección, como la web; el detalle está en su pantalla */}
+        {/* Hoy (rediseño, fase 4): cifras, patrimonio y lo pendiente, proyectos por etapa y próximas fechas.
+            Debajo, el resumen de siempre (por cobrar, ingresos, cuentas, marcas y presupuesto) hasta Patrimonio (fase 5). */}
         {tab === 'dashboard' && (() => {
           const pago = proximoPago(facturasFiscales, compras, cuotaAutonomo, impuestosReales)
-          const flecha = <svg className="arr" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8h9M9 4.5 12.5 8 9 11.5" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          const hoyISO = hoyLocal(), mesISO = hoyISO.slice(0, 7)
+          const cobradoMes = facturasFiscales.filter(f => f.estado === 'cobrada' && (f.fecha_cobro || f.fecha).slice(0, 7) === mesISO).reduce((t, f) => t + totalACobrar(f), 0)
+          const facturadoMes = facturasFiscales.filter(f => f.fecha.slice(0, 7) === mesISO).reduce((t, f) => t + totalACobrar(f), 0)
+          const vencidas = facturasPendientes.filter(f => (f.fecha_vencimiento || f.fecha) < hoyISO).length
+          const leadsHoy = (hoy?.pendientes || []).filter(x => x.clave.startsWith('l'))
+          // El impuesto del trimestre entra en «Pendiente» si vence en 15 días, y siempre en «Próximas fechas».
+          const diasPago = pago ? Math.round((new Date(pago.plazo + 'T00:00:00').getTime() - new Date(hoyISO + 'T00:00:00').getTime()) / 86400000) : null
+          const pendientes = [
+            ...(pago && diasPago != null && diasPago <= 15 ? [{ clave: 'imp', texto: `Pagar IVA e IRPF del T${pago.q}${pago.declarado ? ' (gestor)' : pago.cerrado ? '' : ' (estimado)'}`, sub: `€${fmt2(pago.total)} · ${diasPago <= 0 ? 'vence hoy' : `vence el ${fmtDate(pago.plazo)}`}`, href: '/finanzas/impuestos', urgencia: 400 - diasPago }] : []),
+            ...(hoy?.pendientes || []),
+          ].sort((a, b) => b.urgencia - a.urgencia)
+          const fechas = [
+            ...(pago ? [{ clave: 'imp', fecha: pago.plazo, texto: `IVA e IRPF del T${pago.q}`, sub: `€${fmt2(pago.total)}${pago.declarado ? ' · del gestor' : ' · estimado'}`, href: '/finanzas/impuestos' }] : []),
+            ...(hoy?.fechas || []),
+          ].sort((a, b) => a.fecha.localeCompare(b.fecha)).slice(0, 8)
+          const enMarcha = (hoy?.etapas || []).reduce((t, e) => t + e.n, 0)
           return (
-          <div className="col">
-            <section className="block" aria-label="Patrimonio">
-              <p className="label caps"><span>Patrimonio</span><i className="rule" /></p>
-              <div className="hero">
-                <p className="big">€{fmt(totalPatrimonio)}</p>
-                {deltaMes !== null ? (
-                  <p className="delta caps">
-                    <span className={deltaMes > 0 ? 'up' : deltaMes < 0 ? 'down' : undefined}>{deltaMes > 0 ? '▲' : deltaMes < 0 ? '▼' : '•'} {deltaMes >= 0 ? '+' : '−'}€{fmt(Math.abs(deltaMes))}{deltaPct !== null ? ` (${deltaPct >= 0 ? '+' : ''}${deltaPct.toFixed(1)}%)` : ''}</span>
-                    <span>vs mes anterior</span>
-                  </p>
-                ) : (
-                  <p className="delta caps"><span>• registrando historial</span></p>
-                )}
+          <div className="col hoy">
+            <section className="fx__kpis" aria-label="Resumen">
+              <div className="fx__kpi">
+                <span className="fx__l">Patrimonio</span>
+                <span className="fx__v">€{fmt(totalPatrimonio)}</span>
+                <span className="fx__s">{deltaMes !== null ? `${deltaMes >= 0 ? '+' : '−'}€${fmt(Math.abs(deltaMes))} desde el mes pasado` : 'Registrando historial'}</span>
               </div>
-              <PatrimonioChart snapshots={snapshots} actual={totalPatrimonio} />
-              {snapshots.filter(s => s.fecha.slice(0, 7) !== mesActualKey).length < 2 && (
-                <p className="nota">Se guarda un punto cada día que abres el hub; el gráfico se completa mes a mes.</p>
-              )}
-              <dl className="split">
-                <div><dt className="caps">Liquidez</dt><dd><span className="num">€{fmt(totalLiquidez)}</span></dd></div>
-                <div><dt className="caps">Crypto</dt><dd><span className="num">€{fmt(totalCrypto)}</span></dd></div>
-                <div><dt className="caps">Por cobrar</dt><dd><span className="num">€{fmt(totalPendiente)}</span></dd></div>
-              </dl>
+              <div className="fx__kpi">
+                <span className="fx__l">Cobrado en {new Date().toLocaleDateString('es-ES', { month: 'long' })}</span>
+                <span className="fx__v">€{fmt(cobradoMes)}</span>
+                <span className="fx__s">€{fmt(facturadoMes)} facturados este mes</span>
+              </div>
+              <Link href="/finanzas/facturas" className="fx__kpi hoy__k">
+                <span className="fx__l">Pendiente de cobro</span>
+                <span className="fx__v">€{fmt(totalPendiente)}</span>
+                <span className={`fx__s${vencidas ? ' aviso' : ''}`}>{vencidas ? `${vencidas} factura${vencidas === 1 ? '' : 's'} vencida${vencidas === 1 ? '' : 's'}` : `${facturasPendientes.length} pendientes`}</span>
+              </Link>
+              <Link href="/leads" className="fx__kpi hoy__k">
+                <span className="fx__l">Leads por atender</span>
+                <span className="fx__v">{hoy ? leadsHoy.length : '…'}</span>
+                <span className="fx__s">{leadsHoy.length ? Array.from(new Set(leadsHoy.map(l => l.sub.split(' · ')[0].replace('Lead de ', '')))).join(' · ') : 'Ninguno esperando'}</span>
+              </Link>
             </section>
 
-            {/* Próximo pago de impuestos: frase apagada + botón, sin caja */}
-            {pago && (
-              <button type="button" className="cta" onClick={() => setTab('impuestos')}>
-                <span className="cta__l"><i className="dot dot--amber" aria-hidden="true" />IVA e IRPF del T{pago.q}{pago.declarado ? ' (gestor)' : pago.cerrado ? '' : ' estimado'} · {fmtDate(pago.plazo)}</span>
-                <span className="cta__b">€{fmt2(pago.total)}{flecha}</span>
-              </button>
+            <div className="hoy__g">
+              <section className="fx__card" aria-labelledby="hoy-pat">
+                <header><h2 id="hoy-pat">Patrimonio · 12 meses</h2><span className="caps dim">Liquidez €{fmt(totalLiquidez)} · Cripto €{fmt(totalCrypto)}</span></header>
+                <PatrimonioChart snapshots={snapshots} actual={totalPatrimonio} />
+                {snapshots.filter(s => s.fecha.slice(0, 7) !== mesActualKey).length < 2 && <p className="nota">Se guarda un punto cada día que abres el hub; el gráfico se completa mes a mes.</p>}
+              </section>
+              <section className="fx__card" aria-labelledby="hoy-pend">
+                <header><h2 id="hoy-pend">Pendiente</h2><span className="caps" style={{ color: pendientes.length ? 'var(--amber)' : 'var(--dim)' }}>{hoy ? pendientes.length : '…'}</span></header>
+                {!hoy ? <p className="nota">Cargando…</p> : pendientes.length === 0 ? <p className="nota">Nada pendiente. Buen trabajo.</p> : (
+                  <ul className="hoy__todo">
+                    {pendientes.slice(0, 7).map(x => (
+                      <li key={x.clave}><Link href={x.href}><i aria-hidden="true" /><span><b>{x.texto}</b><span>{x.sub}</span></span></Link></li>
+                    ))}
+                  </ul>
+                )}
+                {pendientes.length > 7 && <p className="nota">y {pendientes.length - 7} más</p>}
+              </section>
+            </div>
+
+            {enMarcha > 0 && hoy && (
+              <section className="fx__card" aria-labelledby="hoy-work">
+                <header><h2 id="hoy-work">Work · {enMarcha} proyecto{enMarcha === 1 ? '' : 's'} en marcha</h2><Link href="/work" className="caps dim">Ver proyectos →</Link></header>
+                <div className="hoy__bar" aria-label="Proyectos por etapa">
+                  {hoy.etapas.filter(e => e.n).map(e => <span key={e.fase} style={{ flex: e.n }} className={e.esperan ? 'is-toca' : undefined}><b>{e.n}</b><small>{e.etiqueta}</small></span>)}
+                </div>
+                {hoy.esperan.length > 0 && (
+                  <div className="hoy__tres">
+                    {hoy.esperan.map(p => (
+                      <Link key={p.id} href={`/proyectos/${p.id}`} className="mk__card is-toca">
+                        <b>{p.cliente}</b>
+                        <span className="mk__m"><span>{p.nombre}</span><span>{p.dias === 0 ? 'hoy' : `${p.dias} d`}</span></span>
+                        <span className="mk__toca">{p.toca}</span>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </section>
             )}
 
-            {!demoMarcas && <LeadsCard />}
+            {fechas.length > 0 && (
+              <section className="fx__card" aria-labelledby="hoy-fe">
+                <header><h2 id="hoy-fe">Próximas fechas</h2><span className="caps dim">3 semanas</span></header>
+                <ol className="hoy__fechas">
+                  {fechas.map(f => {
+                    const dentro = <><span className="caps dim">{fmtDate(f.fecha)}</span><b>{f.texto}</b><small>{f.sub}</small></>
+                    return <li key={f.clave}>{f.href ? <Link href={f.href}>{dentro}</Link> : <span>{dentro}</span>}</li>
+                  })}
+                </ol>
+              </section>
+            )}
 
-            {!demoMarcas && <ProyectosActivosCard proyectos={proyectosActivos}
-              onAbrir={id => { const p = proyectosActivos.find(x => x.id === id); if (p) { setAbrirProyecto(id); setTab(p.tab) } }} />}
+            <p className="label caps hoy__resumen"><span>Resumen</span><i className="rule" /></p>
 
             <section className="block" aria-label="Por cobrar">
               <p className="label caps"><span>Por cobrar</span><i className="rule" /><button type="button" className="label__m copy" onClick={() => setTab('facturas')}>Facturas →</button></p>
