@@ -80,7 +80,7 @@ function Menu({ datos, marcaQ }: { datos: DatosMenu; marcaQ: string | null }) {
       <nav className="sh__grp" aria-label="Work">
         <span className="sh__h caps">Work</span>
         <Entrada it={{ href: '/leads', label: 'Leads', icono: I.inbox, n: leads, activo: ruta.startsWith('/leads') && !marcaQ }} />
-        <Entrada it={{ href: '/work', label: 'Proyectos', icono: I.flag, activo: ruta === '/work' }} />
+        <Entrada it={{ href: '/work', label: 'Proyectos', icono: I.flag, activo: ruta === '/work' || ruta.startsWith('/proyectos/') }} />
       </nav>
       {/* Las marcas, aparte de Leads y Proyectos (que son de todas): cada una con su pantalla. */}
       <nav className="sh__grp" aria-label="Marcas">
@@ -124,6 +124,7 @@ function Migas({ marcas, marcaQ }: { marcas: Marca[]; marcaQ: string | null }) {
     : ruta === '/work' ? [{ t: 'Work' }, { t: 'Proyectos' }]
     : ruta.startsWith('/work/') ? [{ t: 'Marcas' }, { t: nombre(ruta.split('/')[2]) || '' }]
     : ruta === '/leads' ? [{ t: 'Work' }, { t: 'Leads', href: marcaQ ? '/leads' : undefined }, ...(marcaQ ? [{ t: nombre(marcaQ) || '' }] : [])]
+    : ruta.startsWith('/proyectos/') ? [{ t: 'Work' }, { t: 'Proyectos', href: '/work' }, { t: `#${ruta.split('/')[2]}` }]
     : ruta.startsWith('/leads/') ? [{ t: 'Work' }, { t: 'Leads', href: '/leads' }, { t: `#${ruta.split('/')[2]}` }]
     : ruta === '/compartidos' ? [{ t: 'Compartidos' }]
     : ruta === '/ajustes' ? [{ t: 'Ajustes' }]
@@ -194,7 +195,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   // Barra inferior del móvil: Hoy · Work · Leads · Finanzas · Más.
   const abajo = [
     { href: '/', label: 'Hoy', icono: I.home, on: ruta === '/' },
-    { href: '/work', label: 'Work', icono: I.cube, on: ruta.startsWith('/work') },
+    { href: '/work', label: 'Work', icono: I.cube, on: ruta.startsWith('/work') || ruta.startsWith('/proyectos/') },
     { href: '/leads', label: 'Leads', icono: I.inbox, on: ruta.startsWith('/leads'), n: leads },
     { href: '/finanzas/facturas', label: 'Finanzas', icono: I.euro, on: ruta.startsWith('/finanzas'), n: pub.insignias?.facturas },
   ]

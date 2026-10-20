@@ -15,10 +15,10 @@ import { SUBCARPETAS } from '@/lib/drive-carpetas'
 
 const fecha = (iso: string) => new Date(iso).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', timeZone: 'Europe/Madrid' })
 // «Comenzar» un proyecto con agente que aún no tiene encargo en marcha (ni hecho).
-const encargaAgente = (p: ProyectoSeguimiento, fase: FaseProyecto) =>
+export const encargaAgente = (p: ProyectoSeguimiento, fase: FaseProyecto) =>
   fase === 'comenzado' && !!p.encargo_tipo && (!p.agente || p.agente.estado === 'error')
 // Qué pasa al pulsar «Comenzar», en la confirmación.
-function alComenzar(p: ProyectoSeguimiento) {
+export function alComenzar(p: ProyectoSeguimiento) {
   if (!p.encargo_tipo) return 'sin agente: la haces tú'
   if (p.agente && p.agente.estado !== 'error') return 'el encargo ya existe'
   if (p.encargo_tipo === 'custom' && faltaBrief(p.brief)) return 'el agente espera tu brief de dirección (se pide al comenzar)'
@@ -27,7 +27,7 @@ function alComenzar(p: ProyectoSeguimiento) {
   return 'el agente monta la primera versión con el material que haya'
 }
 // Se puede «Comenzar» desde las etapas de antes (sin etapa, confirmado o material).
-const antesDeComenzar = (p: ProyectoSeguimiento) => !p.fase || p.fase === 'confirmado' || p.fase === 'material'
+export const antesDeComenzar = (p: ProyectoSeguimiento) => !p.fase || p.fase === 'confirmado' || p.fase === 'material'
 const dias = (n: number) => n === 0 ? 'hoy' : n === 1 ? 'hace 1 día' : `hace ${n} días`
 
 // Cada proyecto es una línea con sus siete etapas: lo hecho queda trazado, la etapa actual late
@@ -210,6 +210,7 @@ export default function Seguimiento({ proyectos, marcas }: { proyectos: Proyecto
                         <button key={c} type="button" className="copy caps" onClick={() => setEmail({ id: p.id, clave: c })}>✉ {NOMBRE_EMAIL[c]}</button>
                       ))}
                       {(p.drive_url || SUBCARPETAS[p.marca || '']) && <DriveCarpeta proyectoId={p.id} url={p.drive_url} error={p.drive_error} />}
+                      <Link href={`/proyectos/${p.id}`} className="copy caps">Abrir la ficha →</Link>
                       {p.lead_id && <Link href={`/leads/${p.lead_id}`} className="copy caps">Ver el lead →</Link>}
                     </span>
                   </div>

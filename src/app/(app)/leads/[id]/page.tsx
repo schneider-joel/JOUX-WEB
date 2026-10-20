@@ -4,6 +4,7 @@ import { ETIQUETA_ESTADO, ETIQUETA_FASE, esEstadoLead, esFaseProyecto, fechaHora
 import { remitenteLead } from '@/lib/remitentes'
 import { precioPropuesto, type ClienteFiscal } from '@/lib/ganado'
 import { MARCAS_TREATMENT } from '@/lib/seguimiento'
+import { textoEvento } from '@/lib/eventos-texto'
 import CambiarEstado from './cambiar-estado'
 import AccionesLead from './ganado'
 import Bienvenida from './bienvenida'
@@ -23,30 +24,6 @@ const agrupar = { useGrouping: 'always' } as unknown as Intl.NumberFormatOptions
 const peso = (b?: number | null) => b == null ? '' : b < 1024 * 1024 ? `${new Intl.NumberFormat('es-ES', agrupar).format(Math.round(b / 1024))} KB` : `${new Intl.NumberFormat('es-ES', { maximumFractionDigits: 1, ...agrupar }).format(b / 1024 / 1024)} MB`
 // Valores de `interes` y `campos` tal cual llegaron: texto, número o JSON compacto.
 const valor = (v: unknown) => v == null || v === '' ? '—' : typeof v === 'object' ? JSON.stringify(v) : String(v)
-
-function textoEvento(e: Evento) {
-  if (e.tipo === 'lead.nuevo') return `Lead recibido desde ${valor(e.datos.origen)}`
-  if (e.tipo === 'lead.estado') {
-    const de = esEstadoLead(e.datos.de) ? ETIQUETA_ESTADO[e.datos.de] : valor(e.datos.de)
-    const a = esEstadoLead(e.datos.a) ? ETIQUETA_ESTADO[e.datos.a] : valor(e.datos.a)
-    return `Estado: ${de} → ${a}`
-  }
-  if (e.tipo === 'lead.ganado') return `Ganado: ${valor(e.datos.cliente)}${e.datos.cliente_nuevo ? ' (cliente nuevo)' : ''}${e.datos.tarifa_dia ? ` · €${valor(e.datos.tarifa_dia)}/día` : ''}`
-  if (e.tipo === 'lead.perdido') return `Perdido${e.datos.motivo ? `: ${valor(e.datos.motivo)}` : ''}`
-  if (e.tipo === 'ia.borrador') return `Borrador de IA${e.datos.motivo === 'regenerar' ? ' (regenerado)' : e.datos.motivo === 'respuesta' ? ' para su respuesta' : ''}${e.datos.categoria ? ` · ${valor(e.datos.categoria)}` : ''}`
-  if (e.tipo === 'mensaje.descartado') return 'Borrador descartado'
-  if (e.tipo === 'material.recibido') return `Material para la prueba gratis${e.datos.fotos ? ` · ${valor(e.datos.fotos)} fotos` : ''}${e.datos.diseno ? ` · ${valor(e.datos.diseno)}` : ''}`
-  if (e.tipo === 'prueba.lista') return `${Number(e.datos.ronda) === 2 ? 'Prueba gratis con ajustes lista' : 'Prueba gratis lista'}${e.datos.diseno ? ` en ${valor(e.datos.diseno)}` : ''}`
-  if (e.tipo === 'prueba.ajustes') return `Ajustes pedidos al agente: ${valor(e.datos.peticion)}`
-  if (e.tipo === 'prueba.error') return `El agente no pudo montar la prueba: ${valor(e.datos.motivo)}`
-  if (e.tipo === 'drive.creada') return `Carpeta de Drive compartida con ${valor(e.datos.compartida_con)}`
-  if (e.tipo === 'material.subido') return `Ha subido ${valor(e.datos.n)} archivo${Number(e.datos.n) === 1 ? '' : 's'} a Drive`
-  if (e.tipo === 'datos.fiscales') return `${e.datos.corrigiendo ? 'Ha corregido' : 'Ha enviado'} sus datos fiscales: ${valor(e.datos.cliente)} (${valor(e.datos.pais)})`
-  if (e.tipo === 'material.completo') return 'Ha avisado de que ya está todo el material subido'
-  if (e.tipo === 'factura.emitida') return `Factura ${valor(e.datos.numero)} emitida (pago ${valor(e.datos.pago)})${e.datos.prueba ? ' · prueba, sin validez fiscal' : ''}`
-  if (e.tipo === 'proyecto.fase') return `Fase del proyecto: ${esFaseProyecto(e.datos.de) ? ETIQUETA_FASE[e.datos.de] : '—'} → ${esFaseProyecto(e.datos.a) ? ETIQUETA_FASE[e.datos.a] : valor(e.datos.a)}`
-  return e.tipo
-}
 
 export default async function LeadPage({ params }: { params: { id: string } }) {
   const id = Number(params.id)
@@ -104,7 +81,7 @@ export default async function LeadPage({ params }: { params: { id: string } }) {
           <section className="block" aria-label="Proyecto">
             <p className="label caps"><span>Proyecto</span><i className="rule" /></p>
             <dl className="meta lead__meta">
-              <div><dt>Proyecto</dt><dd><Link href={`/leads${lead.marca ? `?marca=${lead.marca}` : ''}`}>{proyecto.nombre}</Link></dd></div>
+              <div><dt>Proyecto</dt><dd><Link href={`/proyectos/${proyecto.id}`}>{proyecto.nombre} · abrir la ficha →</Link></dd></div>
               <div><dt>Cliente</dt><dd>{proyecto.cliente}</dd></div>
               <div><dt>Fase</dt><dd>{esFaseProyecto(proyecto.fase) ? ETIQUETA_FASE[proyecto.fase] : '—'}</dd></div>
               {pago1 && <div><dt>Pago 1</dt><dd><a href={`/invoice/${pago1.id}`} target="_blank" rel="noopener noreferrer">{pago1.numero || 'Factura'}</a></dd></div>}
