@@ -6,6 +6,7 @@
 // Pestañas sin marca → ruta. Las de marca son `ts:<key>` (treatments) y `mk:<key>` (webs): /work/<key>.
 export const RUTA_TAB: Record<string, string> = {
   dashboard: '/',
+  patrimonio: '/finanzas',
   facturas: '/finanzas/facturas',
   compras: '/finanzas/compras',
   impuestos: '/finanzas/impuestos',

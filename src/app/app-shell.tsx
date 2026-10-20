@@ -39,17 +39,19 @@ const I = {
   users: <svg {...svg}><circle cx="9" cy="9" r="3" /><path d="M3 19a6 6 0 0 1 12 0M16 7a3 3 0 0 1 0 6M18 19a5 5 0 0 0-3-4.6" /></svg>,
   gear: <svg {...svg}><circle cx="12" cy="12" r="3" /><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4L7 17M17 7l1.4-1.4" /></svg>,
   more: <svg {...svg}><circle cx="5" cy="12" r="1.2" /><circle cx="12" cy="12" r="1.2" /><circle cx="19" cy="12" r="1.2" /></svg>,
+  wallet: <svg {...svg}><path d="M4 7h14a2 2 0 0 1 2 2v9H4z" /><path d="M4 7V6a2 2 0 0 1 2-2h10" /><circle cx="16" cy="13" r="1.2" /></svg>,
   refresh: <svg {...svg}><path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6" /></svg>,
 }
 const ICONO_MARCA: Record<string, JSX.Element> = { arkevo: I.cube, cartela: I.cup, pitchlab: I.film, custom: I.code, ab: I.clock }
 
-// Finanzas: las pestañas de Facturación, Bancos y Presupuesto. Patrimonio llega en la fase 5.
+// Finanzas: Patrimonio (fase 5) y las pestañas de Facturación, Bancos y Presupuesto.
 const FINANZAS = [
+  { tab: 'patrimonio', label: 'Patrimonio', icono: I.chart },
   { tab: 'facturas', label: 'Facturas', icono: I.doc },
   { tab: 'compras', label: 'Compras', icono: I.cart },
   { tab: 'impuestos', label: 'Impuestos', icono: I.euro },
   { tab: 'bancos', label: 'Bancos', icono: I.bank },
-  { tab: 'presupuesto', label: 'Presupuesto', icono: I.chart },
+  { tab: 'presupuesto', label: 'Presupuesto', icono: I.wallet },
   { tab: 'clientes', label: 'Clientes', icono: I.card },
 ].map(f => ({ ...f, href: rutaDeTab(f.tab)! }))
 
@@ -144,7 +146,7 @@ function Migas({ marcas, marcaQ }: { marcas: Marca[]; marcaQ: string | null }) {
 // En el móvil no hay barra lateral: las páginas hermanas de Finanzas y de Work, en una tira de chips.
 function Hermanas({ marcas }: { marcas: Marca[] }) {
   const ruta = usePathname()
-  const lista = ruta.startsWith('/finanzas/') ? FINANZAS.map(f => ({ href: f.href, label: f.label }))
+  const lista = ruta.startsWith('/finanzas') ? FINANZAS.map(f => ({ href: f.href, label: f.label }))
     : ruta === '/work' || ruta.startsWith('/work/') ? [{ href: '/work', label: 'Proyectos' }, ...marcas.map(m => ({ href: `/work/${m.key}`, label: m.nombre }))]
     : null
   if (!lista) return null
@@ -197,7 +199,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     { href: '/', label: 'Hoy', icono: I.home, on: ruta === '/', n: pub.insignias?.hoy },
     { href: '/work', label: 'Work', icono: I.cube, on: ruta.startsWith('/work') || ruta.startsWith('/proyectos/') },
     { href: '/leads', label: 'Leads', icono: I.inbox, on: ruta.startsWith('/leads'), n: leads },
-    { href: '/finanzas/facturas', label: 'Finanzas', icono: I.euro, on: ruta.startsWith('/finanzas'), n: pub.insignias?.facturas },
+    { href: '/finanzas', label: 'Finanzas', icono: I.euro, on: ruta.startsWith('/finanzas'), n: pub.insignias?.facturas },
   ]
 
   return (

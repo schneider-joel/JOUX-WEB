@@ -9,6 +9,7 @@ import ImpuestosTab, { proximoPago, claveReal, type Reales } from './impuestos-t
 import CuentasCard from './cuentas-card'
 import MarcaCard from './marca-card'
 import Link from 'next/link'
+import PatrimonioEvolucion from './patrimonio-evolucion'
 import type { Hoy } from '@/lib/pendientes'
 import { totalACobrar, desglose, desgloseFactura } from '@/lib/importes'
 import MarcaTab, { type AccionesAgencia } from './marca-tab'
@@ -51,7 +52,7 @@ const ultimosMeses = (n: number) => {
 }
 
 // Los timesheets son dinámicos: una pestaña "ts:<key>" por grupo de clientes (ver lib/timesheets).
-type Tab = 'dashboard' | 'facturas' | 'compras' | 'impuestos' | 'presupuesto' | 'clientes' | 'bancos' | 'compartidos' | `ts:${string}` | `mk:${string}`
+type Tab = 'dashboard' | 'patrimonio' | 'facturas' | 'compras' | 'impuestos' | 'presupuesto' | 'clientes' | 'bancos' | 'compartidos' | `ts:${string}` | `mk:${string}`
 type Seccion = { id: string; label: string; icon: () => JSX.Element; tabs: { id: Tab; label: string; badge?: number }[] }
 type NuevoProyecto = { nombre: string; cliente: string; numero_proyecto: string; modo_rate: 'hora' | 'dia' }
 type Modal = { type: string; data?: any } | null
@@ -530,6 +531,7 @@ export default function Hub({ children }: { children?: React.ReactNode }) {
   const titulos: Record<string, [string, string]> = {
     dashboard: [saludo(), new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })],
     facturas: ['Facturas', `${facturasPendientes.length} pendientes · €${fmt(totalPendiente)} por cobrar`],
+    patrimonio: ['Patrimonio', 'Dónde está el dinero y cómo evoluciona'],
     presupuesto: ['Presupuesto', 'Gastos del mes'],
     clientes: ['Clientes', `${clientesFiscales.length} con datos fiscales guardados`],
     compras: ['Compras', 'Facturas de gastos y compras'],
@@ -561,8 +563,8 @@ export default function Hub({ children }: { children?: React.ReactNode }) {
         {(marcaActiva || marcaTsActiva) && children}
 
         {/* Overview: lo justo de cada sección, como la web; el detalle está en su pantalla */}
-        {/* Hoy (rediseño, fase 4): cifras, patrimonio y lo pendiente, proyectos por etapa y próximas fechas.
-            Debajo, el resumen de siempre (por cobrar, ingresos, cuentas, marcas y presupuesto) hasta Patrimonio (fase 5). */}
+        {/* Hoy (rediseño, fase 4): cifras, patrimonio y lo pendiente, proyectos por etapa, próximas fechas y las
+            facturas por cobrar (con su ✓). Cuentas, ingresos por marca y presupuesto están en Finanzas › Patrimonio. */}
         {tab === 'dashboard' && (() => {
           const pago = proximoPago(facturasFiscales, compras, cuotaAutonomo, impuestosReales)
           const hoyISO = hoyLocal(), mesISO = hoyISO.slice(0, 7)
@@ -608,7 +610,7 @@ export default function Hub({ children }: { children?: React.ReactNode }) {
 
             <div className="hoy__g">
               <section className="fx__card" aria-labelledby="hoy-pat">
-                <header><h2 id="hoy-pat">Patrimonio · 12 meses</h2><span className="caps dim">Liquidez €{fmt(totalLiquidez)} · Cripto €{fmt(totalCrypto)}</span></header>
+                <header><h2 id="hoy-pat">Patrimonio · 12 meses</h2><Link href="/finanzas" className="caps dim">Patrimonio →</Link></header>
                 <PatrimonioChart snapshots={snapshots} actual={totalPatrimonio} />
                 {snapshots.filter(s => s.fecha.slice(0, 7) !== mesActualKey).length < 2 && <p className="nota">Se guarda un punto cada día que abres el hub; el gráfico se completa mes a mes.</p>}
               </section>
@@ -657,7 +659,6 @@ export default function Hub({ children }: { children?: React.ReactNode }) {
               </section>
             )}
 
-            <p className="label caps hoy__resumen"><span>Resumen</span><i className="rule" /></p>
 
             <section className="block" aria-label="Por cobrar">
               <p className="label caps"><span>Por cobrar</span><i className="rule" /><button type="button" className="label__m copy" onClick={() => setTab('facturas')}>Facturas →</button></p>
@@ -676,6 +677,96 @@ export default function Hub({ children }: { children?: React.ReactNode }) {
                 </ul>
               )}
             </section>
+
+          </div>
+          )
+        })()}
+
+        {/* Finanzas › Patrimonio (rediseño, fase 5): cifras, evolución, dónde está el dinero, ingresos y gastos,
+            ingresos por marca, presupuesto e impuestos. Con los mismos datos que ya carga el hub; solo lee. */}
+        {tab === 'patrimonio' && (() => {
+          const pago = proximoPago(facturasFiscales, compras, cuotaAutonomo, impuestosReales)
+          const hoyISO = hoyLocal()
+          const pct = (n: number) => totalPatrimonio > 0 ? `${Math.round(n / totalPatrimonio * 100)} %` : '—'
+          // Hace un año: el primer punto guardado desde entonces (o el más antiguo, si aún no hay un año).
+          const haceUnAno = (() => { const d = new Date(hoyISO + 'T00:00:00'); d.setFullYear(d.getFullYear() - 1); return d.toISOString().slice(0, 10) })()
+          const orden = [...snapshots].sort((a, b) => a.fecha.localeCompare(b.fecha))
+          const base = orden.find(x => x.fecha >= haceUnAno) || orden[0]
+          const delta12 = base ? totalPatrimonio - Number(base.total) : null
+          // Dónde está el dinero: cada cuenta con sus apartados dentro, y la cripto.
+          const grupos = [
+            ...cuentas.filter(c => !c.padre_id).map(c => {
+              const hijos = cuentas.filter(h => h.padre_id === c.id)
+              return { clave: `c${c.id}`, nombre: c.nombre, color: c.color, total: aEuros(c) + hijos.reduce((t, h) => t + aEuros(h), 0), detalle: hijos.map(h => `${h.nombre} €${fmt(aEuros(h))}`).join(' · '), usd: c.moneda === 'USD' }
+            }),
+            ...(totalCrypto > 0 ? [{ clave: 'crypto', nombre: 'Cripto', color: '#8A8A87', total: totalCrypto, detalle: crypto.map(c => `${c.cantidad} ${c.symbol}`).join(' · '), usd: false }] : []),
+          ].sort((a, b) => b.total - a.total)
+          const mayor = Math.max(1, ...grupos.map(g => g.total))
+          // Ingresos y gastos por mes (movimientos del banco): cobros e ingresos frente a gastos menos reembolsos.
+          const meses6 = ultimosMeses(6)
+          const porMes = meses6.map(m => {
+            const del = movsBanco.filter(x => x.fecha.slice(0, 7) === m)
+            const ingresos = del.filter(x => (x.clase === 'cobro' || x.clase === 'ingreso') && x.importe > 0).reduce((t, x) => t + Number(x.importe), 0)
+            const gastos = del.filter(x => x.clase === 'gasto' && x.importe < 0).reduce((t, x) => t - Number(x.importe), 0) - del.filter(x => x.clase === 'reembolso' && x.importe > 0).reduce((t, x) => t + Number(x.importe), 0)
+            return { m, ingresos, gastos: Math.max(0, gastos) }
+          })
+          const tope = Math.max(1, ...porMes.flatMap(x => [x.ingresos, x.gastos]))
+          const irpf = cuentas.find(c => c.tipo === 'irpf')
+          return (
+          <div className="col pt">
+            <section className="fx__kpis" aria-label="Resumen del patrimonio">
+              <div className="fx__kpi"><span className="fx__l">Patrimonio total</span><span className="fx__v">€{fmt(totalPatrimonio)}</span><span className="fx__s">{deltaMes !== null ? `${deltaMes >= 0 ? '+' : '−'}€${fmt(Math.abs(deltaMes))} desde el mes pasado` : 'Registrando historial'}</span></div>
+              <div className="fx__kpi"><span className="fx__l">Liquidez</span><span className="fx__v">€{fmt(totalLiquidez)}</span><span className="fx__s">{pct(totalLiquidez)} del total</span></div>
+              <div className="fx__kpi"><span className="fx__l">Cripto</span><span className="fx__v">€{fmt(totalCrypto)}</span><span className="fx__s">{pct(totalCrypto)} del total</span></div>
+              <div className="fx__kpi"><span className="fx__l">En 12 meses</span><span className="fx__v">{delta12 === null ? '—' : `${delta12 >= 0 ? '+' : '−'}€${fmt(Math.abs(delta12))}`}</span><span className="fx__s">{base ? `desde el ${fmtDate(base.fecha)}${Number(base.total) > 0 && delta12 !== null ? ` · ${delta12 >= 0 ? '+' : ''}${(delta12 / Number(base.total) * 100).toFixed(1)} %` : ''}` : 'Sin historial'}</span></div>
+            </section>
+
+            <section className="fx__card" aria-labelledby="pt-evo">
+              <header><h2 id="pt-evo">Evolución del patrimonio</h2><span className="caps dim">un punto por día</span></header>
+              <PatrimonioEvolucion snapshots={snapshots} actual={totalPatrimonio} hoy={hoyISO} />
+            </section>
+
+            <div className="pt__g">
+              <section className="fx__card" aria-labelledby="pt-donde">
+                <header><h2 id="pt-donde">Dónde está el dinero</h2><span className="caps dim">€{fmt(totalPatrimonio)}</span></header>
+                <ul className="pt__barras">
+                  {grupos.map(g => (
+                    <li key={g.clave}>
+                      <span className="pt__bn"><i style={{ background: g.color || 'var(--muted)' }} />{g.nombre}{g.usd && <small className="dim"> · USD</small>}</span>
+                      <span className="num">€{fmt(g.total)} <small className="dim">{pct(g.total)}</small></span>
+                      <span className="pt__tr"><i style={{ width: `${g.total / mayor * 100}%` }} /></span>
+                      {g.detalle && <small className="pt__det">{g.detalle}</small>}
+                    </li>
+                  ))}
+                </ul>
+                <button type="button" className="copy caps" onClick={() => setModal({ type: 'editCuentas' })}>Editar cuentas →</button>
+              </section>
+
+              <section className="fx__card" aria-labelledby="pt-ig">
+                <header><h2 id="pt-ig">Ingresos y gastos</h2><span className="caps dim">últimos 6 meses · banco</span></header>
+                {movsBanco.length === 0 ? <p className="nota">Sin movimientos del banco todavía.</p> : <>
+                  <div className="pt__cols" role="img" aria-label="Ingresos y gastos de los últimos 6 meses">
+                    {porMes.map(x => (
+                      <div key={x.m} className="pt__mes" title={`${fmtMes(x.m)}: ingresos €${fmt(x.ingresos)}, gastos €${fmt(x.gastos)}`}>
+                        <div className="pt__par"><i className="pt__in" style={{ height: `${x.ingresos / tope * 100}%` }} /><i className="pt__ga" style={{ height: `${x.gastos / tope * 100}%` }} /></div>
+                        <span className="caps dim">{fmtMes(x.m)}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="legend caps pt__ley"><span><i className="sw" />Ingresos €{fmt(porMes.reduce((t, x) => t + x.ingresos, 0))}</span><span><i className="sw sw--g" />Gastos €{fmt(porMes.reduce((t, x) => t + x.gastos, 0))}</span></p>
+                </>}
+              </section>
+            </div>
+
+            {/* Impuestos del trimestre: lo que toca pagar y lo apartado para ello */}
+            {pago && (
+              <Link href="/finanzas/impuestos" className="pt__imp">
+                <span className="caps dim">Impuestos · T{pago.q}</span>
+                <span><b>€{fmt2(pago.total)}</b> {pago.declarado ? 'del gestor' : pago.cerrado ? 'a pagar' : 'estimado'} · hasta el {fmtDate(pago.plazo)}</span>
+                {irpf && <span className={Number(irpf.saldo) >= pago.total ? 'ok' : 'aviso'}>Apartado IRPF €{fmt(aEuros(irpf))}{Number(irpf.saldo) >= pago.total ? ' · cubierto' : ` · faltan €${fmt(pago.total - aEuros(irpf))}`}</span>}
+                <span className="caps dim">Impuestos →</span>
+              </Link>
+            )}
 
             <section className="block" aria-label="Ingresos facturados por mes de emisión">
               <p className="label caps"><span>Ingresos facturados</span><i className="rule" /></p>
