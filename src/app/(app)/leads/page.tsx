@@ -9,6 +9,11 @@ export const metadata = { title: 'Leads · JOUX Hub' }
 
 // Leads (antes /pipeline): los de todas las marcas en columnas por estado, con filtro por marca (?marca=).
 // Los proyectos se siguen en Work › Proyectos (/work); aquí solo el enlace con cuántos hay.
+// Columnas del tablero: los abiertos (ganados, perdidos y spam van en una lista aparte) y los estados que esperan a Joel.
+const CERRADOS: string[] = ['ganado', 'perdido', 'spam']
+const COLUMNAS = ESTADOS_LEAD.filter(e => !CERRADOS.includes(e))
+const ESPERAN: string[] = ['nuevo', 'borrador', 'conversacion']
+const QUE_TOCA: Record<string, string> = { nuevo: 'Sin responder', borrador: 'Borrador listo', conversacion: 'Ha respondido' }
 type Fila = Pick<Lead, 'id' | 'marca' | 'estado' | 'nombre' | 'email' | 'empresa' | 'recibido_en'>
 type FilaProyecto = { id: number; nombre: string; cliente: string; marca: string | null; fase: FaseProyecto; lead_id: number | null }
 
@@ -42,30 +47,38 @@ export default async function PipelinePage({ searchParams }: { searchParams: { m
         </nav>
 
         {error ? <p className="empty pipe__head">No se pudieron cargar los leads.</p> : (
-          <div className="pipe">
-            {ESTADOS_LEAD.map(estado => {
-              const col = lista.filter(l => l.estado === estado)
-              return (
-                <section key={estado} className="block pipe__col" aria-label={ETIQUETA_ESTADO[estado]}>
-                  <p className="label caps"><span>{ETIQUETA_ESTADO[estado]}</span><i className="rule" /><span className="label__m">{col.length}</span></p>
-                  {col.length === 0 ? <p className="nota">—</p> : (
-                    <ul className="list focus">
-                      {col.map(l => (
-                        <li key={l.id}>
-                          <Link href={`/leads/${l.id}`} className="fila pipe__lead">
-                            <span className="fila__main">
-                              <span className="fila__t">{l.nombre || l.email}{l.empresa ? <span> · {l.empresa}</span> : null}</span>
-                              <span className="fila__s caps">{filtro ? '' : `${nombreMarca.get(l.marca) || l.marca} · `}{hace(l.recibido_en)}</span>
-                            </span>
-                          </Link>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </section>
-              )
-            })}
-          </div>
+          <>
+          {/* Tablero por estado (el mismo de la página de cada marca). Los que esperan a Joel, en ámbar. */}
+          {!lista.some(l => (COLUMNAS as readonly string[]).includes(l.estado)) ? <p className="empty pipe__head">No hay leads abiertos{filtro ? ` en ${nombreMarca.get(filtro) || filtro}` : ''}.</p> : <div className="mk__scroll pipe__head">
+            <div className="mk__kanban" style={{ ['--n' as string]: COLUMNAS.length }}>
+              {COLUMNAS.map(estado => {
+                const col = lista.filter(l => l.estado === estado)
+                return (
+                  <div key={estado} className="mk__col">
+                    <h3>{ETIQUETA_ESTADO[estado]}<span>{col.length}</span></h3>
+                    {col.length === 0 ? <div className="mk__vacio">Ninguno</div> : col.map(l => (
+                      <Link key={l.id} href={`/leads/${l.id}`} className={`mk__card${ESPERAN.includes(estado) ? ' is-toca' : ''}`}>
+                        <b>{l.empresa || l.nombre || l.email}</b>
+                        <span className="mk__m"><span>{filtro ? (l.empresa ? l.nombre || l.email : '') : nombreMarca.get(l.marca) || l.marca}</span><span>{hace(l.recibido_en)}</span></span>
+                        {ESPERAN.includes(estado) && <span className="mk__toca">{QUE_TOCA[estado]}</span>}
+                      </Link>
+                    ))}
+                  </div>
+                )
+              })}
+            </div>
+          </div>}
+          {lista.some(l => CERRADOS.includes(l.estado)) && (
+            <section className="fx__card pipe__head" style={{ marginTop: 40 }} aria-labelledby="ld-fuera">
+              <header><h2 id="ld-fuera">Ganados, perdidos y spam</h2><span className="caps dim">{lista.filter(l => CERRADOS.includes(l.estado)).length}</span></header>
+              <ul className="mk__filas">
+                {lista.filter(l => CERRADOS.includes(l.estado)).slice(0, 30).map(l => (
+                  <li key={l.id}><Link href={`/leads/${l.id}`}><span>{l.empresa || l.nombre || l.email} <span className="dim">· {filtro ? '' : `${nombreMarca.get(l.marca) || l.marca} · `}{hace(l.recibido_en)}</span></span><span className={`fx__tag${l.estado === 'ganado' ? ' ok' : ''}`}>{ETIQUETA_ESTADO[l.estado]}</span></Link></li>
+                ))}
+              </ul>
+            </section>
+          )}
+          </>
         )}
 
         <Link href="/work" className="fila pipe__lead pipe__head" style={{ marginTop: 64, borderTop: '1px solid var(--line)', paddingTop: 20 }}>

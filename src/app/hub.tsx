@@ -193,7 +193,7 @@ function IngresosChart({ facturas }: { facturas: Factura[] }) {
 
 // Las pantallas del antiguo Overview. Desde el rediseño (fase 1) cada pestaña es una ruta (ver rutas.ts) y
 // este componente vive en el layout de (app)/(hub): se monta una vez y pinta la pantalla de la ruta.
-export default function Hub() {
+export default function Hub({ children }: { children?: React.ReactNode }) {
   const ruta = usePathname()
   const router = useRouter()
   const publicarMarco = usePublicarMarco()
@@ -564,6 +564,9 @@ export default function Hub() {
             {tab === 'clientes' && <button className="pill" onClick={() => setModal({ type: 'editCliente' })}><Icon.plus />Nuevo cliente</button>}
           </div>
         </header>
+
+        {/* Marca: cifras, tablero por etapa y terminados (los prepara su página del servidor, /work/[marca]); debajo, su pestaña de siempre */}
+        {(marcaActiva || marcaTsActiva) && children}
 
         {/* Overview: lo justo de cada sección, como la web; el detalle está en su pantalla */}
         {tab === 'dashboard' && (() => {

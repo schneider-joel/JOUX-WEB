@@ -3,23 +3,9 @@
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { ETIQUETA_FASE, FASES_PROYECTO, type FaseProyecto } from '@/lib/leads'
-import { AHORA, DIAS_ALERTA, antesDeComenzar, diasDesde, fasesDe, type ProyectoSeguimiento } from '@/lib/seguimiento'
-import { EMAIL_RECORDATORIO } from '@/lib/emails'
+import { AHORA, DIAS_ALERTA, diasDesde, fasesDe, queToca, type ProyectoSeguimiento } from '@/lib/seguimiento'
 
 const dias = (n: number) => n === 0 ? 'hoy' : n === 1 ? 'hace 1 día' : `hace ${n} días`
-
-// Lo que te toca en un proyecto, en dos o tres palabras (el detalle y los botones están en su ficha).
-function queToca(p: ProyectoSeguimiento, parado: boolean): string | null {
-  if (p.borradores.length) return p.borradores.length === 1 ? 'Email por enviar' : `${p.borradores.length} emails por enviar`
-  if (p.agente?.estado === 'error') return 'El agente no pudo terminar'
-  if (p.agente?.estado === 'lista' && p.fase === 'comenzado') return 'Revisar lo que hizo el agente'
-  if (p.fase === 'comenzado' && p.encargo_tipo === 'custom' && !p.agente) return 'Escribir el brief'
-  if (antesDeComenzar(p) && p.material_completo) return 'Listo para comenzar'
-  if (p.drive_error && !p.drive_url) return 'Drive no se pudo crear'
-  if (parado && p.fase && EMAIL_RECORDATORIO[p.fase]) return 'Parado · mandar recordatorio'
-  if (!p.fase) return 'Ponle su etapa'
-  return null
-}
 
 // Work › Proyectos: una fila por proyecto con su línea de etapas. Toda la fila abre la ficha, donde se
 // cambia la etapa y está todo lo demás (emails, agente, Drive, brief). Aquí solo se mira y se filtra.

@@ -1,5 +1,6 @@
 // Seguimiento de proyectos por fase (/proyectos). Usable en el navegador.
 import { FASES_PROYECTO, type FaseProyecto } from './leads'
+import { EMAIL_RECORDATORIO } from './emails'
 
 // Treatments que se siguen por etapas (además de las webs, marcas de modo «cerrado»). Sus etapas son
 // menos: sin «Cambios» (las rondas van en Pitchview). Los de antes de entrar aquí no tienen fase y no salen.
@@ -99,3 +100,20 @@ export function alComenzar(p: ProyectoSeguimiento) {
 }
 // Se puede «Comenzar» desde las etapas de antes (sin etapa, confirmado o material).
 export const antesDeComenzar = (p: ProyectoSeguimiento) => !p.fase || p.fase === 'confirmado' || p.fase === 'material'
+
+// Parado = lleva en su etapa más días de los que toca (cerrado nunca).
+export const estaParado = (p: Pick<ProyectoSeguimiento, 'fase' | 'desde'>) => !!p.fase && DIAS_ALERTA[p.fase] != null && diasDesde(p.desde) >= DIAS_ALERTA[p.fase]!
+
+// Lo que te toca en un proyecto, en dos o tres palabras (el detalle y los botones están en su ficha).
+export function queToca(p: ProyectoSeguimiento, parado: boolean): string | null {
+  if (p.borradores.length) return p.borradores.length === 1 ? 'Email por enviar' : `${p.borradores.length} emails por enviar`
+  if (p.agente?.estado === 'error') return 'El agente no pudo terminar'
+  if (p.agente?.estado === 'lista' && p.fase === 'comenzado') return 'Revisar lo que hizo el agente'
+  if (p.fase === 'comenzado' && p.encargo_tipo === 'custom' && !p.agente) return 'Escribir el brief'
+  if (antesDeComenzar(p) && p.material_completo) return 'Listo para comenzar'
+  if (p.drive_error && !p.drive_url) return 'Drive no se pudo crear'
+  if (parado && p.fase && EMAIL_RECORDATORIO[p.fase]) return 'Parado · mandar recordatorio'
+  if (!p.fase) return 'Ponle su etapa'
+  return null
+}
+
