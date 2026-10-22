@@ -48,8 +48,9 @@ Panel financiero personal de Joel, autónomo en España: facturación, timesheet
 ## Bancos (Enable Banking)
 
 - Open banking de solo lectura: BBVA, Revolut y Wise. `src/lib/enablebanking.ts` + `src/lib/bancos-sync.ts`.
-- Sincroniza al abrir el hub si han pasado más de 3 h, y con el cron diario de las 06:00 UTC (`vercel.json`). Los bancos permiten unas 4 lecturas al día por consentimiento (BBVA devuelve 429). Los consentimientos caducan el 2027-03-30.
-- El saldo del BBVA usa el disponible (ITAV). El apartado de Ahorros se deriva: contable − disponible − resto de apartados. El de IRPF se mantiene a mano.
+- Sincroniza al abrir el hub si han pasado más de 3 h, y con el cron diario de las 06:00 UTC (`vercel.json`). Los bancos permiten unas 4 lecturas al día por consentimiento (BBVA devuelve 429). Los consentimientos de Revolut y Wise caducan el 2027-03-30; el de BBVA, el 2027-04-20.
+- La app de Enable Banking está en la cuenta schneidermenajoel@gmail.com, en modo **Restricted**: solo lee las cuentas de «Linked accounts». Una cuenta nueva se enlaza antes allí («Link accounts»). Cada permiso nuevo de BBVA (también el de «Link») anula el anterior y la reconexión crea otra sesión con otros `uid` de cuenta: los movimientos se duplican (el id lleva el `uid`) y hay que limpiar a mano.
+- BBVA tiene dos cuentas (desde el 2026-10-22): …4921 (cobros, gastos fijos, suscripciones) → cuenta «BBVA» con el disponible (ITAV), con el apartado IRPF a mano; …3777 (ahorros) → cuenta «BBVA Ahorros» (id 10, ya no es apartado). El cálculo del apartado de ahorro en `bancos-sync.ts` (contable − disponible − otros apartados) ya no se aplica porque BBVA no tiene apartado de ahorro.
 - Los movimientos pendientes (`estado = 'PDNG'`) se descartan cuando aparece su gemelo confirmado. Los marcados a mano se conservan.
 - Clasificación (`src/lib/movimientos.ts`): las reglas del usuario (`reglas_movimientos`) van antes que las de por defecto. Se compara primero con el comercio y luego con todo el texto. `clase`: cobro · ingreso · interno · personal · reembolso · gasto.
 - `conciliarTodo()` (`src/lib/conciliar.ts`) clasifica, enlaza compras, enlaza cobros con facturas (combinación exacta de importes) y sincroniza Compartidos. Cada cobro nuevo enlazado se guarda en `notificaciones` y se envía por push (`src/lib/push.ts`, Web Push con claves VAPID).
