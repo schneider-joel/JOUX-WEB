@@ -18,6 +18,8 @@ import BancosTab from './bancos-tab'
 import CompartidosVista from './compartidos-vista'
 import PresupuestoCards, { gastadoPorPartida } from './presupuesto-card'
 import type { GastoCompartido } from '@/lib/compartidos'
+import { CATEGORIA_IMPUESTOS } from '@/lib/movimientos'
+import { impuestosPorApartar, queMover } from '@/lib/que-mover'
 import { PAISES, PaisFiscal, detectarPais, tipoFacturaDePais } from '@/lib/clientes'
 import { GrupoTimesheet, grupoDeCliente, gruposTimesheet, linkPublico, tipoLegacy } from '@/lib/timesheets'
 import { supabase, batchQuery, Compra, Cuenta, Crypto, Factura, PresupuestoItem, Proyecto, DiaTrabajado, PatrimonioSnapshot, ClienteFiscal } from '@/lib/supabase'
@@ -583,6 +585,13 @@ export default function Hub({ children }: { children?: React.ReactNode }) {
             ...(hoy?.fechas || []),
           ].sort((a, b) => a.fecha.localeCompare(b.fecha)).slice(0, 8)
           const enMarcha = (hoy?.etapas || []).reduce((t, e) => t + e.n, 0)
+          // Qué mover entre cuentas (src/lib/que-mover.ts): solo con datos del banco.
+          const gastadoMes = gastadoPorPartida(movsBanco, new Set(variables.map(v => v.nombre)), undefined, compartidos)
+          const quedan = (items: PresupuestoItem[]) => items.reduce((t, i) => t + Math.max(0, Number(i.limite) - (gastadoMes[i.nombre] || 0)), 0)
+          const traspasos = movsBanco.length ? queMover({
+            cuentas, fijosPendientes: quedan(fijos), variablesPendientes: quedan(variables),
+            impuestos: impuestosPorApartar(facturasFiscales, compras, cuotaAutonomo, impuestosReales, movsBanco, hoyISO),
+          }) : null
           return (
           <div className="col hoy">
             <section className="fx__kpis" aria-label="Resumen">
@@ -607,6 +616,19 @@ export default function Hub({ children }: { children?: React.ReactNode }) {
                 <span className="fx__s">{leadsHoy.length ? Array.from(new Set(leadsHoy.map(l => l.sub.split(' · ')[0].replace('Lead de ', '')))).join(' · ') : 'Ninguno esperando'}</span>
               </Link>
             </section>
+
+            {traspasos && (
+              <section className="fx__card" aria-labelledby="hoy-mover">
+                <header><h2 id="hoy-mover">Qué mover</h2><Link href="/finanzas" className="caps dim">Cuentas →</Link></header>
+                {traspasos.length === 0 ? <p className="nota">Todo en su sitio: fijos, variables, impuestos y ahorro.</p> : (
+                  <ul className="hoy__todo hoy__mover">
+                    {traspasos.map(x => (
+                      <li key={x.clave}><Link href="/finanzas"><i aria-hidden="true" className={x.aviso ? 'is-aviso' : undefined} /><span><b>{x.texto}</b><span>{x.sub}</span></span></Link></li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            )}
 
             <div className="hoy__g">
               <section className="fx__card" aria-labelledby="hoy-pat">
@@ -702,11 +724,12 @@ export default function Hub({ children }: { children?: React.ReactNode }) {
             ...(totalCrypto > 0 ? [{ clave: 'crypto', nombre: 'Cripto', color: '#8A8A87', total: totalCrypto, detalle: crypto.map(c => `${c.cantidad} ${c.symbol}`).join(' · '), hijos: [] as { nombre: string; total: number }[], usd: false }] : []),
           ].sort((a, b) => b.total - a.total)
           // Ingresos y gastos por mes (movimientos del banco): cobros e ingresos frente a gastos menos reembolsos.
+          // Los pagos a Hacienda no son gasto: salen de la hucha de impuestos (y la proyección ya resta el impuesto aparte).
           const meses6 = ultimosMeses(6)
           const porMes = meses6.map(m => {
             const del = movsBanco.filter(x => x.fecha.slice(0, 7) === m)
             const ingresos = del.filter(x => (x.clase === 'cobro' || x.clase === 'ingreso') && x.importe > 0).reduce((t, x) => t + Number(x.importe), 0)
-            const gastos = del.filter(x => x.clase === 'gasto' && x.importe < 0).reduce((t, x) => t - Number(x.importe), 0) - del.filter(x => x.clase === 'reembolso' && x.importe > 0).reduce((t, x) => t + Number(x.importe), 0)
+            const gastos = del.filter(x => x.clase === 'gasto' && x.categoria !== CATEGORIA_IMPUESTOS && x.importe < 0).reduce((t, x) => t - Number(x.importe), 0) - del.filter(x => x.clase === 'reembolso' && x.importe > 0).reduce((t, x) => t + Number(x.importe), 0)
             return { m, ingresos, gastos: Math.max(0, gastos) }
           })
           const tope = Math.max(1, ...porMes.flatMap(x => [x.ingresos, x.gastos]))
@@ -1055,9 +1078,12 @@ function ModalEditCuentas({ cuentas, automaticas, onUpdate, onClose }: { cuentas
   // Cada cuenta seguida de sus apartados.
   const ordenadas = cuentas.filter(c => !c.padre_id).flatMap(c => [c, ...cuentas.filter(h => h.padre_id === c.id).sort((a, b) => a.orden - b.orden)])
   const campo = { background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 7, padding: '6px 10px', color: 'var(--text)', fontSize: 13, fontFamily: 'Inter, sans-serif', outline: 'none' }
-  // Las que actualiza el banco (y el apartado de ahorro, que es lo que sobra
-  // del total del banco) no se editan; solo se guarda lo que cambió.
-  const auto = (c: Cuenta) => automaticas.includes(c.id) || (c.tipo === 'ahorro' && !!c.padre_id && automaticas.includes(c.padre_id))
+  // Las que actualiza el banco (y el apartado que es lo que sobra del total
+  // del banco: el de ahorro o, sin él, el de impuestos; como en bancos-sync)
+  // no se editan; solo se guarda lo que cambió.
+  const derivada = (c: Cuenta) => !!c.padre_id && automaticas.includes(c.padre_id) &&
+    (c.tipo === 'ahorro' || (c.tipo === 'irpf' && !cuentas.some(h => h.padre_id === c.padre_id && h.tipo === 'ahorro')))
+  const auto = (c: Cuenta) => automaticas.includes(c.id) || derivada(c)
   const guardar = async () => {
     await Promise.all(ordenadas.flatMap(c => {
       const patch: Partial<Cuenta> = {}
@@ -1085,7 +1111,7 @@ function ModalEditCuentas({ cuentas, automaticas, onUpdate, onClose }: { cuentas
             <input type="number" step="0.01" value={rent[c.id]} onChange={e => setRent({ ...rent, [c.id]: e.target.value })} placeholder="% anual" title="Rentabilidad anual (%)" style={{ ...campo, width: 72 }} />
           )}
           {auto(c)
-            ? <span title={c.tipo === 'ahorro' ? 'Se calcula solo: total del banco − disponible − otros apartados' : 'Se actualiza solo desde el banco'} style={{ ...campo, width: 110, color: 'var(--text3)', display: 'inline-flex', justifyContent: 'space-between' }}><span className="mono">{fmt2(c.saldo)}</span><span style={{ fontSize: 10 }}>auto</span></span>
+            ? <span title={derivada(c) ? 'Se calcula solo: total del banco − disponible − otros apartados' : 'Se actualiza solo desde el banco'} style={{ ...campo, width: 110, color: 'var(--text3)', display: 'inline-flex', justifyContent: 'space-between' }}><span className="mono">{fmt2(c.saldo)}</span><span style={{ fontSize: 10 }}>auto</span></span>
             : <input type="number" value={values[c.id]} onChange={e => setValues({ ...values, [c.id]: e.target.value })} style={{ ...campo, width: 110 }} />}
         </div>
       ))}

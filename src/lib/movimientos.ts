@@ -9,6 +9,10 @@
 
 export type Clase = 'cobro' | 'ingreso' | 'interno' | 'personal' | 'reembolso' | 'gasto'
 
+// Pagos a Hacienda (130, 303): se guardan como gasto para verlos, pero no
+// cuentan en los gastos del mes porque salen de la hucha de impuestos.
+export const CATEGORIA_IMPUESTOS = 'Impuestos'
+
 export type MovimientoBase = {
   importe: number
   contraparte: string | null
@@ -54,7 +58,7 @@ const REGLAS: Regla0[] = [
   // Otros ingresos
   { re: /bonificaci|cashback|intereses/, clase: 'ingreso', soloIngresos: true },
   // Pagos a Hacienda (el banco los identifica con el NRC del pago)
-  { re: /^nrc\b|\bnrc\.? \d|agencia tributaria|aeat/, clase: 'gasto', categoria: 'Impuestos' },
+  { re: /^nrc\b|\bnrc\.? \d|agencia tributaria|aeat/, clase: 'gasto', categoria: CATEGORIA_IMPUESTOS },
   // Fijos
   { re: /\balquiler\b/, clase: 'gasto', categoria: 'Alquiler' },
   { re: /tgss|seguridad social/, clase: 'gasto', categoria: 'Cuota autónomo' },

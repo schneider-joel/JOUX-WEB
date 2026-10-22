@@ -2,6 +2,7 @@ import { supabaseServer as sb } from '@/lib/supabase-server'
 import { clasificar, comercio, palabrasClave, textoDe, type Regla } from '@/lib/movimientos'
 import { sincronizarCompartidos } from '@/lib/compartidos-server'
 import { notificar } from '@/lib/push'
+import { traspasosDeHoy } from '@/lib/que-mover-server'
 
 const IVA = 0.21
 const RETENCION = 0.15
@@ -100,11 +101,14 @@ export async function conciliarCobros() {
     cobros++
   }
   const eur = (n: number) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(n)
+  // Con el cobro, qué mover ahora (hucha de impuestos y ahorros), como en Hoy.
+  const mover = avisos.length ? await traspasosDeHoy().catch(() => []) : []
+  const reparto = mover.filter(t => t.clave === 'imp' || t.clave === 'aho').map(t => t.texto).join(' · ')
   for (const a of avisos) {
     await notificar({
       titulo: `Cobro recibido · ${a.cliente}`,
-      cuerpo: `${eur(a.importe)} → ${a.numeros.length > 1 ? `facturas ${a.numeros.join(', ')}` : `factura ${a.numeros[0] || ''}`}`,
-      url: '/?tab=facturas',
+      cuerpo: `${eur(a.importe)} → ${a.numeros.length > 1 ? `facturas ${a.numeros.join(', ')}` : `factura ${a.numeros[0] || ''}`}${reparto ? `\n${reparto}` : ''}`,
+      url: reparto ? '/' : '/?tab=facturas',
     }).catch(() => {})
   }
   return cobros
