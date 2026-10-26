@@ -1,0 +1,52 @@
+/* Enlace de cambios de Cartela: marca Cartela (Vichy), no la del hub. Todo cuelga de .cz. */
+@font-face { font-family: 'Instrument Sans'; font-weight: 400 700; font-display: swap; src: url(/fonts/cartela/instrument-sans-normal-400-700.woff2) format('woff2'); }
+@font-face { font-family: 'Bricolage Grotesque'; font-weight: 800; font-display: swap; src: url(/fonts/cartela/bricolage-grotesque-800.woff2) format('woff2'); }
+@font-face { font-family: 'Bricolage Grotesque'; font-weight: 700; font-display: swap; src: url(/fonts/cartela/bricolage-grotesque-700.woff2) format('woff2'); }
+
+html:has(.cz), body:has(.cz) { background: #E9E1CF; }
+.cz {
+  --paper: #F7EFDF; --slip: #FCF8EE; --ink: #231B17; --muted: #65574E; --red: #D3371E; --red-t: #B52C15;
+  --line: rgba(35,27,23,.14); --ok: #1E7A3C;
+  min-height: 100dvh; padding: 12px 0 40px; background: #E9E1CF; color: var(--ink);
+  font: 400 16px/1.5 'Instrument Sans', system-ui, sans-serif;
+}
+.cz *, .cz *::before, .cz *::after { box-sizing: border-box; }
+.cz button, .cz textarea { font-family: inherit; color: inherit; }
+.cz__app { max-width: 440px; margin: 0 auto; background: var(--paper); border-radius: 22px; overflow: hidden; box-shadow: 0 30px 60px -30px rgba(35,27,23,.45); }
+@media (max-width: 460px) { .cz { padding: 0; } .cz__app { border-radius: 0; min-height: 100dvh; box-shadow: none; } }
+.cz__vacia { padding: 28px 18px; color: var(--muted); }
+.cz__top { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 18px; border-bottom: 1px solid var(--line); }
+.cz__top b { display: block; font: 800 19px/1.1 'Bricolage Grotesque', sans-serif; letter-spacing: -.02em; }
+.cz__top span { font-size: 13px; color: var(--muted); }
+.cz__top a { flex: none; font-size: 13px; font-weight: 600; color: var(--red-t); text-decoration: none; }
+.cz__pane { padding: 18px 18px 24px; }
+.cz h1 { margin: 0 0 4px; font: 800 24px/1.1 'Bricolage Grotesque', sans-serif; letter-spacing: -.02em; }
+.cz h2 { margin: 26px 0 10px; font: 700 13px/1 'Instrument Sans', sans-serif; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.cz__sub { margin: 0 0 14px; color: var(--muted); font-size: 14px; }
+.cz__chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.cz__chips button { padding: 8px 11px; border-radius: 99px; border: 1.5px solid var(--line); background: var(--slip); font-size: 13px; font-weight: 500; cursor: pointer; }
+.cz textarea { display: block; width: 100%; min-height: 110px; padding: 12px 14px; border-radius: 14px; border: 1.5px solid var(--line); background: #fff; font-size: 16px; line-height: 1.4; resize: vertical; }
+.cz textarea:focus { outline: none; border-color: var(--red); }
+.cz__row { display: flex; gap: 8px; margin-top: 10px; }
+.cz__ghost { display: inline-flex; align-items: center; gap: 6px; padding: 10px 13px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--slip); font-size: 13px; font-weight: 600; cursor: pointer; }
+.cz__send { margin-left: auto; padding: 11px 20px; border-radius: 99px; border: 0; background: var(--red); color: #fff !important; font-size: 14px; font-weight: 700; cursor: pointer; transition: opacity .2s; }
+.cz__send:disabled { opacity: .55; cursor: default; }
+.cz__att { margin: 8px 0 0; font-size: 13px; color: var(--muted); }
+.cz__att button { margin-left: 6px; border: 0; background: none; padding: 0; color: var(--red-t); font-size: 13px; font-weight: 600; cursor: pointer; }
+.cz__error { margin: 10px 0 0; padding: 9px 12px; border-radius: 10px; background: rgba(211,55,30,.1); color: var(--red-t); font-size: 14px; }
+.cz__hint { margin: 10px 0 0; font-size: 12.5px; color: var(--muted); }
+.cz__req { background: var(--slip); border: 1px solid var(--line); border-radius: 16px; padding: 13px 14px; margin-bottom: 10px; }
+.cz__q { margin: 0; font-weight: 600; overflow-wrap: anywhere; white-space: pre-line; }
+.cz__q small { font-weight: 500; color: var(--muted); }
+.cz__when { margin: 2px 0 0; font-size: 12.5px; color: var(--muted); }
+.cz__pill { display: inline-flex; align-items: center; gap: 6px; margin-top: 9px; padding: 5px 10px; border-radius: 99px; font-size: 12px; font-weight: 700; line-height: 1; background: rgba(35,27,23,.07); color: var(--muted); }
+.cz__pill i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.cz__pill--ok { background: rgba(30,122,60,.12); color: var(--ok); }
+.cz__pill--curso { background: rgba(240,180,60,.25); color: #9A6400; }
+.cz__pill--rev { background: rgba(211,55,30,.1); color: var(--red-t); }
+.cz__nota { margin: 10px 0 0; padding: 8px 10px; border-radius: 10px; background: #fff; border: 1px solid var(--red); font-size: 14px; }
+.cz__nota small { display: block; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+@media (hover: hover) and (pointer: fine) {
+  .cz__chips button:hover, .cz__ghost:hover { border-color: var(--ink); }
+  .cz__send:not(:disabled):hover { background: var(--red-t); }
+}

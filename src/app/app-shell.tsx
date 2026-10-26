@@ -72,7 +72,7 @@ type DatosMenu = { marcas: Marca[]; insignias: Record<string, number>; leads: nu
 function Menu({ datos, marcaQ }: { datos: DatosMenu; marcaQ: string | null }) {
   const ruta = usePathname()
   const { marcas, insignias, leads } = datos
-  const marcaAbierta = ruta.match(/^\/work\/([\w-]+)/)?.[1] || (ruta === '/leads' ? marcaQ : null)
+  const marcaAbierta = ruta.match(/^\/work\/([\w-]+)/)?.[1] || (ruta === '/leads' ? marcaQ : ruta.startsWith('/cartela/') ? 'cartela' : null)
   return (
     <>
       <nav className="sh__grp" aria-label="Inicio">
@@ -97,6 +97,7 @@ function Menu({ datos, marcaQ }: { datos: DatosMenu; marcaQ: string | null }) {
                 <div className="sh__subs">
                   <Entrada sub it={{ href: `/work/${m.key}`, label: 'Proyectos', activo: ruta === `/work/${m.key}` }} />
                   {m.key !== 'ab' && <Entrada sub it={{ href: `/leads?marca=${m.key}`, label: 'Leads', activo: ruta === '/leads' && marcaQ === m.key }} />}
+                  {m.key === 'cartela' && <Entrada sub it={{ href: '/cartela/cambios', label: 'Cambios', activo: ruta === '/cartela/cambios' }} />}
                 </div>
               )}
             </div>
@@ -128,6 +129,7 @@ function Migas({ marcas, marcaQ }: { marcas: Marca[]; marcaQ: string | null }) {
     : ruta === '/leads' ? [{ t: 'Work' }, { t: 'Leads', href: marcaQ ? '/leads' : undefined }, ...(marcaQ ? [{ t: nombre(marcaQ) || '' }] : [])]
     : ruta.startsWith('/proyectos/') ? [{ t: 'Work' }, { t: 'Proyectos', href: '/work' }, { t: `#${ruta.split('/')[2]}` }]
     : ruta.startsWith('/leads/') ? [{ t: 'Work' }, { t: 'Leads', href: '/leads' }, { t: `#${ruta.split('/')[2]}` }]
+    : ruta === '/cartela/cambios' ? [{ t: 'Marcas' }, { t: nombre('cartela') || '', href: '/work/cartela' }, { t: 'Cambios' }]
     : ruta === '/compartidos' ? [{ t: 'Compartidos' }]
     : ruta === '/ajustes' ? [{ t: 'Ajustes' }]
     : []

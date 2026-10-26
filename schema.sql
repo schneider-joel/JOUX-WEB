@@ -1671,3 +1671,50 @@ Cualquier duda, responde a este correo.
 Joel
 Cartela$t$)
 ON CONFLICT DO NOTHING;
+
+
+-- ============================================================
+-- MIGRACIÓN: cambios de Cartela, fase 1 (2026-10-26, aplicada). Solo aditiva: dos tablas nuevas y un bucket privado.
+-- Diseño en 01 Agencias web/cartela/joux-hub/CAMBIOS-AUTOMATICOS.md. Versiones y operaciones del agente, en fases 2 y 3.
+
+-- Un local de Cartela con su enlace de cambios (/cambios/<token_cambios>). proyecto_id es opcional:
+-- el local de prueba (Cresta) no tiene proyecto.
+CREATE TABLE IF NOT EXISTS cartela_locales (
+  id SERIAL PRIMARY KEY,
+  proyecto_id INT REFERENCES proyectos(id) ON DELETE SET NULL,
+  nombre TEXT NOT NULL,
+  slug TEXT NOT NULL UNIQUE,
+  plan TEXT NOT NULL DEFAULT 'carta' CHECK (plan IN ('carta','casa','grupo')),
+  url_carta TEXT,
+  token_cambios TEXT NOT NULL UNIQUE DEFAULT encode(extensions.gen_random_bytes(32), 'hex'),
+  email_aviso TEXT,
+  estado TEXT NOT NULL DEFAULT 'activo' CHECK (estado IN ('activo','pausado','baja')),
+  prueba BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE cartela_locales ENABLE ROW LEVEL SECURITY;
+
+-- Cada petición de cambio de un local. adjuntos: rutas en el bucket privado `cartela`
+-- (<local>/<petición>/<nombre>). nota: lo que Joel cambió, la ve el cliente en su historial.
+CREATE TABLE IF NOT EXISTS cartela_peticiones (
+  id SERIAL PRIMARY KEY,
+  local_id INT NOT NULL REFERENCES cartela_locales(id) ON DELETE CASCADE,
+  texto TEXT NOT NULL,
+  adjuntos TEXT[] NOT NULL DEFAULT '{}',
+  estado TEXT NOT NULL DEFAULT 'recibida' CHECK (estado IN ('recibida','en_curso','publicada','escalada')),
+  nota TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  actualizada_at TIMESTAMPTZ
+);
+ALTER TABLE cartela_peticiones ENABLE ROW LEVEL SECURITY;
+CREATE INDEX IF NOT EXISTS cartela_peticiones_local ON cartela_peticiones (local_id, created_at DESC);
+
+-- Fotos de las peticiones (privado; el panel las enseña con URLs firmadas). 5 MB e imágenes.
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES ('cartela', 'cartela', false, 5242880, ARRAY['image/jpeg','image/png','image/webp','image/heic'])
+ON CONFLICT (id) DO NOTHING;
+
+-- Local de prueba (ficticio) para probar el flujo de punta a punta.
+INSERT INTO cartela_locales (nombre, slug, plan, url_carta, prueba)
+VALUES ('Cresta', 'cresta', 'casa', 'https://cartela.live/ejemplos/cresta/', true)
+ON CONFLICT (slug) DO NOTHING;
