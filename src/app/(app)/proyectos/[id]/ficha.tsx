@@ -4,7 +4,7 @@ import { useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ETIQUETA_FASE, type FaseProyecto } from '@/lib/leads'
-import { ETAPAS_VISTA, NOMBRE_ENCARGO, PASO_ARKEVO_REVISION, alComenzar, antesDeComenzar, diasDesde, encargaAgente, estadoDe, estaParado, etapaVista, faltaBrief, nombreCorto, rondaSiguiente, type Estado, type ProyectoSeguimiento } from '@/lib/seguimiento'
+import { ETAPAS_VISTA, NOMBRE_ENCARGO, entregaPendiente, PASO_ARKEVO_REVISION, alComenzar, antesDeComenzar, diasDesde, encargaAgente, estadoDe, estaParado, etapaVista, faltaBrief, nombreCorto, rondaSiguiente, type Estado, type ProyectoSeguimiento } from '@/lib/seguimiento'
 import { EMAIL_AL_ENTRAR, EMAIL_RECORDATORIO, NOMBRE_EMAIL } from '@/lib/emails'
 import { ETIQUETA_PAGO, type Pago } from '@/lib/marcas'
 import EmailPanel from '../../work/email-panel'
@@ -82,8 +82,10 @@ export default function Ficha({ d }: { d: DatosFicha }) {
   const etapa = etapaVista(fase)
   const treatment = d.dinero.tipo === 'dias'
   const pago1Cobrado = d.dinero.tipo === 'cerrado' && d.dinero.pagos[0]?.estado === 'cobrada'
-  // Pago 2 sin facturar (ni pendiente ni cobrado): la entrega lleva su factura.
-  const pago2SinFacturar = d.dinero.tipo === 'cerrado' && !d.dinero.unica && d.dinero.precio > 0 && d.dinero.pagos[1]?.estado === 'sin_facturar'
+  // Web entregada sin el email de entrega: la caja lo ofrece con la factura del pago 2 (la crea o, si ya se
+  // facturó a mano, la adjunta).
+  const conEntrega = !!s && d.dinero.tipo === 'cerrado' && !d.dinero.unica
+  const pendienteEntrega = conEntrega && entregaPendiente(s!)
   const titulo = nombreCorto(p.nombre, p.cliente, p.marcaNombre)
   const ronda = s?.rondas.length ? s.rondas[s.rondas.length - 1] : null
 
@@ -99,7 +101,7 @@ export default function Ficha({ d }: { d: DatosFicha }) {
     else if (j?.encargo?.omitido && mover === 'comenzado') setAviso(`Comenzado, sin encargo: ${j.encargo.omitido}`)
     else setAviso('')
     // Al entregar una web con el pago 2 sin facturar, la caja ofrece la entrega con su factura (no el email suelto).
-    const clave = mover === 'entregado' && pago2SinFacturar ? undefined : EMAIL_AL_ENTRAR[mover]
+    const clave = mover === 'entregado' && conEntrega ? undefined : EMAIL_AL_ENTRAR[mover]
     setEmail(clave && s.plantillas.includes(clave) ? { clave } : null); setCerrada(false)
     setMover(null); setNota(''); setVerEtapas(false); router.refresh()
   }
@@ -123,11 +125,11 @@ export default function Ficha({ d }: { d: DatosFicha }) {
   if (ronda?.estado === 'comentada') tareas.push({ titulo: `Aplica ${ronda.comentarios} comentario${ronda.comentarios === 1 ? '' : 's'} de ${ronda.ronda}`, panel: 'aplicada', boton: { texto: 'Ya he aplicado los cambios', hacer: () => { setError(''); setAplicar('pide') } }, enlace: ronda.url ? { texto: 'Ver la ronda', href: ronda.url, externo: true } : undefined })
   const siguiente = s ? rondaSiguiente(s) : null
   if (siguiente) tareas.push({ titulo: `Cambios aplicados: abre la ${siguiente} o entrega la web`, sub: PASO_ARKEVO_REVISION, boton: ronda?.url ? { texto: `Ver la ${ronda.ronda}`, href: ronda.url, externo: true } : undefined })
-  if (fase === 'entregado' && pago2SinFacturar) tareas.push({ titulo: 'Envía la entrega con la factura final', sub: `Factura del 50 % restante en PDF${p.marca === 'cartela' ? ' y el QR' : ''}, en la misma conversación con el cliente.`, panel: 'entrega' })
+  if (pendienteEntrega) tareas.push({ titulo: 'Envía la entrega con la factura final', sub: `Factura del 50 % restante en PDF${p.marca === 'cartela' ? ' y el QR' : ''}, en la misma conversación con el cliente.`, panel: 'entrega' })
   if (d.bienvenidaPendiente && d.lead) tareas.push({ titulo: 'Envía la bienvenida al cliente', sub: d.dinero.tipo === 'cerrado' ? 'Con la factura del pago 1. Se envía desde la ficha del lead.' : 'Con la carpeta de Drive. Se envía desde la ficha del lead.', boton: { texto: 'Ir a la bienvenida', href: `/leads/${d.lead.id}` } })
   if (s) {
     // El borrador de «Entrega final» sin factura sobra si la entrega va a salir con ella.
-    for (const b of s.borradores.filter(b => !(b.plantilla === 'entrega.final' && fase === 'entregado' && pago2SinFacturar))) tareas.push({ titulo: `Revisa y envía «${NOMBRE_EMAIL[b.plantilla] || b.plantilla}»`, sub: b.error ? `No salió: ${b.error}` : undefined, email: { clave: b.plantilla, mensaje: b.id } })
+    for (const b of s.borradores.filter(b => !(b.plantilla === 'entrega.final' && pendienteEntrega))) tareas.push({ titulo: `Revisa y envía «${NOMBRE_EMAIL[b.plantilla] || b.plantilla}»`, sub: b.error ? `No salió: ${b.error}` : undefined, email: { clave: b.plantilla, mensaje: b.id } })
     if (s.agente?.estado === 'error') tareas.push({ titulo: 'El agente no pudo terminar', sub: s.agente.motivo, panel: 'agente' })
     if (fase === 'comenzado' && s.encargo_tipo === 'custom' && !s.agente) tareas.push({ titulo: 'Escribe el brief de dirección', sub: 'El agente de custom empieza al guardarlo', panel: 'brief' })
     if (s.agente?.estado === 'lista' && fase === 'comenzado') tareas.push({ titulo: `Revisa la ${NOMBRE_ENCARGO[s.agente.tipo]} del agente`, sub: `Terminada el ${fecha(s.agente.fecha)}${s.agente.diseno ? ` · ${s.agente.diseno}` : ''}. ${s.agente.tipo === 'carta' ? 'El email de primera versión ya lleva la URL y el QR.' : 'Cuando esté bien, abre la R1 y pásalo a Revisión.'}`, boton: s.agente.url ? { texto: 'Ver', href: s.agente.url, externo: true } : undefined })
@@ -136,7 +138,7 @@ export default function Ficha({ d }: { d: DatosFicha }) {
     if (estaParado(s) && rec && s.plantillas.includes(rec) && !s.borradores.some(b => b.plantilla === rec) && email?.clave !== rec) tareas.push({ titulo: `Lleva ${diasDesde(s.desde)} días en ${ETIQUETA_FASE[fase!]}`, sub: 'Puedes mandarle un recordatorio', boton: { texto: 'Preparar recordatorio', hacer: () => { setEmail({ clave: rec }); setCerrada(false) } } })
   }
   const toca = tareas[0]
-  const estado: Estado = toca ? { k: 'tu', texto: toca.titulo } : s ? estadoDe(s, pago1Cobrado, !pago2SinFacturar) : { k: 'espera', texto: `${ESTADO_TS[p.status] || p.status} · se lleva en su timesheet` }
+  const estado: Estado = toca ? { k: 'tu', texto: toca.titulo } : s ? estadoDe(s, pago1Cobrado) : { k: 'espera', texto: `${ESTADO_TS[p.status] || p.status} · se lleva en su timesheet` }
 
   // Recorrido: lo hecho (del historial, en orden), lo de ahora y lo que viene.
   const hechos = d.historial.filter(h => HECHOS.includes(h.tipo) || h.tipo.startsWith('revision.')).reverse()
