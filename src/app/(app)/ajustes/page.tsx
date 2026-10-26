@@ -4,6 +4,7 @@ import { CATEGORIAS, MARCAS_CON_IA } from '@/lib/ia'
 import { NOMBRE_EMAIL } from '@/lib/emails'
 import { fechaHora } from '@/lib/leads'
 import { Interruptor, Pausa, ResumenAhora, type Cifras } from './interruptores'
+import { estadoGoogle, PERMISOS_GOOGLE } from '@/lib/google-token'
 
 export const dynamic = 'force-dynamic'
 // supabase-js usa fetch: sin esto, Next guarda sus respuestas en el Data Cache y la lista sale vieja.
@@ -16,8 +17,9 @@ const NOMBRE_CATEGORIA: Record<string, string> = {
 
 // Ajustes de autonomía (fase 5): qué sale solo y con qué datos decidirlo. Todo empieza apagado.
 // La métrica cuenta lo que Joel envió a mano: sin cambios frente a editado. Lo enviado solo no cuenta.
-export default async function AjustesPage() {
-  const [autonomia, { data: plantillas }, { data: marcas }, { data: enviados }, { data: resumen }] = await Promise.all([
+export default async function AjustesPage({ searchParams }: { searchParams: { google?: string } }) {
+  const [google, autonomia, { data: plantillas }, { data: marcas }, { data: enviados }, { data: resumen }] = await Promise.all([
+    estadoGoogle(),
     leerAutonomia(),
     // prueba.lista y prueba.ajustada no llevan interruptor: esos emails los manda siempre Joel desde la ficha del lead.
     sb.from('plantillas').select('clave, marca, idioma, auto').not('clave', 'in', '(prueba.lista,prueba.ajustada)').order('marca'),
@@ -75,6 +77,21 @@ export default async function AjustesPage() {
         </header>
 
         <div className="ajustes">
+        <section className="block" aria-label="Google">
+          <p className="label caps"><span>Google · Gmail y Drive</span><i className="rule" /><span className="label__m">{google ? google.cuenta : 'sin conectar'}</span></p>
+          {searchParams.google && (
+            searchParams.google.startsWith('ok')
+              ? <p className="nota ok">Conectado.{searchParams.google === 'ok-sin-drive' ? ' Sin los permisos de Drive: las carpetas de los clientes no funcionarán.' : ''}</p>
+              : <p className="nota error">No se conectó: {searchParams.google}.</p>
+          )}
+          <p className="nota">
+            {!google ? 'Usa el token de las variables de Vercel. Conéctalo aquí para que se renueve sin tocar Vercel.'
+              : google.estado === 'caducado' ? `Caducado el ${fechaHora(google.caducado_at!)}: los emails de leads y proyectos no salen hasta que lo reconectes.`
+              : `Conectado el ${fechaHora(google.conectado_at)}${PERMISOS_GOOGLE.every(x => google.permisos.includes(x)) ? '' : ' · faltan permisos de Drive'}.`}
+          </p>
+          <a className="pill" href="/api/google/conectar" style={{ alignSelf: 'flex-start' }}>{google?.estado === 'conectado' ? 'Reconectar Google' : 'Conectar Google'}</a>
+        </section>
+
         <section className="block" aria-label="Resumen diario">
           <p className="label caps"><span>Resumen diario</span><i className="rule" /><span className="label__m">8:00 · push + email</span></p>
           <p className="nota">

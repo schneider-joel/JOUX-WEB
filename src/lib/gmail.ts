@@ -1,27 +1,41 @@
 // API de Gmail (solo servidor) con el refresh token de joel@joelschneider.io (gmail.send + gmail.readonly
 // + drive.file; el mismo token lo usa src/lib/drive.ts).
 // Las respuestas a leads salen de aquí con el alias de la marca («Enviar como») y quedan en sus hilos.
+import { clienteGoogle, marcarCaducado, tokenDeLaBase } from '@/lib/google-token'
+
 const API = 'https://gmail.googleapis.com/gmail/v1/users/me'
 
 let token: { valor: string; caduca: number; permisos: string[]; de: string } | null = null
 
 export async function accessToken() {
+  if (token && token.caduca > Date.now() + 60_000) return token.valor
   // Sin espacios, saltos de línea ni comillas sobrantes: un pegado así en Vercel da «invalid_grant».
   const limpio = (v?: string) => v?.trim().replace(/^["']|["']$/g, '')
-  const GMAIL_CLIENT_ID = limpio(process.env.GMAIL_CLIENT_ID), GMAIL_CLIENT_SECRET = limpio(process.env.GMAIL_CLIENT_SECRET), GMAIL_REFRESH_TOKEN = limpio(process.env.GMAIL_REFRESH_TOKEN)
-  if (!GMAIL_CLIENT_ID || !GMAIL_CLIENT_SECRET || !GMAIL_REFRESH_TOKEN) throw new Error('Faltan las credenciales de Gmail')
-  // Si cambia el refresh token (p. ej. con más permisos), el acceso guardado del anterior ya no vale.
-  if (token && token.de === GMAIL_REFRESH_TOKEN && token.caduca > Date.now() + 60_000) return token.valor
-  const r = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ client_id: GMAIL_CLIENT_ID, client_secret: GMAIL_CLIENT_SECRET, refresh_token: GMAIL_REFRESH_TOKEN, grant_type: 'refresh_token' }),
-    cache: 'no-store',
-  })
-  const j = await r.json().catch(() => ({}))
-  if (!r.ok || !j.access_token) throw new Error(`Gmail no dio acceso (${j.error || r.status})`)
-  token = { valor: j.access_token, caduca: Date.now() + (j.expires_in || 3600) * 1000, permisos: String(j.scope || '').split(' '), de: GMAIL_REFRESH_TOKEN }
-  return token.valor
+  const { id, secreto } = clienteGoogle()
+  if (!id || !secreto) throw new Error('Faltan las credenciales de Gmail')
+  // Primero el de la base («Reconectar Google» en Ajustes); GMAIL_REFRESH_TOKEN de respaldo.
+  const deLaBase = await tokenDeLaBase()
+  const respaldo = limpio(process.env.GMAIL_REFRESH_TOKEN)
+  const candidatos = [deLaBase, respaldo].filter((t, i, a): t is string => !!t && a.indexOf(t) === i)
+  if (!candidatos.length) throw new Error('Gmail no está conectado: reconéctalo en Ajustes')
+  let error = ''
+  for (const refresh of candidatos) {
+    const r = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ client_id: id, client_secret: secreto, refresh_token: refresh, grant_type: 'refresh_token' }),
+      cache: 'no-store',
+    })
+    const j = await r.json().catch(() => ({}))
+    if (r.ok && j.access_token) {
+      token = { valor: j.access_token, caduca: Date.now() + (j.expires_in || 3600) * 1000, permisos: String(j.scope || '').split(' '), de: refresh }
+      return token.valor
+    }
+    error = j.error || String(r.status)
+    // Revocado o caducado: se marca en la base (con aviso a Joel) y se prueba el respaldo.
+    if (refresh === deLaBase && error === 'invalid_grant') await marcarCaducado()
+  }
+  throw new Error(`Gmail no dio acceso (${error})${error === 'invalid_grant' ? ': reconéctalo en Ajustes' : ''}`)
 }
 
 // Scopes que concedió Joel al token (p. ej. para saber si ya hay permiso de Drive).
