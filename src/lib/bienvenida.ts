@@ -42,6 +42,7 @@ export type VistaBienvenida = {
   bloqueo: string | null              // por qué no se puede emitir (datos fiscales, ROI, email…)
   enviada: string | null              // fecha si este email ya salió por aquí
   drive: boolean
+  cambios: boolean                    // Cartela: lleva el enlace de cambios (sin Drive)
   a_la_entrega: boolean               // treatment: se factura entero a la entrega (sin factura ahora)
 }
 
@@ -113,7 +114,7 @@ export async function vistaBienvenida(id: number, clave: ClaveInicio = 'proyecto
   const { data: ya } = await sb.from('mensajes').select('enviado_en').eq('proyecto_id', p.id).eq('plantilla', clave).eq('estado', 'enviado').eq('canal', 'gmail').limit(1).maybeSingle()
   return {
     clave, remitente, para, asunto, cuerpo: t.cuerpo, factura, datos_url,
-    bloqueo, enviada: ya ? ya.enviado_en || 'enviando' : null, drive: !!p.drive_url,
+    bloqueo, enviada: ya ? ya.enviado_en || 'enviando' : null, drive: !!p.drive_url, cambios: p.marca === 'cartela',
     a_la_entrega: p.precio_cerrado == null && MARCAS_TREATMENT.includes(p.marca || ''),
   }
 }

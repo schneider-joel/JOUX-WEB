@@ -4,6 +4,7 @@ import { pendientes, rellenar } from '@/lib/emails'
 import { enviarEmail } from '@/lib/resend'
 import { enviosPausados } from '@/lib/autonomia'
 import { MARCAS_TREATMENT } from '@/lib/seguimiento'
+import { enlaceCambios } from '@/lib/cartela-cambios'
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -31,7 +32,9 @@ export async function plantillaProyecto(id: number | string, clave: string, extr
     ronda = clave === 'revision.lista' ? (count || 0) + 1 : Math.max(1, count || 0)
   }
   // {{web}}: la web, o el cliente si no hay (los treatments no tienen web).
-  const vars = { nombre: (p.contacto_nombre || p.cliente).split(' ')[0], web: p.web || p.cliente, ronda, url: extra.url, drive_url: p.drive_url, ...extra.vars }
+  // {{cambios_url}}: el enlace de cambios del local (solo Cartela), donde también sube sus fotos.
+  const cambios_url = p.marca === 'cartela' ? await enlaceCambios(p.id) : null
+  const vars = { nombre: (p.contacto_nombre || p.cliente).split(' ')[0], web: p.web || p.cliente, ronda, url: extra.url, drive_url: p.drive_url, cambios_url, ...extra.vars }
   return { p, t, asunto: rellenar(t.asunto, vars), cuerpo: rellenar(t.cuerpo, vars) }
 }
 

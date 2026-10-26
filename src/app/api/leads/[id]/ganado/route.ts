@@ -5,6 +5,7 @@ import { faltaGanado, filasGanado, type FormGanado } from '@/lib/ganado'
 import type { Lead } from '@/lib/leads'
 import { crearCarpetaProyecto } from '@/lib/drive'
 import { SUBCARPETAS } from '@/lib/drive-carpetas'
+import { crearLocalCartela } from '@/lib/cartela-cambios'
 
 export const dynamic = 'force-dynamic'
 // supabase-js usa fetch: sin esto, Next guarda sus respuestas en el Data Cache y la lista sale vieja.
@@ -51,5 +52,10 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   // Carpeta de Drive para el material (solo marcas con subcarpetas). Si falla, el proyecto ya está creado:
   // el motivo queda en proyectos.drive_error y la ficha ofrece «Reintentar».
   const drive = SUBCARPETAS[marca.key] ? await crearCarpetaProyecto(nuevo.id).catch(e => ({ error: String(e?.message || e) })) : null
-  return NextResponse.json({ ok: true, proyecto_id: nuevo.id, drive })
+  // Cartela: el local y su enlace de cambios, para la bienvenida. Si falla, el proyecto queda igual.
+  const local = marca.key === 'cartela'
+    ? await crearLocalCartela(nuevo.id, { nombre: lead.empresa || proyecto.cliente, plan: proyecto.plan ?? null, email: lead.email || null, prueba: !!lead.prueba }).catch(e => ({ ok: false as const, error: String(e?.message || e) }))
+    : null
+  if (local && !local.ok) console.error('ganado/cartela', local.error)
+  return NextResponse.json({ ok: true, proyecto_id: nuevo.id, drive, local })
 }

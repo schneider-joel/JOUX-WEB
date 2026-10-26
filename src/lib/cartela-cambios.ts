@@ -6,6 +6,7 @@ import { notificar } from '@/lib/push'
 // y Joel la aplica a mano con el motor. Sin agente todavía.
 
 export const BUCKET_CARTELA = 'cartela'
+const PUBLICA = 'https://joux-web.vercel.app'
 export const ESTADOS_PETICION = ['recibida', 'en_curso', 'publicada', 'escalada'] as const
 export type EstadoPeticion = typeof ESTADOS_PETICION[number]
 
@@ -94,4 +95,26 @@ export async function firmarAdjuntos(rutas: string[]) {
   if (!rutas.length) return new Map<string, string>()
   const { data } = await sb.storage.from(BUCKET_CARTELA).createSignedUrls(rutas, 3600)
   return new Map((data || []).filter(d => d.signedUrl && d.path).map(d => [d.path as string, d.signedUrl]))
+}
+
+// «Marcar ganado» de un lead de Cartela: el local nace con su enlace de cambios, que va en la bienvenida
+// (ahí sube el cliente sus fotos; no hay carpeta de Drive). Repetirlo no duplica: uno por proyecto.
+export async function crearLocalCartela(proyectoId: number, d: { nombre: string; plan: string | null; email: string | null; prueba: boolean }) {
+  const { data: ya } = await sb.from('cartela_locales').select('id').eq('proyecto_id', proyectoId).maybeSingle()
+  if (ya) return { ok: true as const, id: ya.id as number }
+  const base = d.nombre.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'local'
+  const { data: usados } = await sb.from('cartela_locales').select('slug').like('slug', `${base}%`)
+  const libres = new Set((usados || []).map(u => u.slug))
+  let slug = base
+  for (let n = 2; libres.has(slug); n++) slug = `${base}-${n}`
+  const plan = ['carta', 'casa', 'grupo'].find(p => (d.plan || '').toLowerCase().includes(p)) || 'carta'
+  const { data, error } = await sb.from('cartela_locales').insert({ proyecto_id: proyectoId, nombre: d.nombre, slug, plan, email_aviso: d.email, prueba: d.prueba }).select('id').single()
+  if (error || !data) return { ok: false as const, error: error?.message || 'No se pudo crear el local' }
+  return { ok: true as const, id: data.id as number }
+}
+
+// {{cambios_url}} de los emails de un proyecto de Cartela: null si aún no tiene local.
+export async function enlaceCambios(proyectoId: number) {
+  const { data } = await sb.from('cartela_locales').select('token_cambios').eq('proyecto_id', proyectoId).neq('estado', 'baja').maybeSingle()
+  return data ? `${PUBLICA}/cambios/${data.token_cambios}` : null
 }
