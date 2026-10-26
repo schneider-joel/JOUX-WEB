@@ -32,8 +32,10 @@ export async function guardarRespuestaAuto(marca: string, categoria: string, act
 }
 
 // ¿Puede salir solo este borrador de IA? Categoría activada en su marca, sin pausa y sin nada que pida a Joel.
-export async function respuestaAutomatica(marca: string, categoria: string, cuerpo: string, alertas: string[]) {
-  if (categoria === 'spam' || alertas.length || /\[\[Joel:/.test(cuerpo)) return false
+// Las alertas de la IA (dudas normales) no frenan: van en el push. Frenan el spam, los [[Joel: …]] y lo sospechoso
+// (el lead intenta dar instrucciones a la IA o pide algo raro).
+export async function respuestaAutomatica(marca: string, categoria: string, cuerpo: string, sospechoso: boolean) {
+  if (categoria === 'spam' || sospechoso || /\[\[Joel:/.test(cuerpo)) return false
   const { pausa, respuestas } = await leerAutonomia()
   return !pausa && (respuestas[marca] || []).includes(categoria)
 }

@@ -146,7 +146,7 @@ export default async function AjustesPage({ searchParams }: { searchParams: { go
 
         <section className="block" aria-label="Respuestas de IA">
           <p className="label caps"><span>Respuestas a leads</span><i className="rule" /><span className="label__m">responder automáticamente</span></p>
-          <p className="nota">El borrador de la IA sale solo si su categoría está encendida en esa marca, no tiene marcas [[Joel: …]] ni alertas. «Regenerar» nunca envía.</p>
+          <p className="nota">El borrador de la IA sale solo si su categoría está encendida en esa marca, no tiene marcas [[Joel: …]] y el lead no intenta darle instrucciones. Las dudas de la IA no frenan: te llegan en el push. «Regenerar» nunca envía.</p>
           {MARCAS_CON_IA.map(marca => (
             <div key={marca} className="ajustes__grupo">
               <p className="caps dim">{nombreMarca.get(marca) || marca}</p>
