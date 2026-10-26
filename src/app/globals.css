@@ -1358,6 +1358,8 @@ div.ajustes { display: flex; flex-direction: column; gap: 48px; }
 .fx__caja .trk__email { margin: 0; }
 .fx__caja .fx__mas { margin: 4px 0 0; }
 .fx__sub { margin: 0; color: var(--muted); font-size: 13.5px; }
+.fx__btns { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.fx__caja .fx__mover { margin-top: 0; }
 .fx__rec { list-style: none; margin: 0; padding: 0; }
 .fx__rec li { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 12px; padding: 8px 0; align-items: start; position: relative; font-size: 13.5px; }
 .fx__rec li::before { content: ''; position: absolute; left: 8px; top: 26px; bottom: -8px; width: 1px; background: var(--line2); }

@@ -4,7 +4,7 @@ import { useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ETIQUETA_FASE, type FaseProyecto } from '@/lib/leads'
-import { ETAPAS_VISTA, NOMBRE_ENCARGO, alComenzar, antesDeComenzar, diasDesde, encargaAgente, estadoDe, estaParado, etapaVista, faltaBrief, nombreCorto, type Estado, type ProyectoSeguimiento } from '@/lib/seguimiento'
+import { ETAPAS_VISTA, NOMBRE_ENCARGO, PASO_ARKEVO_REVISION, alComenzar, antesDeComenzar, diasDesde, encargaAgente, estadoDe, estaParado, etapaVista, faltaBrief, nombreCorto, rondaSiguiente, type Estado, type ProyectoSeguimiento } from '@/lib/seguimiento'
 import { EMAIL_AL_ENTRAR, EMAIL_RECORDATORIO, NOMBRE_EMAIL } from '@/lib/emails'
 import { ETIQUETA_PAGO, type Pago } from '@/lib/marcas'
 import EmailPanel from '../../work/email-panel'
@@ -57,7 +57,8 @@ const HECHOS = ['lead.ganado', 'proyecto.fase', 'factura.emitida', 'mensaje.envi
 
 // Lo que te toca en este proyecto, de más a menos urgente. La primera va en la caja grande; si es un email,
 // el editor va dentro de la caja.
-type Tarea = { titulo: string; sub?: string; email?: { clave: string; mensaje?: number }; panel?: 'brief' | 'agente' | 'drive'; boton?: { texto: string; href?: string; externo?: boolean; hacer?: () => void } }
+type Boton = { texto: string; href?: string; externo?: boolean; hacer?: () => void }
+type Tarea = { titulo: string; sub?: string; email?: { clave: string; mensaje?: number }; panel?: 'brief' | 'agente' | 'drive' | 'aplicada'; boton?: Boton; enlace?: Boton }
 
 export default function Ficha({ d }: { d: DatosFicha }) {
   const router = useRouter()
@@ -73,6 +74,7 @@ export default function Ficha({ d }: { d: DatosFicha }) {
   const [cerrada, setCerrada] = useState(false)  // «Ahora no» en el email de la caja
   const [verTodo, setVerTodo] = useState(false)
   const [verBrief, setVerBrief] = useState(false)
+  const [aplicar, setAplicar] = useState<'pide' | 'guardando' | null>(null)  // «Ya he aplicado los cambios», con confirmación
 
   const fase = s?.fase ?? p.fase
   const idx = fase ? d.fases.indexOf(fase) : -1
@@ -97,13 +99,24 @@ export default function Ficha({ d }: { d: DatosFicha }) {
     setEmail(clave && s.plantillas.includes(clave) ? { clave } : null); setCerrada(false)
     setMover(null); setNota(''); setVerEtapas(false); router.refresh()
   }
+  // «Ya he aplicado los cambios»: la ronda pasa a cerrada y sus emails sin enviar se descartan.
+  const confirmarAplicada = async () => {
+    if (!ronda) return
+    setAplicar('guardando'); setError('')
+    const r = await fetch(`/api/proyectos/${p.id}/ronda`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ronda: ronda.ronda }) }).catch(() => null)
+    const j = await r?.json().catch(() => ({}))
+    if (!r?.ok) { setAplicar('pide'); setError(j?.error || 'No se pudo guardar'); return }
+    setAplicar(null); setEmail(null); router.refresh()
+  }
   const pedirMover = (f: FaseProyecto) => { setError(''); setMover(f); setVerEtapas(true); setTimeout(() => document.getElementById('fx-etapas')?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 60) }
 
   const tareas: Tarea[] = []
   if (email) tareas.push({ titulo: `Envía «${NOMBRE_EMAIL[email.clave] || email.clave}»`, email })
   // Mismo orden que estadoDe() (la línea de la tarjeta en Work): cobro del pago 1, comentarios de la ronda, emails…
   if (s && antesDeComenzar(s) && (pago1Cobrado || s.material_completo) && !s.agente) tareas.push({ titulo: pago1Cobrado ? 'Pago 1 cobrado: comienza' : 'El cliente ya lo ha subido todo', sub: alComenzar(s), boton: { texto: 'Comenzar', hacer: () => pedirMover('comenzado') } })
-  if (ronda?.estado === 'comentada') tareas.push({ titulo: `Aplica ${ronda.comentarios} comentario${ronda.comentarios === 1 ? '' : 's'} de ${ronda.ronda}`, boton: ronda.url ? { texto: 'Ver la ronda', href: ronda.url, externo: true } : undefined })
+  if (ronda?.estado === 'comentada') tareas.push({ titulo: `Aplica ${ronda.comentarios} comentario${ronda.comentarios === 1 ? '' : 's'} de ${ronda.ronda}`, panel: 'aplicada', boton: { texto: 'Ya he aplicado los cambios', hacer: () => { setError(''); setAplicar('pide') } }, enlace: ronda.url ? { texto: 'Ver la ronda', href: ronda.url, externo: true } : undefined })
+  const siguiente = s ? rondaSiguiente(s) : null
+  if (siguiente) tareas.push({ titulo: `Cambios aplicados: abre la ${siguiente} o entrega la web`, sub: PASO_ARKEVO_REVISION, boton: ronda?.url ? { texto: `Ver la ${ronda.ronda}`, href: ronda.url, externo: true } : undefined })
   if (d.bienvenidaPendiente && d.lead) tareas.push({ titulo: 'Envía la bienvenida al cliente', sub: d.dinero.tipo === 'cerrado' ? 'Con la factura del pago 1. Se envía desde la ficha del lead.' : 'Con la carpeta de Drive. Se envía desde la ficha del lead.', boton: { texto: 'Ir a la bienvenida', href: `/leads/${d.lead.id}` } })
   if (s) {
     for (const b of s.borradores) tareas.push({ titulo: `Revisa y envía «${NOMBRE_EMAIL[b.plantilla] || b.plantilla}»`, sub: b.error ? `No salió: ${b.error}` : undefined, email: { clave: b.plantilla, mensaje: b.id } })
@@ -122,7 +135,7 @@ export default function Ficha({ d }: { d: DatosFicha }) {
   const hechosVista = verTodo ? hechos : hechos.slice(-8)
   const viene = s ? proximos(treatment, !!s.encargo_tipo).slice(etapa + 1).flatMap((pasos, i) => pasos.map(x => ({ ...x, etapa: ETAPAS_VISTA[etapa + 1 + i] }))) : []
 
-  const boton = (b: NonNullable<Tarea['boton']>, clase = 'pill pill--sm') => b.href
+  const boton = (b: Boton, clase = 'pill pill--sm') => b.href
     ? (b.externo ? <a className={clase} href={b.href} target="_blank" rel="noreferrer">{b.texto} ↗</a> : <Link className={clase} href={b.href}>{b.texto}</Link>)
     : <button type="button" className={clase} onClick={b.hacer}>{b.texto}</button>
   const cuerpoTarea = (t: Tarea): ReactNode => {
@@ -131,6 +144,15 @@ export default function Ficha({ d }: { d: DatosFicha }) {
     if (t.panel === 'brief' && s) return <BriefPanel p={s} />
     if (t.panel === 'agente' && s) return <div className="fx__agente"><AgenteWeb p={s} /></div>
     if (t.panel === 'drive' && s) return <DriveCarpeta proyectoId={p.id} url={s.drive_url} error={s.drive_error} />
+    if (t.panel === 'aplicada' && aplicar) return (
+      <div className="trk__mover fx__mover">
+        <span>Se cierra la <b>{ronda?.ronda}</b> y se descartan sus emails sin enviar. Luego abres la siguiente ronda o entregas desde la herramienta de revisión.</span>
+        {error && <span className="nota error">{error}</span>}
+        <button type="button" className="copy caps" onClick={() => { setAplicar(null); setError('') }}>Cancelar</button>
+        <button type="button" className="pill pill--sm" disabled={aplicar === 'guardando'} onClick={confirmarAplicada}>{aplicar === 'guardando' ? 'Guardando…' : 'Confirmar'}</button>
+      </div>
+    )
+    if (t.boton && t.enlace) return <div className="fx__btns">{boton(t.boton)}{boton(t.enlace, 'copy caps')}</div>
     return t.boton ? <div>{boton(t.boton)}</div> : null
   }
 
@@ -208,6 +230,7 @@ export default function Ficha({ d }: { d: DatosFicha }) {
             {tareas.slice(1).map((t, i) => (
               <li key={i}><i aria-hidden="true" /><span><b>{t.titulo}</b>{t.sub && <span> · {t.sub}</span>}</span>
                 {t.email ? <button type="button" className="copy caps" onClick={() => { setEmail(t.email!); setCerrada(false) }}>Abrir →</button> : t.boton && boton(t.boton, 'copy caps')}
+                {t.panel === 'aplicada' && aplicar && cuerpoTarea(t)}
               </li>
             ))}
           </ul>

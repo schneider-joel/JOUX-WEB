@@ -131,12 +131,24 @@ export const etapaVista = (fase: FaseProyecto | null) => fase ? VISTA_DE_FASE[fa
 export type Estado = { k: 'tu' | 'espera' | 'parado' | 'ok'; texto: string }
 const conDias = (texto: string, d: number) => d > 0 ? `${texto} · ${d} d` : texto
 
+// Con los cambios de la última ronda aplicados (cerrada) y la web aún en «Cambios», toca abrir la siguiente
+// ronda o entregar; las dos cosas se hacen en arkevo-revision y su aviso pone al día el hub. Devuelve 'R3'…
+export function rondaSiguiente(p: Pick<ProyectoSeguimiento, 'fase' | 'rondas'>): string | null {
+  const ultima = p.rondas[p.rondas.length - 1]
+  if (p.fase !== 'cambios' || ultima?.estado !== 'cerrada') return null
+  const n = Number(ultima.ronda.replace(/\D/g, ''))
+  return n ? `R${n + 1}` : 'siguiente ronda'
+}
+export const PASO_ARKEVO_REVISION = 'Se hace en la herramienta de revisión de Arkevo (desde su sesión): al abrir la ronda o entregar, Joux Hub se pone al día solo con su aviso.'
+
 export function estadoDe(p: ProyectoSeguimiento, pago1Cobrado: boolean): Estado {
   if (p.fase === 'cerrado') return { k: 'ok', texto: 'Cerrado' }
   const parado = estaParado(p), d = diasDesde(p.desde)
   if (antesDeComenzar(p) && pago1Cobrado && !p.agente) return { k: 'tu', texto: 'Pago 1 cobrado: comenzar' }
   const comentada = p.rondas.find(r => r.estado === 'comentada')
   if (comentada) return { k: 'tu', texto: `Aplicar ${comentada.comentarios} comentario${comentada.comentarios === 1 ? '' : 's'} de ${comentada.ronda}` }
+  const siguiente = rondaSiguiente(p)
+  if (siguiente) return { k: 'tu', texto: `Cambios aplicados: abre la ${siguiente} o entrega la web` }
   const toca = queToca(p, parado)
   if (toca?.startsWith('Parado')) return { k: 'parado', texto: conDias('Parado: manda un recordatorio', d) }
   if (toca) return { k: 'tu', texto: toca }

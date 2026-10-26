@@ -33,6 +33,7 @@ export function textoEvento(e: Pick<Evento, 'tipo' | 'datos'>) {
   if (e.tipo === 'mensaje.enviado') return `Email enviado${e.datos.asunto ? `: «${valor(e.datos.asunto)}»` : ''}`
   if (e.tipo === 'mensaje.recibido') return 'Ha respondido por email'
   if (e.tipo === 'mensaje.rebotado') return `Un email no llegó${e.datos.motivo ? `: ${valor(e.datos.motivo)}` : ''}`
+  if (e.tipo === 'revision.aplicada') return `Cambios de ${valor(e.datos.ronda)} aplicados`
   if (e.tipo.startsWith('revision.')) return `Revisión${e.datos.ronda ? ` ${valor(e.datos.ronda)}` : ''}: ${e.tipo.slice(9).replace(/[._]/g, ' ')}`
   return e.tipo
 }
