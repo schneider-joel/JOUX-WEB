@@ -1790,3 +1790,8 @@ ALTER TABLE google_token ENABLE ROW LEVEL SECURITY;
 -- respuesta (y guarda los datos fiscales que encuentre en fiscales.datos) y Joel a mano (por = 'joel' manda).
 ALTER TABLE leads ADD COLUMN IF NOT EXISTS para_empezar jsonb NOT NULL DEFAULT '{}'::jsonb;
 COMMENT ON COLUMN leads.para_empezar IS 'Rediseño comercial, fase 3: lo que el cliente ya ha mandado para empezar, por clave de su marca ({"carta": {"ok": true, "por": "ia"|"joel"}}). Lo marca la IA al leer cada respuesta y Joel a mano.';
+
+-- DATOS (2026-10-26): rediseño comercial, fase 5. Correos cortos de Cartela (es): bienvenida (con la factura
+-- dentro si hay datos fiscales, o el enlace /datos si no), primera versión, recordatorio y entrega. {{url}} y el
+-- QR los pone Joux Hub (emails-proyecto.ts). Aplicado con OK de Joel con UPDATE plantillas … WHERE marca = 'cartela'
+-- AND idioma = 'es' AND clave IN ('proyecto.bienvenida', 'revision.lista', 'revision.recordatorio', 'entrega.final').
