@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabaseServer as sb } from '@/lib/supabase-server'
-import { guardarPausa, guardarRespuestaAuto } from '@/lib/autonomia'
+import { esPasoPiloto, guardarPausa, guardarPiloto, guardarRespuestaAuto } from '@/lib/autonomia'
 import { CATEGORIAS, MARCAS_CON_IA } from '@/lib/ia'
 
 export const dynamic = 'force-dynamic'
@@ -26,8 +26,14 @@ export async function PATCH(req: Request) {
     if (!MARCAS_CON_IA.includes(b.marca) || !(CATEGORIAS as readonly string[]).includes(b.categoria) || b.categoria === 'spam') return NextResponse.json({ error: 'Marca o categoría desconocida' }, { status: 400 })
     const { error } = await guardarRespuestaAuto(b.marca, b.categoria, activo)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  } else if (b.tipo === 'piloto') {
+    // Paso del piloto automático en una marca con leads (no Ambushed/BoldMove).
+    const { data: m } = await sb.from('marcas').select('key').eq('key', b.marca ?? '').maybeSingle()
+    if (!m || m.key === 'ab' || !esPasoPiloto(b.paso)) return NextResponse.json({ error: 'Marca o paso desconocido' }, { status: 400 })
+    const { error } = await guardarPiloto(b.marca, b.paso, activo)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   } else return NextResponse.json({ error: 'Tipo desconocido' }, { status: 400 })
 
-  await sb.from('eventos').insert({ tipo: 'autonomia.cambio', fuente: 'joux-hub', datos: { tipo: b.tipo, clave: b.clave, marca: b.marca, categoria: b.categoria, activo } })
+  await sb.from('eventos').insert({ tipo: 'autonomia.cambio', fuente: 'joux-hub', datos: { tipo: b.tipo, clave: b.clave, marca: b.marca, categoria: b.categoria, paso: b.paso, activo } })
   return NextResponse.json({ ok: true })
 }

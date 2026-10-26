@@ -139,9 +139,9 @@ export async function enviarEmailProyecto(m: {
 }
 
 // Prepara el email de una plantilla como borrador para enviarlo desde /proyectos con un toque.
-// Solo sale solo si la plantilla es `auto` y está completo (destinatario y sin {{…}} pendientes).
-// Los borradores anteriores de la misma plantilla se descartan: siempre vale el último.
-export async function prepararEmailProyecto(proyectoId: number, clave: string, extra: { ronda?: string; url?: string }, fuente: string) {
+// Solo sale solo si la plantilla es `auto` (o quien llama lo pide: un paso del piloto encendido) y está completo
+// (destinatario y sin {{…}} pendientes). Los borradores anteriores de la misma plantilla se descartan: vale el último.
+export async function prepararEmailProyecto(proyectoId: number, clave: string, extra: { ronda?: string; url?: string; vars?: Record<string, string | null> }, fuente: string, opciones: { auto?: boolean } = {}) {
   const d = await plantillaProyecto(proyectoId, clave, extra)
   if ('error' in d) return { omitido: d.error }
   const para = d.p.contacto_email?.trim() || ''
@@ -149,7 +149,7 @@ export async function prepararEmailProyecto(proyectoId: number, clave: string, e
   const original = { asunto: d.asunto, cuerpo: d.cuerpo }
   // La pausa de emergencia de /ajustes convierte cualquier envío automático en borrador.
   // El push lo da quien llama (intake/evento, tick) con su propio texto.
-  if (d.t.auto && completo && !(await enviosPausados())) {
+  if ((opciones.auto ?? d.t.auto) && completo && !(await enviosPausados())) {
     const r = await enviarEmailProyecto({ proyectoId, leadId: d.p.lead_id, clave, remitente: d.t.remitente, para, asunto: d.asunto, cuerpo: d.cuerpo, fuente, original, auto: true })
     return r.error ? { error: r.error } : { enviado: true }
   }

@@ -97,3 +97,32 @@ export function ResumenAhora() {
     </div>
   )
 }
+
+// Un paso del piloto automático en una marca (rediseño comercial): encender pide confirmación.
+export function PasoPilotoInterruptor({ marca, paso, titulo, detalle, activo }: { marca: string; paso: string; titulo: string; detalle: string; activo: boolean }) {
+  const router = useRouter()
+  const [on, setOn] = useState(activo)
+  const [ocupado, setOcupado] = useState(false)
+  const [error, setError] = useState('')
+  const cambiar = async () => {
+    const nuevo = !on
+    if (nuevo && !confirm(`«${titulo}» pasará solo, sin preguntarte. ¿Encender?`)) return
+    setOcupado(true); setError('')
+    const e = await guardar({ tipo: 'piloto', marca, paso, activo: nuevo })
+    setOcupado(false)
+    if (e) { setError(e); return }
+    setOn(nuevo); router.refresh()
+  }
+  return (
+    <div className="fila">
+      <span className="fila__main">
+        <span className="fila__t">{titulo}</span>
+        <span className="fila__s">{detalle}</span>
+        {error && <span className="nota error">{error}</span>}
+      </span>
+      <button type="button" className="chip" aria-pressed={on} disabled={ocupado} onClick={cambiar}>
+        <span>{on ? 'Automático' : 'Apagado'}</span>
+      </button>
+    </div>
+  )
+}

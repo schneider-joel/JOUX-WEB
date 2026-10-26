@@ -20,6 +20,8 @@ import { pdfFactura } from '@/lib/pdf'
 import { nombreArchivoFactura } from '@/app/invoice/[id]/nombre-archivo'
 import { MARCAS_TREATMENT } from '@/lib/seguimiento'
 import { qrCartela } from '@/lib/emails-proyecto'
+import { pilotoActivo } from '@/lib/autonomia'
+import { encargarWeb } from '@/lib/primera-version'
 
 export const CLAVES_INICIO = ['proyecto.bienvenida', 'factura.pago', 'entrega.final'] as const
 export type ClaveInicio = typeof CLAVES_INICIO[number]
@@ -133,7 +135,7 @@ export async function enviarBienvenida(id: number, origen: string, clave: ClaveI
   if ('error' in v) return v
   if (v.enviada) return { error: 'Este email ya se envió', status: 409 }
   if (v.bloqueo) return { error: v.bloqueo, status: 400 }
-  const { data: p } = await sb.from('proyectos').select('id, cliente, idioma, lead_id, fase, prueba').eq('id', id).single()
+  const { data: p } = await sb.from('proyectos').select('id, cliente, marca, idioma, lead_id, fase, prueba').eq('id', id).single()
   if (!p) return { error: 'No existe el proyecto', status: 404 }
   const idioma = p.idioma === 'en' ? 'en' : 'es'
   const { data: lead } = p.lead_id ? await sb.from('leads').select('gmail_hilo').eq('id', p.lead_id).maybeSingle() : { data: null }
@@ -205,9 +207,19 @@ export async function enviarBienvenida(id: number, origen: string, clave: ClaveI
     if (clave === 'proyecto.bienvenida' && (!p.fase || p.fase === 'confirmado')) {
       await sb.from('proyectos').update({ fase: 'material' }).eq('id', id)
       await sb.from('eventos').insert({ proyecto_id: id, lead_id: p.lead_id, tipo: 'proyecto.fase', fuente: 'joux-hub', datos: { de: p.fase, a: 'material' } })
+      // Piloto «Comenzar las pruebas»: la factura de prueba nunca se cobra en el banco, así que un proyecto de prueba
+      // empieza (fase comenzado + encargo al agente) al enviar la bienvenida, como si el pago 1 ya estuviera cobrado.
+      if (p.prueba && await pilotoActivo(p.marca || '', 'comenzar_prueba')) await comenzarPrueba(id, p.lead_id).catch(e => console.error('piloto comenzar', e?.message))
     }
     return { ok: true, factura: factura?.numero ?? null, pdf: !!pdf }
   } catch (e) {
     return fallo(`No se envió: ${(e as Error)?.message || 'Gmail no respondió'}`)
   }
+}
+
+async function comenzarPrueba(id: number, leadId: number | null) {
+  const { data: movido } = await sb.from('proyectos').update({ fase: 'comenzado' }).eq('id', id).eq('fase', 'material').select('id').maybeSingle()
+  if (!movido) return
+  await sb.from('eventos').insert({ proyecto_id: id, lead_id: leadId, tipo: 'proyecto.fase', fuente: 'piloto', datos: { de: 'material', a: 'comenzado', motivo: 'prueba: pago 1 simulado' } })
+  await encargarWeb(id, null, 'piloto')
 }

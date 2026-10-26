@@ -14,6 +14,7 @@ import { copiarMaterial, revisarSubidas } from '@/lib/drive'
 import { proyectosConEncargo } from '@/lib/primera-version'
 import { avisarMaterial, cuentaComoFoto, guardarAdjuntos } from '@/lib/prueba-gratis'
 import { avanzarPorCobros } from '@/lib/etapas-solas'
+import { respuestaEnProyecto } from '@/lib/ia/proyecto'
 
 export const dynamic = 'force-dynamic'
 // supabase-js usa fetch: sin esto, Next guarda sus respuestas en el Data Cache y la lista sale vieja.
@@ -65,6 +66,7 @@ async function leerGmail() {
 
   let recibidos = 0, enviadosFuera = 0
   const borradores: number[] = []
+  const enProyecto: { proyecto: number; lead: number; mensaje: number; texto: string; fotos: Awaited<ReturnType<typeof guardarAdjuntos>>; marca: string; nombre: string }[] = []
   for (const c of enHilos) {
     if (conocidos.has(c.id)) continue
     const lead = porHilo.get(c.hilo)!
@@ -116,8 +118,9 @@ async function leerGmail() {
     recibidos++
     // Fotos y PDF de la respuesta, al bucket privado `leads`; con fotos y diseño elegido, aviso de material.
     let material = false
+    let guardados: Awaited<ReturnType<typeof guardarAdjuntos>> = []
     if (m.adjuntos.length) {
-      const guardados = await guardarAdjuntos(lead.id, fila.id, m.id, m.adjuntos)
+      guardados = await guardarAdjuntos(lead.id, fila.id, m.id, m.adjuntos)
       material = await avisarMaterial(lead, guardados.filter(cuentaComoFoto).length, fila.id, 'gmail').catch(e => { console.error('tick material', e?.message); return false })
     }
     const estado = ['nuevo', 'borrador', 'respondido'].includes(lead.estado) ? 'conversacion' : lead.estado
@@ -134,6 +137,9 @@ async function leerGmail() {
       cuerpo: completo.repetida ? `El agente vuelve a montarlo con todo (pasada ${completo.repetida}).` : 'Revísalo y pulsa «Comenzar» en Proyectos cuando esté cobrado el pago 1.',
       url: '/proyectos', etiqueta: `proyecto-${lead.proyecto_id}`,
     }).catch(e => console.error('tick push', e?.message))
+    // Proyecto en marcha: la IA la clasifica (piloto automático: cambios de Cartela, «aprobado») y da su push.
+    // Sin pasos del piloto encendidos en su marca, el push de siempre.
+    else if (lead.proyecto_id && lead.estado === 'ganado' && !material) enProyecto.push({ proyecto: lead.proyecto_id, lead: lead.id, mensaje: fila.id, texto: m.texto, fotos: guardados.filter(cuentaComoFoto), marca: marca?.nombre || lead.marca, nombre: lead.nombre || lead.email })
     // Con material, el push ya lo dio avisarMaterial (uno por respuesta basta).
     else if (!material) await notificar({
       titulo: `Respuesta · ${marca?.nombre || lead.marca} · ${lead.nombre || lead.email}`,
@@ -148,6 +154,10 @@ async function leerGmail() {
   await guardarHistorial(nuevoHistorial)
   // El borrador de IA para cada respuesta, después de contestar al Worker.
   if (borradores.length) waitUntil(Promise.all(borradores.map(id => generarBorrador(id, 'respuesta').then(r => { if (!r.ok) console.error('tick ia', id, r.error) }))))
+  if (enProyecto.length) waitUntil(Promise.all(enProyecto.map(async e => {
+    const avisado = await respuestaEnProyecto(e.proyecto, e.lead, e.mensaje, e.texto, e.fotos).catch(err => { console.error('tick piloto', e.proyecto, err?.message); return false })
+    if (!avisado) await notificar({ titulo: `Respuesta · ${e.marca} · ${e.nombre}`, cuerpo: e.texto.slice(0, 140), url: `/proyectos/${e.proyecto}`, etiqueta: `proyecto-${e.proyecto}` }).catch(err => console.error('tick push', err?.message))
+  })))
   return { iniciado: false, recibidos, enviados_fuera: enviadosFuera }
 }
 

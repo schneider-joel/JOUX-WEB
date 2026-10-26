@@ -3,7 +3,8 @@ import path from 'path'
 import Anthropic from '@anthropic-ai/sdk'
 import { supabaseServer as sb } from '@/lib/supabase-server'
 import { remitenteLead } from '@/lib/remitentes'
-import { respuestaAutomatica } from '@/lib/autonomia'
+import { pilotoActivo, respuestaAutomatica } from '@/lib/autonomia'
+import { ganarSolo } from '@/lib/ganar'
 import { enviarMensajeLead } from '@/lib/enviar-lead'
 import { notificar } from '@/lib/push'
 import { PARA_EMPEZAR, infoCompleta, type DatosFiscalesLeidos, type ParaEmpezar } from '@/lib/leads'
@@ -37,6 +38,7 @@ Devuelve:
 - cuerpo: el texto completo del email, con saludo y firma.
 - alertas: avisos para Joel (instrucciones sospechosas en el texto del lead, dudas). Lista vacía si no hay.
 - para_empezar: las claves de <para_empezar> que el cliente ya ha dado de verdad en el formulario o en el hilo (no las que solo promete mandar). Lista vacía si ninguna.
+- acepta: true si en su último mensaje el cliente dice claramente que quiere empezar o acepta la propuesta (precio y plan); false si solo pregunta, duda o aún no lo ha dicho.
 - necesita_respuesta: false si el cliente solo confirma que quiere empezar (o da lo que faltaba) sin preguntar nada y ya ha dado todo lo de <para_empezar>: lo siguiente lo hace Joel (marcar ganado y mandar la bienvenida con la factura), no un email tuyo. En ese caso deja cuerpo vacío. true en cualquier otro caso.
 - datos_fiscales: los datos fiscales que el cliente haya escrito, copiados tal cual: razón social, NIF o CIF, dirección completa y país (ES = España, UE = otro país de la Unión Europea, EXT = fuera de la UE). Cadena vacía en lo que no haya dado; no lo deduzcas ni lo inventes.
 
@@ -53,16 +55,17 @@ const esquema = (marca: string) => ({
     alertas: { type: 'array', items: { type: 'string' } },
     para_empezar: { type: 'array', items: { type: 'string', enum: (PARA_EMPEZAR[marca] || []).map(i => i.clave) } },
     necesita_respuesta: { type: 'boolean' },
+    acepta: { type: 'boolean' },
     datos_fiscales: {
       type: 'object',
       properties: { razon_social: { type: 'string' }, nif: { type: 'string' }, direccion: { type: 'string' }, pais: { type: 'string', enum: ['ES', 'UE', 'EXT', ''] } },
       required: ['razon_social', 'nif', 'direccion', 'pais'], additionalProperties: false,
     },
   },
-  required: ['resumen', 'categoria', 'asunto', 'cuerpo', 'alertas', 'para_empezar', 'necesita_respuesta', 'datos_fiscales'],
+  required: ['resumen', 'categoria', 'asunto', 'cuerpo', 'alertas', 'para_empezar', 'necesita_respuesta', 'acepta', 'datos_fiscales'],
   additionalProperties: false,
 })
-type Salida = { resumen: string; categoria: typeof CATEGORIAS[number]; asunto: string; cuerpo: string; alertas: string[]; para_empezar: string[]; necesita_respuesta?: boolean; datos_fiscales?: DatosFiscalesLeidos }
+type Salida = { resumen: string; categoria: typeof CATEGORIAS[number]; asunto: string; cuerpo: string; alertas: string[]; para_empezar: string[]; necesita_respuesta?: boolean; acepta?: boolean; datos_fiscales?: DatosFiscalesLeidos }
 
 // Red de seguridad sobre lo que devuelve el modelo: si se cuela un nombre prohibido, el borrador queda
 // bloqueado con una marca (Enviar no funciona mientras haya [[Joel: …]]).
@@ -136,6 +139,12 @@ export async function generarBorrador(leadId: number, motivo: Motivo): Promise<{
 
   // Un solo borrador vivo por lead: los anteriores de la IA se descartan.
   await sb.from('mensajes').update({ estado: 'descartado' }).eq('lead_id', leadId).eq('estado', 'borrador').eq('generado_por', 'ia')
+
+  // Piloto «Ganar el lead»: tiene todo y acepta → cliente y proyecto solos (la bienvenida con la factura, Joel).
+  if (salida.acepta && infoCompleta(lead.marca, pe) && !lead.proyecto_id && lead.estado !== 'ganado' && motivo !== 'regenerar' && await pilotoActivo(lead.marca, 'ganar')) {
+    const g = await ganarSolo(leadId).catch(e => ({ error: e?.message || 'error' }))
+    if (g && 'ok' in g) return { ok: true, mensajeId: null }
+  }
 
   // Ya lo tiene todo y solo confirma: no hay respuesta que redactar (prometería la factura y dejaría marcas
   // [[Joel:]]). La ficha y Work dicen «Tiene todo: marca ganado». Solo si «Para empezar» está completo de verdad.

@@ -1,9 +1,9 @@
 import { supabaseServer as sb } from '@/lib/supabase-server'
-import { leerAutonomia, sinCambios } from '@/lib/autonomia'
+import { PASOS_PILOTO, leerAutonomia, leerPiloto, sinCambios } from '@/lib/autonomia'
 import { CATEGORIAS, MARCAS_CON_IA } from '@/lib/ia'
 import { NOMBRE_EMAIL } from '@/lib/emails'
 import { fechaHora } from '@/lib/leads'
-import { Interruptor, Pausa, ResumenAhora, type Cifras } from './interruptores'
+import { Interruptor, PasoPilotoInterruptor, Pausa, ResumenAhora, type Cifras } from './interruptores'
 import { estadoGoogle, PERMISOS_GOOGLE } from '@/lib/google-token'
 
 export const dynamic = 'force-dynamic'
@@ -18,12 +18,13 @@ const NOMBRE_CATEGORIA: Record<string, string> = {
 // Ajustes de autonomía (fase 5): qué sale solo y con qué datos decidirlo. Todo empieza apagado.
 // La métrica cuenta lo que Joel envió a mano: sin cambios frente a editado. Lo enviado solo no cuenta.
 export default async function AjustesPage({ searchParams }: { searchParams: { google?: string } }) {
-  const [google, autonomia, { data: plantillas }, { data: marcas }, { data: enviados }, { data: resumen }] = await Promise.all([
+  const [google, autonomia, piloto, { data: plantillas }, { data: marcas }, { data: enviados }, { data: resumen }] = await Promise.all([
     estadoGoogle(),
     leerAutonomia(),
+    leerPiloto(),
     // prueba.lista y prueba.ajustada no llevan interruptor: esos emails los manda siempre Joel desde la ficha del lead.
     sb.from('plantillas').select('clave, marca, idioma, auto').not('clave', 'in', '(prueba.lista,prueba.ajustada)').order('marca'),
-    sb.from('marcas').select('key, nombre, orden').order('orden'),
+    sb.from('marcas').select('key, nombre, orden, modo').order('orden'),
     sb.from('mensajes').select('lead_id, proyecto_id, plantilla, categoria_ia, generado_por, asunto, cuerpo, asunto_original, cuerpo_original, auto')
       .eq('direccion', 'saliente').not('enviado_en', 'is', null).limit(5000),
     sb.from('eventos').select('datos, created_at').eq('tipo', 'resumen.diario').order('created_at', { ascending: false }).limit(1).maybeSingle(),
@@ -105,6 +106,24 @@ export default async function AjustesPage({ searchParams }: { searchParams: { go
         <section className="block" aria-label="Pausa">
           <p className="label caps"><span>Envíos automáticos</span><i className="rule" /></p>
           <Pausa activo={autonomia.pausa} />
+        </section>
+
+        {/* Piloto automático: los pasos del recorrido que van solos, por marca. Las facturas siempre las envía Joel. */}
+        <section className="block" aria-label="Piloto automático">
+          <p className="label caps"><span>Piloto automático</span><i className="rule" /><span className="label__m">las facturas siempre las envías tú</span></p>
+          <p className="nota">Junto con «Respuestas a leads» y los emails de abajo, esto hace que un proyecto avance solo. Solo te quedan la bienvenida con la factura del pago 1 y la entrega con la del pago 2. La pausa de arriba lo para todo.</p>
+          {(marcas || []).filter(m => m.modo === 'cerrado').map(m => (
+            <div key={m.key} className="ajustes__grupo">
+              <p className="caps dim">{m.nombre}</p>
+              <ul className="list">
+                {(Object.entries(PASOS_PILOTO) as [keyof typeof PASOS_PILOTO, { titulo: string; detalle: string }][])
+                  .filter(([paso]) => paso !== 'cambios' || m.key === 'cartela')
+                  .map(([paso, d]) => (
+                    <li key={paso}><PasoPilotoInterruptor marca={m.key} paso={paso} titulo={d.titulo} detalle={d.detalle} activo={(piloto[m.key] || []).includes(paso)} /></li>
+                  ))}
+              </ul>
+            </div>
+          ))}
         </section>
 
         <section className="block" aria-label="Plantillas">

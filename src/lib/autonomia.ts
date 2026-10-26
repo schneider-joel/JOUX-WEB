@@ -48,3 +48,38 @@ export function sinCambios(m: { asunto: string | null; cuerpo: string; asunto_or
   }
   return igual(m.cuerpo_original, m.cuerpo) && igual(m.asunto_original || '', (m.asunto || '').replace(/^re:\s*/i, ''))
 }
+
+// ---------- Piloto automático (rediseño comercial, 2026-10-26) ----------
+// Pasos del recorrido que pueden ir solos, por marca, en `configuracion.piloto_auto` ({"cartela": ["ganar", …]}).
+// Las facturas nunca: la bienvenida con la factura del pago 1 y la entrega con la del pago 2 las envía Joel.
+// La pausa global (`auto_pausa`) también los para. Todo apagado por defecto.
+const CLAVE_PILOTO = 'piloto_auto'
+export const PASOS_PILOTO = {
+  ganar: { titulo: 'Ganar el lead', detalle: 'Cuando «Para empezar» está completo y el cliente acepta: crea el cliente y el proyecto. Luego te toca la bienvenida con la factura.' },
+  comenzar_prueba: { titulo: 'Comenzar las pruebas', detalle: 'En proyectos de prueba no llega transferencia: el agente arranca al enviar la bienvenida.' },
+  cambios: { titulo: 'Cambios por email', detalle: 'Si el cliente pide cambios respondiendo al correo, pasan como petición al agente de cambios (Cartela).' },
+  aprobar: { titulo: 'Dar por aprobada', detalle: 'Si el cliente dice que está bien, el proyecto pasa a Entregado y la caja te pide la entrega con la factura.' },
+} as const
+export type PasoPiloto = keyof typeof PASOS_PILOTO
+export const esPasoPiloto = (x: unknown): x is PasoPiloto => typeof x === 'string' && x in PASOS_PILOTO
+
+export async function leerPiloto(): Promise<Record<string, PasoPiloto[]>> {
+  const { data } = await sb.from('configuracion').select('valor').eq('clave', CLAVE_PILOTO).maybeSingle()
+  try { return JSON.parse(data?.valor || '{}') } catch { return {} }
+}
+
+// ¿Va solo este paso en esta marca? Encendido y sin pausa global.
+export async function pilotoActivo(marca: string | null | undefined, paso: PasoPiloto) {
+  if (!marca) return false
+  const [{ pausa }, piloto] = await Promise.all([leerAutonomia(), leerPiloto()])
+  return !pausa && (piloto[marca] || []).includes(paso)
+}
+
+export async function guardarPiloto(marca: string, paso: PasoPiloto, activo: boolean) {
+  const piloto = await leerPiloto()
+  const lista = new Set(piloto[marca] || [])
+  activo ? lista.add(paso) : lista.delete(paso)
+  const nuevo = { ...piloto, [marca]: Array.from(lista) }
+  if (!nuevo[marca].length) delete nuevo[marca]
+  return sb.from('configuracion').upsert({ clave: CLAVE_PILOTO, valor: JSON.stringify(nuevo) }, { onConflict: 'clave' })
+}
