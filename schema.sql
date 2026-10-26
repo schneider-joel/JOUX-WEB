@@ -1800,3 +1800,12 @@ COMMENT ON COLUMN leads.para_empezar IS 'Rediseño comercial, fase 3: lo que el 
 -- plantillas entrega.final (arkevo/custom es+en, cartela es) la frase «la factura te llega aparte» pasa a ser
 -- {{#factura_numero}}…te adjunto la factura del segundo 50 %, {{factura_numero}}, por {{factura_total}}…{{/factura_numero}}
 -- con la frase de antes en {{^factura_numero}}. Aplicado con OK de Joel con UPDATE … SET cuerpo = replace(…).
+
+-- DATOS (2026-10-26): piloto automático encendido en Cartela con OK de Joel (src/lib/autonomia.ts, /ajustes).
+-- configuracion.piloto_auto = {"cartela":["ganar","comenzar_prueba","cambios","aprobar"]};
+-- configuracion.auto_respuestas_ia = {"cartela":["precio","plazos","encargo","informacion","material","otro"]};
+-- configuracion.auto_pausa = 'false'; plantillas.auto = true en cartela revision.lista y revision.recordatorio.
+-- Plantilla nueva cambio.publicado (cartela, es; la manda cambio-hecho del agente de cambios):
+-- insert into plantillas (clave, marca, idioma, remitente, auto, asunto, cuerpo) values
+-- ('cambio.publicado', 'cartela', 'es', 'Cartela <hola@cartela.live>', false, 'Cambio hecho en tu carta',
+--  E'Hola, {{nombre}}:\n\nYa está: {{nota}}\nLo tienes publicado en {{url}}\n\nJoel · Cartela');
