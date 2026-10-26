@@ -31,6 +31,9 @@ export async function encargosPendientes(tipo: TipoEncargo, solo: string | null)
   const { data: pruebas } = leadIds.length && tipo === 'diseno'
     ? await sb.from('eventos').select('lead_id, datos, created_at').in('lead_id', leadIds).eq('tipo', 'prueba.lista').order('created_at')
     : { data: [] }
+  // Cartela: el local de cada carta (sin el token de cambios, que es del cliente).
+  const { data: locales } = tipo === 'carta' ? await sb.from('cartela_locales').select('id, proyecto_id, slug, nombre, plan, url_carta').in('proyecto_id', ids) : { data: [] }
+  const localDe = (id: number) => { const l = (locales || []).find(x => x.proyecto_id === id); return l ? { id: l.id, slug: l.slug, nombre: l.nombre, plan: l.plan, url_carta: l.url_carta } : null }
   // Por qué se repite una pasada (material nuevo): lo dice su encargo.
   const { data: encargosDatos } = await sb.from('eventos').select('proyecto_id, datos, created_at').in('proyecto_id', ids).eq('tipo', 'web.encargo').order('created_at')
 
@@ -69,6 +72,7 @@ export async function encargosPendientes(tipo: TipoEncargo, solo: string | null)
         prueba_gratis: prueba ? { url: typeof prueba.datos?.url === 'string' ? prueba.datos.url : null, ronda: rondaDe(prueba.datos), cambios: Array.isArray(prueba.datos?.cambios) ? prueba.datos.cambios : [] } : null,
       } : {}),
       ...(tipo === 'custom' ? { brief: p.brief || null } : {}),
+      ...(tipo === 'carta' ? { local: localDe(p.id) } : {}),
       nota: 'nota' in a ? a.nota : null,
       formulario: lead?.mensaje || null, interes: lead?.interes || {}, campos: lead?.campos || {},
       ...(lead ? material.get(lead.id)! : { mensajes: [], adjuntos: [] }),

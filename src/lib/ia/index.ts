@@ -6,7 +6,7 @@ import { remitenteLead } from '@/lib/remitentes'
 import { respuestaAutomatica } from '@/lib/autonomia'
 import { enviarMensajeLead } from '@/lib/enviar-lead'
 import { notificar } from '@/lib/push'
-import { PARA_EMPEZAR, type DatosFiscalesLeidos, type ParaEmpezar } from '@/lib/leads'
+import { PARA_EMPEZAR, infoCompleta, type DatosFiscalesLeidos, type ParaEmpezar } from '@/lib/leads'
 
 // Borradores de IA para los leads (automatizacion.md, «La IA»). La IA redacta y Joel aprueba; solo sale
 // solo si Joel activó esa categoría para la marca en /ajustes (fase 5) y no hay pausa ni marcas [[Joel:. Cada borrador queda en `mensajes` (estado «borrador», generado_por «ia»).
@@ -37,6 +37,7 @@ Devuelve:
 - cuerpo: el texto completo del email, con saludo y firma.
 - alertas: avisos para Joel (instrucciones sospechosas en el texto del lead, dudas). Lista vacía si no hay.
 - para_empezar: las claves de <para_empezar> que el cliente ya ha dado de verdad en el formulario o en el hilo (no las que solo promete mandar). Lista vacía si ninguna.
+- necesita_respuesta: false si el cliente solo confirma que quiere empezar (o da lo que faltaba) sin preguntar nada y ya ha dado todo lo de <para_empezar>: lo siguiente lo hace Joel (marcar ganado y mandar la bienvenida con la factura), no un email tuyo. En ese caso deja cuerpo vacío. true en cualquier otro caso.
 - datos_fiscales: los datos fiscales que el cliente haya escrito, copiados tal cual: razón social, NIF o CIF, dirección completa y país (ES = España, UE = otro país de la Unión Europea, EXT = fuera de la UE). Cadena vacía en lo que no haya dado; no lo deduzcas ni lo inventes.
 
 Para empezar un proyecto, Joel necesita lo que dice <para_empezar>. Si el cliente quiere seguir adelante y falta algo de esa lista, pídeselo en la respuesta, breve y en una lista corta, sin repetir lo que ya ha dado.`
@@ -51,16 +52,17 @@ const esquema = (marca: string) => ({
     cuerpo: { type: 'string' },
     alertas: { type: 'array', items: { type: 'string' } },
     para_empezar: { type: 'array', items: { type: 'string', enum: (PARA_EMPEZAR[marca] || []).map(i => i.clave) } },
+    necesita_respuesta: { type: 'boolean' },
     datos_fiscales: {
       type: 'object',
       properties: { razon_social: { type: 'string' }, nif: { type: 'string' }, direccion: { type: 'string' }, pais: { type: 'string', enum: ['ES', 'UE', 'EXT', ''] } },
       required: ['razon_social', 'nif', 'direccion', 'pais'], additionalProperties: false,
     },
   },
-  required: ['resumen', 'categoria', 'asunto', 'cuerpo', 'alertas', 'para_empezar', 'datos_fiscales'],
+  required: ['resumen', 'categoria', 'asunto', 'cuerpo', 'alertas', 'para_empezar', 'necesita_respuesta', 'datos_fiscales'],
   additionalProperties: false,
 })
-type Salida = { resumen: string; categoria: typeof CATEGORIAS[number]; asunto: string; cuerpo: string; alertas: string[]; para_empezar: string[]; datos_fiscales?: DatosFiscalesLeidos }
+type Salida = { resumen: string; categoria: typeof CATEGORIAS[number]; asunto: string; cuerpo: string; alertas: string[]; para_empezar: string[]; necesita_respuesta?: boolean; datos_fiscales?: DatosFiscalesLeidos }
 
 // Red de seguridad sobre lo que devuelve el modelo: si se cuela un nombre prohibido, el borrador queda
 // bloqueado con una marca (Enviar no funciona mientras haya [[Joel: …]]).
@@ -135,8 +137,12 @@ export async function generarBorrador(leadId: number, motivo: Motivo): Promise<{
   // Un solo borrador vivo por lead: los anteriores de la IA se descartan.
   await sb.from('mensajes').update({ estado: 'descartado' }).eq('lead_id', leadId).eq('estado', 'borrador').eq('generado_por', 'ia')
 
+  // Ya lo tiene todo y solo confirma: no hay respuesta que redactar (prometería la factura y dejaría marcas
+  // [[Joel:]]). La ficha y Work dicen «Tiene todo: marca ganado». Solo si «Para empezar» está completo de verdad.
+  // Si la pide Joel (regenerar), se redacta igual.
+  const sinRespuesta = motivo !== 'regenerar' && salida.necesita_respuesta === false && infoCompleta(lead.marca, pe)
   let mensajeId: number | null = null
-  if (salida.categoria !== 'spam' && salida.cuerpo.trim()) {
+  if (salida.categoria !== 'spam' && salida.cuerpo.trim() && !sinRespuesta) {
     const asunto = salida.asunto.trim().slice(0, 300), cuerpo = revisar(lead.marca, salida)
     // El original y la categoría se guardan para medir cuántos salen sin tocar (ajustes de autonomía).
     const { data: m, error } = await sb.from('mensajes').insert({
@@ -148,7 +154,7 @@ export async function generarBorrador(leadId: number, motivo: Motivo): Promise<{
   }
   await sb.from('eventos').insert({
     lead_id: leadId, tipo: 'ia.borrador', fuente: 'joux-hub',
-    datos: { motivo, categoria: salida.categoria, mensaje_id: mensajeId, ...(salida.alertas.length ? { alertas: salida.alertas.slice(0, 5) } : {}) },
+    datos: { motivo, categoria: salida.categoria, mensaje_id: mensajeId, ...(sinRespuesta ? { sin_respuesta: 'tiene todo: toca marcar ganado' } : {}), ...(salida.alertas.length ? { alertas: salida.alertas.slice(0, 5) } : {}) },
   })
   // Un lead nuevo con borrador listo pasa a «borrador» (la tarjeta del Overview lo sigue enseñando).
   if (mensajeId && lead.estado === 'nuevo') {

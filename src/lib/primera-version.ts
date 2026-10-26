@@ -4,6 +4,8 @@
 //   - custom: web de Arkevo con plan Esencial, Estudio o Signature → /web-custom (aún no existe). Necesita el
 //     brief de dirección de Joel (`proyectos.brief`): sin él no hay encargo («esperando brief»).
 //   - treatment: The Pitch Lab → agente de Pitchview (aún no existe).
+//   - carta: Cartela → /montar-carta (`01 Agencias web/cartela/`): monta la carta del local con su web, su
+//     Instagram y lo que mandó el cliente; en web-lista manda la URL, el QR y cuántos platos tiene.
 // Custom Websites no tiene agente: «Comenzar» solo cambia la etapa.
 // El agente avisa con web.empezada / web.lista / web.error. No toca la fase ni prepara emails.
 // Pasadas: si en un diseño llega material nuevo («Ya está todo» o archivos en Drive), se crea otro encargo
@@ -12,9 +14,9 @@ import { supabaseServer as sb } from '@/lib/supabase-server'
 import { faltaBrief, planCustom, type AgenteWeb, type Brief, type TipoEncargo } from '@/lib/seguimiento'
 import { disenoDelLead, disenoValido } from '@/lib/prueba-gratis'
 
-export const TIPOS_ENCARGO: TipoEncargo[] = ['diseno', 'custom', 'treatment']
+export const TIPOS_ENCARGO: TipoEncargo[] = ['diseno', 'custom', 'treatment', 'carta']
 // Marcas con agente (para validar las peticiones del agente).
-export const MARCAS_AGENTE = ['arkevo', 'pitchlab']
+export const MARCAS_AGENTE = ['arkevo', 'pitchlab', 'cartela']
 export const TIPOS_AGENTE = ['web.encargo', 'web.empezada', 'web.lista', 'web.error'] as const
 // Una pasada de la tarea que empezó y no terminó (Mac dormido, error) deja de bloquear pasado este tiempo.
 export const HORAS_EMPEZADA = 3
@@ -30,6 +32,7 @@ const tipoDe = (d: Record<string, unknown> | null | undefined): TipoEncargo => T
 // Qué agente le toca a un proyecto. null = sin agente (Custom Websites: lo hace Joel).
 export function tipoEncargo(p: { marca: string | null; plan: string | null }, lead?: { interes?: Record<string, unknown> | null; campos?: Record<string, unknown> | null } | null): TipoEncargo | null {
   if (p.marca === 'pitchlab') return 'treatment'
+  if (p.marca === 'cartela') return 'carta'
   if (p.marca !== 'arkevo') return null
   if (disenoValido(p.plan)) return 'diseno'
   if (planCustom(p.plan)) return 'custom'

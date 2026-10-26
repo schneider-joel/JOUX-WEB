@@ -52,8 +52,8 @@ export type ProyectoSeguimiento = {
 
 // Encargo al agente: encargada → montándose → lista (vista previa solo para Joel) o error.
 // `pasada` > 1 = se vuelve a montar con material nuevo; `anterior` = la vista previa de la pasada anterior.
-export type TipoEncargo = 'diseno' | 'custom' | 'treatment'
-export const NOMBRE_ENCARGO: Record<TipoEncargo, string> = { diseno: 'primera versión', custom: 'web custom', treatment: 'treatment' }
+export type TipoEncargo = 'diseno' | 'custom' | 'treatment' | 'carta'
+export const NOMBRE_ENCARGO: Record<TipoEncargo, string> = { diseno: 'primera versión', custom: 'web custom', treatment: 'treatment', carta: 'carta' }
 type Pasada = { tipo: TipoEncargo; pasada: number; anterior: string | null }
 export type AgenteWeb = Pasada & (
   | { estado: 'encargada' | 'montandose'; fecha: string; nota: string | null }
@@ -145,6 +145,8 @@ export function estadoDe(p: ProyectoSeguimiento, pago1Cobrado: boolean): Estado 
   if (p.fase === 'cerrado') return { k: 'ok', texto: 'Cerrado' }
   const parado = estaParado(p), d = diasDesde(p.desde)
   if (antesDeComenzar(p) && pago1Cobrado && !p.agente) return { k: 'tu', texto: 'Pago 1 cobrado: comenzar' }
+  // Proyecto de prueba: no habrá transferencia, así que se comienza a mano tras la bienvenida.
+  if (p.prueba && p.fase === 'material' && !p.agente) return { k: 'tu', texto: 'Prueba: comienza sin cobro' }
   const comentada = p.rondas.find(r => r.estado === 'comentada')
   if (comentada) return { k: 'tu', texto: `Aplicar ${comentada.comentarios} comentario${comentada.comentarios === 1 ? '' : 's'} de ${comentada.ronda}` }
   const siguiente = rondaSiguiente(p)

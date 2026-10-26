@@ -114,6 +114,8 @@ export default function Ficha({ d }: { d: DatosFicha }) {
   if (email) tareas.push({ titulo: `Envía «${NOMBRE_EMAIL[email.clave] || email.clave}»`, email })
   // Mismo orden que estadoDe() (la línea de la tarjeta en Work): cobro del pago 1, comentarios de la ronda, emails…
   if (s && antesDeComenzar(s) && (pago1Cobrado || s.material_completo) && !s.agente) tareas.push({ titulo: pago1Cobrado ? 'Pago 1 cobrado: comienza' : 'El cliente ya lo ha subido todo', sub: alComenzar(s), boton: { texto: 'Comenzar', hacer: () => pedirMover('comenzado') } })
+  // Proyecto de prueba: no hay transferencia que esperar, así que se comienza a mano (crea el encargo del agente).
+  if (s && p.prueba && fase === 'material' && !pago1Cobrado && !s.agente) tareas.push({ titulo: 'Prueba: comienza sin cobro', sub: alComenzar(s), boton: { texto: 'Comenzar (prueba)', hacer: () => pedirMover('comenzado') } })
   if (ronda?.estado === 'comentada') tareas.push({ titulo: `Aplica ${ronda.comentarios} comentario${ronda.comentarios === 1 ? '' : 's'} de ${ronda.ronda}`, panel: 'aplicada', boton: { texto: 'Ya he aplicado los cambios', hacer: () => { setError(''); setAplicar('pide') } }, enlace: ronda.url ? { texto: 'Ver la ronda', href: ronda.url, externo: true } : undefined })
   const siguiente = s ? rondaSiguiente(s) : null
   if (siguiente) tareas.push({ titulo: `Cambios aplicados: abre la ${siguiente} o entrega la web`, sub: PASO_ARKEVO_REVISION, boton: ronda?.url ? { texto: `Ver la ${ronda.ronda}`, href: ronda.url, externo: true } : undefined })
@@ -122,7 +124,7 @@ export default function Ficha({ d }: { d: DatosFicha }) {
     for (const b of s.borradores) tareas.push({ titulo: `Revisa y envía «${NOMBRE_EMAIL[b.plantilla] || b.plantilla}»`, sub: b.error ? `No salió: ${b.error}` : undefined, email: { clave: b.plantilla, mensaje: b.id } })
     if (s.agente?.estado === 'error') tareas.push({ titulo: 'El agente no pudo terminar', sub: s.agente.motivo, panel: 'agente' })
     if (fase === 'comenzado' && s.encargo_tipo === 'custom' && !s.agente) tareas.push({ titulo: 'Escribe el brief de dirección', sub: 'El agente de custom empieza al guardarlo', panel: 'brief' })
-    if (s.agente?.estado === 'lista' && fase === 'comenzado') tareas.push({ titulo: `Revisa la ${NOMBRE_ENCARGO[s.agente.tipo]} del agente`, sub: `Terminada el ${fecha(s.agente.fecha)}${s.agente.diseno ? ` · ${s.agente.diseno}` : ''}. Cuando esté bien, abre la R1 y pásalo a Revisión.`, boton: s.agente.url ? { texto: 'Ver', href: s.agente.url, externo: true } : undefined })
+    if (s.agente?.estado === 'lista' && fase === 'comenzado') tareas.push({ titulo: `Revisa la ${NOMBRE_ENCARGO[s.agente.tipo]} del agente`, sub: `Terminada el ${fecha(s.agente.fecha)}${s.agente.diseno ? ` · ${s.agente.diseno}` : ''}. ${s.agente.tipo === 'carta' ? 'El email de primera versión ya lleva la URL y el QR.' : 'Cuando esté bien, abre la R1 y pásalo a Revisión.'}`, boton: s.agente.url ? { texto: 'Ver', href: s.agente.url, externo: true } : undefined })
     if (s.drive_error && !s.drive_url) tareas.push({ titulo: 'No se pudo crear la carpeta de Drive', sub: s.drive_error, panel: 'drive' })
     const rec = fase ? EMAIL_RECORDATORIO[fase] : undefined
     if (estaParado(s) && rec && s.plantillas.includes(rec) && !s.borradores.some(b => b.plantilla === rec) && email?.clave !== rec) tareas.push({ titulo: `Lleva ${diasDesde(s.desde)} días en ${ETIQUETA_FASE[fase!]}`, sub: 'Puedes mandarle un recordatorio', boton: { texto: 'Preparar recordatorio', hacer: () => { setEmail({ clave: rec }); setCerrada(false) } } })

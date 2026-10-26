@@ -10,7 +10,8 @@ export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
 export const maxDuration = 60
 
-// Encargos de un tipo: ?tipo=custom (agente /web-custom de Arkevo) o ?tipo=treatment (agente de Pitchview);
+// Encargos de un tipo: ?tipo=custom (agente /web-custom de Arkevo), ?tipo=treatment (agente de Pitchview) o
+// ?tipo=carta (agente /montar-carta de Cartela, con `local: {id, slug, nombre, plan, url_carta}`);
 // también ?tipo=diseno (lo mismo que webs-pendientes). Pública en el middleware: valida INTAKE_KEY_AGENTE.
 // Responde con web-empezada / web-lista / web-error. Contrato en automatizacion.md («Encargos custom y treatment»).
 export async function GET(req: NextRequest) {

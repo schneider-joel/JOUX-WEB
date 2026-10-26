@@ -72,7 +72,7 @@ export async function enviarEmailProyecto(m: {
   // La plantilla rellenada antes de que Joel la toque (para la métrica de ajustes) y si salió sin aprobación.
   original?: { asunto: string; cuerpo: string }; auto?: boolean
 }) {
-  const { data: marca } = CON_QR.includes(m.clave) ? await sb.from('proyectos').select('marca').eq('id', m.proyectoId).maybeSingle() : { data: null }
+  const { data: marca } = CON_QR.includes(m.clave) ? await sb.from('proyectos').select('marca, fase').eq('id', m.proyectoId).maybeSingle() : { data: null }
   const qr = marca?.marca === 'cartela' ? await qrCartela(m.proyectoId).catch(() => null) : null
   const envio = await enviarEmail({ de: m.remitente, para: m.para, asunto: m.asunto, texto: m.cuerpo, ...(qr ? { adjuntos: [qr] } : {}) })
   // Un borrador que no sale vuelve a borrador (con el motivo) para reintentarlo desde /proyectos.
@@ -88,6 +88,11 @@ export async function enviarEmailProyecto(m: {
   })
   if (envio.error) return { error: envio.error }
   await sb.from('eventos').insert({ proyecto_id: m.proyectoId, lead_id: m.leadId ?? null, tipo: 'mensaje.enviado', fuente: m.fuente || 'joux-hub', datos: { plantilla: m.clave, para: m.para, asunto: m.asunto, ...(m.auto ? { auto: true } : {}) } })
+  // Cartela no tiene herramienta de revisión que avise: la carta pasa a «Revisión» al enviarle la primera versión.
+  if (m.clave === 'revision.lista' && marca?.marca === 'cartela' && marca.fase === 'comenzado') {
+    const { data: movido } = await sb.from('proyectos').update({ fase: 'revision' }).eq('id', m.proyectoId).eq('fase', 'comenzado').select('id')
+    if (movido?.length) await sb.from('eventos').insert({ proyecto_id: m.proyectoId, lead_id: m.leadId ?? null, tipo: 'proyecto.fase', fuente: m.fuente || 'joux-hub', datos: { de: 'comenzado', a: 'revision', motivo: 'primera versión enviada' } })
+  }
   return { ok: true }
 }
 
