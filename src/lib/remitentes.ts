@@ -7,7 +7,7 @@ const REMITENTES: Record<string, { es: string; en: string }> = {
   // Custom Websites es la marca personal: sale de la cuenta principal (decisión de Joel, 2026-10-16).
   custom: { es: 'Joel Schneider <joel@joelschneider.io>', en: 'Joel Schneider <joel@joelschneider.io>' },
   // Cartas digitales para restaurantes: solo en español, el alias en inglés es el mismo.
-  cartela: { es: 'Cartela <hola@cartela.es>', en: 'Cartela <hola@cartela.es>' },
+  cartela: { es: 'Cartela <hola@cartela.live>', en: 'Cartela <hola@cartela.live>' },
 }
 
 export const remitenteLead = (marca: string, idioma: string) => {
