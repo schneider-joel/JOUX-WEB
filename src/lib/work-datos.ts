@@ -6,7 +6,7 @@ import { estadoLead, type Lead } from '@/lib/leads'
 // Work › Proyectos con los leads dentro (rediseño comercial, fase 1): una franja por marca que recibe
 // leads, con sus leads abiertos y sus proyectos, cada uno con una sola línea de estado. Lo usan la página
 // (/work) y la insignia del menú (/api/work), para que cuenten lo mismo. Solo lee.
-export type LeadWork = Pick<Lead, 'id' | 'marca' | 'estado' | 'nombre' | 'email' | 'empresa' | 'recibido_en' | 'ultimo_contacto'> & { prueba?: boolean; estadoVista: Estado }
+export type LeadWork = Pick<Lead, 'id' | 'marca' | 'estado' | 'nombre' | 'email' | 'empresa' | 'recibido_en' | 'ultimo_contacto' | 'para_empezar'> & { prueba?: boolean; estadoVista: Estado }
 export type ProyectoWork = ProyectoSeguimiento & { estadoVista: Estado }
 export type FranjaWork = { key: string; nombre: string; leads: LeadWork[]; proyectos: ProyectoWork[]; cerrados: ProyectoWork[]; perdidos: LeadWork[] }
 
@@ -18,7 +18,7 @@ export async function cargarWork() {
   const [seg, { data: leads, error }, { data: cobrados }] = await Promise.all([
     cargarSeguimiento(),
     // Abiertos todos; perdidos y spam, solo los de los últimos 60 días (para el desplegable de cada marca).
-    sb.from('leads').select('id, marca, estado, nombre, email, empresa, recibido_en, ultimo_contacto, prueba')
+    sb.from('leads').select('id, marca, estado, nombre, email, empresa, recibido_en, ultimo_contacto, prueba, para_empezar')
       .or(`estado.in.(${ABIERTOS.join(',')}),and(estado.in.(perdido,spam),recibido_en.gte.${hace60})`)
       .order('recibido_en', { ascending: false }).limit(300),
     sb.from('facturas').select('proyecto_id').eq('pago', 1).eq('estado', 'cobrada'),

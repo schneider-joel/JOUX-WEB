@@ -9,7 +9,7 @@ import { faltaGanado, filasGanado, formInicial, nombreProyecto, sugerirPais, typ
 import { desglose } from '@/lib/importes'
 import { SUBCARPETAS, rutaCarpeta } from '@/lib/drive-carpetas'
 
-type LeadProps = Pick<Lead, 'id' | 'estado' | 'nombre' | 'email' | 'empresa' | 'pais' | 'idioma' | 'interes' | 'prueba'>
+type LeadProps = Pick<Lead, 'id' | 'estado' | 'nombre' | 'email' | 'empresa' | 'pais' | 'idioma' | 'interes' | 'prueba' | 'para_empezar'>
 type MarcaProps = Pick<Marca, 'key' | 'nombre' | 'modo'>
 
 const eur = (n: number) => '€' + new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: 'always' } as unknown as Intl.NumberFormatOptions).format(n)
@@ -148,6 +148,7 @@ export default function AccionesLead({ lead, marca, clientes, propuesto }: { lea
               <input type="checkbox" checked={form.datos_cliente} onChange={e => set({ datos_cliente: e.target.checked })} />
               Los datos fiscales los rellena el cliente (formulario en la bienvenida)
             </label>
+            {!form.datos_cliente && lead.para_empezar?.fiscales?.datos && <p className="nota ok">Datos fiscales leídos del email del cliente: revísalos antes de crear.</p>}
             {form.datos_cliente ? (
               <div className="field">
                 <label className="caps" htmlFor="lg-cliente">Cliente (provisional)</label>

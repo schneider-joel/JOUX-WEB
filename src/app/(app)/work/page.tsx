@@ -28,7 +28,7 @@ function TarjetaLead({ l }: { l: LeadWork }) {
   return (
     <Link href={`/leads/${l.id}`} className="wk__card is-lead">
       <span className="wk__q"><b>{l.empresa || l.nombre || l.email}</b><span>{l.empresa && l.nombre ? `${l.nombre} · ` : ''}{hace(l.recibido_en)}{l.prueba ? ' · prueba' : ''}</span></span>
-      <Barra etapas={ETAPAS_LEAD_VISTA} actual={etapaLead(l.estado)} />
+      <Barra etapas={ETAPAS_LEAD_VISTA} actual={etapaLead(l)} />
       <Estado e={l.estadoVista} />
     </Link>
   )

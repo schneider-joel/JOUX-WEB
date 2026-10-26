@@ -1378,3 +1378,11 @@ div.ajustes { display: flex; flex-direction: column; gap: 48px; }
 .fx__notas { margin-top: 12px; }
 .fx__notas summary { cursor: pointer; list-style: none; width: max-content; }
 .fx__notas summary::-webkit-details-marker { display: none; }
+
+/* «Para empezar» en la ficha del lead (rediseño comercial, fase 3): lo que tiene que mandar el cliente. */
+.pe { list-style: none; margin: -6px 0 0; padding: 0; }
+.pe__i { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 12px; align-items: center; width: 100%; padding: 10px 0; border: 0; border-bottom: 1px solid var(--line); background: none; color: var(--muted); font: inherit; font-size: 13.5px; text-align: left; cursor: pointer; }
+.pe__i:disabled { cursor: default; }
+.pe__i.is-ok { color: var(--text); }
+.pe__c { width: 17px; height: 17px; border-radius: 5px; border: 1.5px solid var(--line2); display: grid; place-items: center; font-size: 10px; }
+.pe__i.is-ok .pe__c { background: var(--green); border-color: var(--green); color: #0B0B0B; }

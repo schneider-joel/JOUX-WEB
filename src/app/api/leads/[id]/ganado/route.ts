@@ -49,6 +49,8 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const { error: errL } = await sb.from('leads').update({ estado: 'ganado', proyecto_id: nuevo.id, updated_at: new Date().toISOString() }).eq('id', lead.id)
   if (errL) return NextResponse.json({ error: errL.message, proyecto_id: nuevo.id }, { status: 500 })
   await sb.from('eventos').insert({ ...evento, lead_id: lead.id, proyecto_id: nuevo.id, datos: { ...evento.datos, de: lead.estado } })
+  // Los borradores de IA que queden en el lead ya no sirven: lo siguiente es la bienvenida.
+  await sb.from('mensajes').update({ estado: 'descartado' }).eq('lead_id', lead.id).eq('estado', 'borrador').eq('generado_por', 'ia')
   // Carpeta de Drive para el material (solo marcas con subcarpetas). Si falla, el proyecto ya está creado:
   // el motivo queda en proyectos.drive_error y la ficha ofrece «Reintentar».
   const drive = SUBCARPETAS[marca.key] ? await crearCarpetaProyecto(nuevo.id).catch(e => ({ error: String(e?.message || e) })) : null

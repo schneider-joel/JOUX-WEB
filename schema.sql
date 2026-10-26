@@ -1784,3 +1784,9 @@ CREATE TABLE IF NOT EXISTS google_token (
   caducado_at TIMESTAMPTZ
 );
 ALTER TABLE google_token ENABLE ROW LEVEL SECURITY;
+
+-- MIGRACIÓN (2026-10-26): rediseño comercial, fase 3. «Para empezar»: lo que el cliente ya ha mandado antes
+-- de ganar el lead, por clave de su marca (src/lib/leads.ts, PARA_EMPEZAR). Lo marca la IA al leer cada
+-- respuesta (y guarda los datos fiscales que encuentre en fiscales.datos) y Joel a mano (por = 'joel' manda).
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS para_empezar jsonb NOT NULL DEFAULT '{}'::jsonb;
+COMMENT ON COLUMN leads.para_empezar IS 'Rediseño comercial, fase 3: lo que el cliente ya ha mandado para empezar, por clave de su marca ({"carta": {"ok": true, "por": "ia"|"joel"}}). Lo marca la IA al leer cada respuesta y Joel a mano.';

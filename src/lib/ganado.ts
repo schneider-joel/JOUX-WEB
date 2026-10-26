@@ -22,7 +22,7 @@ export type FormGanado = {
   tarifa_dia: number | null    // solo treatments por día: va al evento, proyectos no tiene columna
 }
 
-type LeadGanado = Pick<Lead, 'id' | 'nombre' | 'email' | 'empresa' | 'pais' | 'idioma' | 'interes' | 'prueba'>
+type LeadGanado = Pick<Lead, 'id' | 'nombre' | 'email' | 'empresa' | 'pais' | 'idioma' | 'interes' | 'prueba'> & { para_empezar?: Lead['para_empezar'] }
 type MarcaGanado = Pick<Marca, 'key' | 'nombre' | 'modo'>
 
 export const UE_ISO = new Set(['AT', 'BE', 'BG', 'CY', 'CZ', 'DE', 'DK', 'EE', 'FI', 'FR', 'GR', 'HR', 'HU', 'IE', 'IT', 'LT', 'LU', 'LV', 'MT', 'NL', 'PL', 'PT', 'RO', 'SE', 'SI', 'SK'])
@@ -80,12 +80,16 @@ export function precioPropuesto(enviados: { cuerpo: string | null; fecha: string
 
 // Valores iniciales del formulario a partir del lead (empresa, plan y precio si el formulario los traía).
 export function formInicial(lead: LeadGanado, marca: MarcaGanado, existente?: ClienteFiscal, propuesto?: PrecioPropuesto | null): FormGanado {
-  const cliente = existente?.cliente || lead.empresa?.trim() || lead.nombre?.trim() || lead.email
+  // Cliente nuevo cuyos datos fiscales ya leyó la IA en el hilo (rediseño comercial, fase 3): el formulario sale
+  // relleno y la bienvenida puede ir con la factura en un solo email. Sin ellos, los rellena el cliente después.
+  const leidos = !existente ? lead.para_empezar?.fiscales?.datos : undefined
+  const cliente = existente?.cliente || leidos?.razon_social || lead.empresa?.trim() || lead.nombre?.trim() || lead.email
   return {
-    existente: !!existente, datos_cliente: !existente, cliente,
-    identificador: existente?.identificador || '', direccion: existente?.direccion || '',
-    pais: (existente?.pais as PaisFiscal) || sugerirPais('', '', lead.pais),
-    nombre: nombreProyecto(cliente, marca),
+    existente: !!existente, datos_cliente: !existente && !leidos, cliente,
+    identificador: existente?.identificador || leidos?.nif || '', direccion: existente?.direccion || leidos?.direccion || '',
+    pais: (existente?.pais as PaisFiscal) || (leidos?.pais || undefined) || sugerirPais('', '', lead.pais),
+    // El proyecto lleva el nombre del local o estudio, no la razón social.
+    nombre: nombreProyecto(leidos ? lead.empresa?.trim() || cliente : cliente, marca),
     web: '', plan: texto(lead.interes?.plan) || propuesto?.diseno || '', precio: propuesto?.precio ?? numero(lead.interes?.precio), tarifa_dia: null,
   }
 }

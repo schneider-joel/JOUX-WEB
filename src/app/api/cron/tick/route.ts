@@ -120,7 +120,8 @@ async function leerGmail() {
       url: `/leads/${lead.id}`,
       etiqueta: `lead-${lead.id}`,
     }).catch(e => console.error('tick push', e?.message))
-    if (!borradores.includes(lead.id)) borradores.push(lead.id)
+    // Ganado: lo que siga se contesta desde el proyecto; un borrador de IA aquí solo confunde («Tienes una respuesta preparada»).
+    if (lead.estado !== 'ganado' && !borradores.includes(lead.id)) borradores.push(lead.id)
   }
 
   await guardarHistorial(nuevoHistorial)
