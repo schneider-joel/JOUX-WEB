@@ -2,12 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createHash, timingSafeEqual } from 'crypto'
 import { waitUntil } from '@vercel/functions'
 import { supabaseServer as sb } from '@/lib/supabase-server'
-import { ErrorGmail, historial, historyIdActual, hiloIds, leerMensaje } from '@/lib/gmail'
+import { ErrorGmail, historial, historyIdActual, hiloIds, leerMensaje, sinCita } from '@/lib/gmail'
 import { generarBorrador } from '@/lib/ia'
 import { enviarMensajeLead } from '@/lib/enviar-lead'
 import { enviarEmail } from '@/lib/resend'
 import { notificar } from '@/lib/push'
-import { prepararEmailProyecto } from '@/lib/emails-proyecto'
+import { enviarEmailProyecto, prepararEmailProyecto } from '@/lib/emails-proyecto'
 import { resumenDiario } from '@/lib/resumen'
 import { repetirPasada } from '@/lib/primera-version'
 import { copiarMaterial, revisarSubidas } from '@/lib/drive'
@@ -79,6 +79,26 @@ async function leerGmail() {
       const { count } = await sb.from('mensajes').select('id', { count: 'exact', head: true }).eq('lead_id', lead.id).eq('estado', 'enviado').is('id_proveedor', null)
       if (count) continue
     }
+    // Rebote (Gmail no tiene webhook como Resend): el aviso de mailer-daemon llega al hilo. Marca en «error» el
+    // último email que salió por Gmail a este cliente y avisa; el aviso se guarda descartado (no es una respuesta).
+    const deDir = (m.de.match(/<([^>]+)>/)?.[1] || m.de).trim().toLowerCase()
+    if (!saliente && /^(mailer-daemon|postmaster)@/.test(deDir)) {
+      const { error: dupR } = await sb.from('mensajes').insert({
+        lead_id: lead.id, direccion: 'entrante', estado: 'descartado', canal: 'gmail', id_proveedor: m.id,
+        remitente: m.de.slice(0, 300), para: m.para.slice(0, 300) || lead.email, asunto: m.asunto.slice(0, 300), cuerpo: m.texto.slice(0, 4000), enviado_en: m.fecha,
+      })
+      if (dupR) { if (dupR.code === '23505') continue; throw new Error(dupR.message) }
+      const { data: ult } = await sb.from('mensajes').select('id, proyecto_id, plantilla, para').eq('lead_id', lead.id).eq('direccion', 'saliente').eq('canal', 'gmail').eq('estado', 'enviado')
+        .order('enviado_en', { ascending: false }).limit(1).maybeSingle()
+      if (ult) {
+        const motivo = `Rebotado: ${(sinCita(m.texto).split('\n').map(l => l.trim()).find(l => l.length > 20) || m.asunto).slice(0, 200)}`
+        await sb.from('mensajes').update({ estado: 'error', error: motivo }).eq('id', ult.id)
+        await sb.from('eventos').insert({ lead_id: lead.id, proyecto_id: ult.proyecto_id, tipo: 'mensaje.rebotado', fuente: 'gmail', datos: { mensaje_id: ult.id, plantilla: ult.plantilla, para: ult.para, motivo } })
+        await notificar({ titulo: 'Un email ha rebotado', cuerpo: `${ult.para} · ${lead.empresa || lead.nombre || lead.email}`, url: ult.proyecto_id ? `/proyectos/${ult.proyecto_id}` : `/leads/${lead.id}`, etiqueta: `mensaje-${ult.id}` })
+          .catch(e => console.error('tick push', e?.message))
+      }
+      continue
+    }
     const { data: fila, error } = await sb.from('mensajes').insert({
       lead_id: lead.id, direccion: saliente ? 'saliente' : 'entrante', estado: saliente ? 'enviado' : 'recibido',
       generado_por: saliente ? 'joel' : null, canal: 'gmail', id_proveedor: m.id,
@@ -149,9 +169,10 @@ async function materialCompleto(proyectoId: number, leadId: number, texto: strin
   return { cliente: p.cliente as string, repetida: r && 'ok' in r ? r.pasada : null }
 }
 
-// 2. Mensajes «aprobado» cuya hora ya llegó (o sin hora): los de leads por Gmail, los de proyectos por Resend.
+// 2. Mensajes «aprobado» cuya hora ya llegó (o sin hora): los de leads por Gmail; los de proyectos, por Gmail en el
+// hilo de su lead o, sin hilo, por Resend (enviarEmailProyecto).
 async function enviarAprobados() {
-  const { data } = await sb.from('mensajes').select('id, lead_id, proyecto_id, canal, remitente, para, asunto, cuerpo')
+  const { data } = await sb.from('mensajes').select('id, lead_id, proyecto_id, canal, remitente, para, asunto, cuerpo, plantilla, auto')
     .eq('estado', 'aprobado').eq('direccion', 'saliente')
     .or(`programado_para.is.null,programado_para.lte.${new Date().toISOString()}`).order('programado_para', { ascending: true, nullsFirst: true }).limit(20)
   let enviados = 0, errores = 0
@@ -164,13 +185,17 @@ async function enviarAprobados() {
     if (!m.remitente || !m.asunto) { await sb.from('mensajes').update({ estado: 'error', error: 'Falta remitente o asunto' }).eq('id', m.id); errores++; continue }
     const { data: reservado } = await sb.from('mensajes').update({ estado: 'enviado' }).eq('id', m.id).eq('estado', 'aprobado').select('id')
     if (!reservado?.length) continue
+    if (m.proyecto_id) {
+      const r = await enviarEmailProyecto({ proyectoId: m.proyecto_id, clave: m.plantilla || '', remitente: m.remitente, para: m.para, asunto: m.asunto, cuerpo: m.cuerpo, mensajeId: m.id, fuente: 'joux-cron', auto: !!m.auto })
+      'error' in r ? errores++ : enviados++
+      continue
+    }
     const envio = await enviarEmail({ de: m.remitente, para: m.para, asunto: m.asunto, texto: m.cuerpo })
     await sb.from('mensajes').update(envio.error
       ? { estado: 'error', error: envio.error }
       : { canal: 'resend', id_proveedor: envio.id || null, enviado_en: new Date().toISOString() }).eq('id', m.id)
     if (envio.error) { errores++; continue }
     enviados++
-    if (m.proyecto_id) await sb.from('eventos').insert({ proyecto_id: m.proyecto_id, tipo: 'mensaje.enviado', fuente: 'joux-cron', datos: { mensaje_id: m.id, para: m.para, asunto: m.asunto } })
   }
   return { enviados, errores }
 }

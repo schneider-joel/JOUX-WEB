@@ -68,7 +68,8 @@ const conNombre = (s: string) => {
   return m ? `${m[1] ? `${cabecera(m[1].replace(/"/g, ''))} ` : ''}<${m[2]}>` : s
 }
 
-export type Envio = { de: string; para: string; asunto: string; texto: string; html: string; hilo?: string | null; adjuntos?: { nombre: string; tipo: string; datos: Buffer }[] }
+// `mismoAsunto`: en un hilo, el asunto pasa a ser «Re: » + el del hilo (Gmail solo junta mensajes con el mismo asunto).
+export type Envio = { de: string; para: string; asunto: string; texto: string; html: string; hilo?: string | null; mismoAsunto?: boolean; adjuntos?: { nombre: string; tipo: string; datos: Buffer }[] }
 
 // Alias de «Enviar como» verificados. Si el From no es uno de ellos, Gmail lo cambia por joel@ sin
 // avisar (y en The Pitch Lab eso destaparía el nombre), así que se corta antes de enviar.
@@ -81,17 +82,19 @@ async function aliasVerificados() {
   return lista
 }
 
-export async function enviarGmail(m: Envio): Promise<{ id: string; hilo: string }> {
+export async function enviarGmail(m: Envio): Promise<{ id: string; hilo: string; asunto: string }> {
   const desde = (m.de.match(/<([^>]+)>/)?.[1] || m.de).trim().toLowerCase()
   if (!(await aliasVerificados()).has(desde)) throw new Error(`${desde} no está en «Enviar como» de Gmail`)
   // En un hilo que ya existe, se responde al último mensaje para que el cliente lo vea en la misma conversación.
-  let enRespuestaA: string | null = null, referencias: string | null = null
+  let enRespuestaA: string | null = null, referencias: string | null = null, asunto = m.asunto
   if (m.hilo) {
-    const h = await gmail(`/threads/${m.hilo}?format=metadata&metadataHeaders=Message-ID&metadataHeaders=References`).catch(() => null)
+    const h = await gmail(`/threads/${m.hilo}?format=metadata&metadataHeaders=Message-ID&metadataHeaders=References&metadataHeaders=Subject`).catch(() => null)
     const ultimo = h?.messages?.[h.messages.length - 1]
     const cab = (n: string) => ultimo?.payload?.headers?.find((x: any) => x.name.toLowerCase() === n.toLowerCase())?.value as string | undefined
     enRespuestaA = cab('Message-ID') || null
     referencias = [cab('References'), enRespuestaA].filter(Boolean).join(' ') || null
+    const primero = h?.messages?.[0]?.payload?.headers?.find((x: any) => x.name.toLowerCase() === 'subject')?.value as string | undefined
+    if (m.mismoAsunto && primero) asunto = `Re: ${primero.replace(/^\s*(re|rv|fwd?):\s*/i, '')}`
   }
   const frontera = `joux-${Date.now().toString(36)}`
   // Con adjuntos: multipart/mixed con el texto (alternative) dentro y cada archivo en base64.
@@ -100,7 +103,7 @@ export async function enviarGmail(m: Envio): Promise<{ id: string; hilo: string 
   const mime = [
     `From: ${conNombre(m.de)}`,
     `To: ${m.para}`,
-    `Subject: ${cabecera(m.asunto)}`,
+    `Subject: ${cabecera(asunto)}`,
     ...(enRespuestaA ? [`In-Reply-To: ${enRespuestaA}`, `References: ${referencias}`] : []),
     'MIME-Version: 1.0',
     ...(mixta ? [`Content-Type: multipart/mixed; boundary="${mixta}"`, '', `--${mixta}`] : []),
@@ -128,7 +131,7 @@ export async function enviarGmail(m: Envio): Promise<{ id: string; hilo: string 
     ...(mixta ? [`--${mixta}--`] : []),
   ].join('\r\n')
   const j = await gmail('/messages/send', { method: 'POST', body: JSON.stringify({ raw: b64url(mime), ...(m.hilo ? { threadId: m.hilo } : {}) }) })
-  return { id: j.id, hilo: j.threadId }
+  return { id: j.id, hilo: j.threadId, asunto }
 }
 
 // ── Lectura ──────────────────────────────────────────────────────────────────

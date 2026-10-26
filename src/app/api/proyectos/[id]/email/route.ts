@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabaseServer as sb } from '@/lib/supabase-server'
 import { NOMBRE_EMAIL, pendientes } from '@/lib/emails'
-import { enviarEmailProyecto, plantillaProyecto } from '@/lib/emails-proyecto'
+import { enviarEmailProyecto, plantillaProyecto, remitenteProyecto } from '@/lib/emails-proyecto'
 
 export const dynamic = 'force-dynamic'
 // supabase-js usa fetch: sin esto, Next guarda sus respuestas en el Data Cache y la lista sale vieja.
@@ -19,13 +19,14 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
   if (q.get('mensaje')) {
     const { data: m } = await borrador(params.id, q.get('mensaje'))
     if (!m) return NextResponse.json({ error: 'Ese borrador ya no está pendiente' }, { status: 404 })
-    return NextResponse.json({ remitente: m.remitente, para: m.para, asunto: m.asunto, cuerpo: m.cuerpo })
+    const { data: p } = await sb.from('proyectos').select('lead_id').eq('id', params.id).maybeSingle()
+    return NextResponse.json({ remitente: await remitenteProyecto(p?.lead_id, m.remitente || ''), para: m.para, asunto: m.asunto, cuerpo: m.cuerpo })
   }
   const clave = q.get('clave') || ''
   if (!NOMBRE_EMAIL[clave]) return NextResponse.json({ error: 'Email desconocido' }, { status: 400 })
   const d = await plantillaProyecto(params.id, clave)
   if ('error' in d) return NextResponse.json({ error: d.error }, { status: d.status })
-  return NextResponse.json({ remitente: d.t.remitente, para: d.p.contacto_email || '', asunto: d.asunto, cuerpo: d.cuerpo })
+  return NextResponse.json({ remitente: await remitenteProyecto(d.p.lead_id, d.t.remitente), para: d.p.contacto_email || '', asunto: d.asunto, cuerpo: d.cuerpo })
 }
 
 // Envía el email tal como lo dejó Joel y lo guarda en `mensajes` (sobre el borrador, si venía de uno) y en la línea de tiempo.
