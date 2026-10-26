@@ -113,25 +113,15 @@ export default function MarcaTab({ marca, proyectos: iniciales, numerosExistente
   }
 
   const ordenados = [...proyectos].sort((a, b) => a.cliente.localeCompare(b.cliente))
-  // Cobrado, pendiente y por facturar, en una línea fina (la de Patrimonio en el Overview).
-  const segmentos = ([[tot.cobrado, 'var(--green)'], [tot.pendiente, 'var(--amber)'], [tot.porFacturar, 'var(--dim)']] as const).filter(([v]) => v > 0)
-
-  // Como la web: lo cobrado en grande y una fila por web que se despliega en sus dos pagos.
+  // Una fila por web que se despliega en sus dos pagos. Cobrado y por cobrar ya salen arriba, en las cifras de
+  // la página de la marca (rediseño comercial, fase 4); aquí solo lo que falta por facturar.
   return (
     <div className="col">
-      <section className="block" aria-label={`Resumen de ${marca.nombre}`}>
-        <p className="label caps"><span>Cobrado</span><i className="rule" />{demo && <span className="label__m aviso" title="Datos de ejemplo: no se escribe nada en la base de datos">Demo</span>}</p>
-        <div className="hero">
-          <p className="big">{eurCorto(Math.round(tot.cobrado))}</p>
-          <p className="delta caps"><span>{eurCorto(Math.round(tot.pendiente))}</span><span>pendiente</span></p>
-        </div>
-        <div className="stack" aria-hidden="true">{segmentos.map(([v, c], k) => <i key={k} style={{ flex: v, background: c }} />)}</div>
-        <dl className="split"><div><dt className="caps">Por facturar</dt><dd><span className="num">{eurCorto(Math.round(tot.porFacturar))}</span></dd></div></dl>
-      </section>
-
       <section className="block" aria-label={`Webs de ${marca.nombre}`}>
         <p className="label caps">
           <span>Clientes · {new Set(proyectos.map(p => p.cliente)).size}</span><i className="rule" />
+          {tot.porFacturar > 0 && <span className="label__m">Por facturar <span className="num">{eurCorto(Math.round(tot.porFacturar))}</span></span>}
+          {demo && <span className="label__m aviso" title="Datos de ejemplo: no se escribe nada en la base de datos">Demo</span>}
           <button type="button" className="label__m copy" onClick={() => setNuevo(true)}>+ Cliente</button>
         </p>
         {aviso && <p className="nota">{aviso}</p>}
