@@ -1767,3 +1767,20 @@ Para montar tu carta nos falta la carta actual con los precios al día: no la he
 {{/cambios_url}}Joel
 Cartela$t$
 WHERE marca = 'cartela' AND clave = 'material.recordatorio' AND idioma = 'es';
+
+
+-- ============================================================
+-- MIGRACIÓN: token de Google en la base (2026-10-26, aplicada). Solo aditiva: una tabla nueva de una fila.
+-- «Reconectar Google» en /ajustes guarda aquí el refresh token de joel@joelschneider.io, cifrado
+-- (AES-256-GCM; la clave sale de GMAIL_CLIENT_SECRET, que solo está en Vercel y .env.local).
+-- RLS sin políticas: solo la service role la lee. No está en la lista de /api/db.
+CREATE TABLE IF NOT EXISTS google_token (
+  id SMALLINT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+  cuenta TEXT NOT NULL,
+  token_cifrado TEXT NOT NULL,
+  permisos TEXT[] NOT NULL DEFAULT '{}',
+  estado TEXT NOT NULL DEFAULT 'conectado' CHECK (estado IN ('conectado','caducado')),
+  conectado_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  caducado_at TIMESTAMPTZ
+);
+ALTER TABLE google_token ENABLE ROW LEVEL SECURITY;
