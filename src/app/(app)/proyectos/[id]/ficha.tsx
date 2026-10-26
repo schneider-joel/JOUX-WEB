@@ -17,7 +17,7 @@ import Bienvenida from '../../leads/[id]/bienvenida'
 
 export type MensajeHilo = { id: number; entrante: boolean; estado: string; asunto: string | null; cuerpo: string; error: string | null; plantilla: string | null; auto: boolean; deProyecto: boolean; de: string | null; para: string | null; adjuntos?: { nombre: string; url: string | null }[] }
 export type ItemHilo = { tipo: 'msg'; clave: string; fecha: string; m: MensajeHilo } | { tipo: 'aviso'; clave: string; fecha: string; texto: string }
-type Enlace = { titulo: string; url: string; estado: string; tono: 'ok' | 'aviso' | null; icono: 'gift' | 'pen' | 'chat' | 'folder' | 'globe' }
+type Enlace = { titulo: string; url: string; estado: string; tono: 'ok' | 'aviso' | null; icono: 'gift' | 'pen' | 'chat' | 'folder' | 'globe' | 'doc' }
 export type DatosFicha = {
   p: { id: number; nombre: string; cliente: string; marca: string | null; marcaNombre: string; cerrado: boolean; web: string | null; plan: string | null; status: string; prueba: boolean; fase: FaseProyecto | null; contacto: string | null; email: string | null; created_at: string }
   seg: ProyectoSeguimiento | null      // datos del seguimiento por etapa (null = proyecto sin seguimiento, p. ej. Ambushed/BoldMove)
@@ -235,7 +235,8 @@ export default function Ficha({ d }: { d: DatosFicha }) {
         <h2>{estado.texto}</h2>
         {toca?.sub && <p className="fx__sub">{toca.sub}</p>}
         {toca && cuerpoTarea(toca)}
-        {!toca && s?.agente && s.agente.estado !== 'error' && <div className="fx__agente"><AgenteWeb p={s} /></div>}
+        {/* El estado del agente, solo mientras monta o hay que revisar lo suyo; después su vista previa ya no sirve. */}
+        {!toca && s?.agente && s.agente.estado !== 'error' && s.fase === 'comenzado' && <div className="fx__agente"><AgenteWeb p={s} /></div>}
         {tareas.length > 1 && (
           <ul className="fx__mas">
             {tareas.slice(1).map((t, i) => (
@@ -293,7 +294,8 @@ export default function Ficha({ d }: { d: DatosFicha }) {
                 {d.enlaces.map(e => <li key={e.titulo}><a href={e.url} target="_blank" rel="noreferrer"><span>{e.titulo} ↗</span><span className={`fx__tag${e.tono ? ` ${e.tono}` : ''}`}>{e.estado}</span></a></li>)}
               </ul>
             )}
-            {s && <RefEntrega proyectoId={p.id} valor={s.ref_entrega} />}
+            {/* Cartela no tiene herramienta de revisión: sin ref. */}
+            {s && p.marca !== 'cartela' && <RefEntrega proyectoId={p.id} valor={s.ref_entrega} />}
             {s?.encargo_tipo === 'custom' && toca?.panel !== 'brief' && (verBrief ? <BriefPanel p={s} /> : <button type="button" className="copy caps" onClick={() => setVerBrief(true)}>{s.brief ? 'Ver el brief de dirección' : 'Escribir el brief de dirección'} →</button>)}
             {s && (s.material || (s.agente?.estado === 'lista' && s.agente.notas.length > 0)) && (
               <details className="fx__notas"><summary className="copy caps">Notas del agente y material</summary><div className="fx__agente"><AgenteWeb p={s} detalle /></div></details>

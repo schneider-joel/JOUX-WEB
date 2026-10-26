@@ -7,6 +7,7 @@ import { aProyectoAgencia } from '@/lib/marcas'
 import { estadoPrueba } from '@/lib/prueba-gratis'
 import { remitenteLead } from '@/lib/remitentes'
 import { textoEvento } from '@/lib/eventos-texto'
+import { enlaceCambios } from '@/lib/cartela-cambios'
 import Ficha, { type DatosFicha, type ItemHilo } from './ficha'
 
 export const dynamic = 'force-dynamic'
@@ -59,7 +60,17 @@ export default async function ProyectoPage({ params }: { params: { id: string } 
   const enlaces: DatosFicha['enlaces'] = []
   const ultPrueba = prueba?.ajustada || prueba?.lista
   if (ultPrueba?.url) enlaces.push({ titulo: 'Prueba gratis', url: ultPrueba.url, estado: (prueba?.ajustadaEnviada || prueba?.enviada) ? 'Enviada' : 'Sin enviar', tono: (prueba?.ajustadaEnviada || prueba?.enviada) ? 'ok' : null, icono: 'gift' })
-  if (s?.agente?.estado === 'lista' && s.agente.url) enlaces.push({ titulo: MARCAS_TREATMENT.includes(p.marca || '') ? 'Treatment del agente' : 'Primera versión', url: s.agente.url, estado: s.fase === 'comenzado' ? 'Por revisar' : 'Lista', tono: s.fase === 'comenzado' ? 'aviso' : null, icono: 'pen' })
+  // Cartela: la carta publicada, su QR (bucket privado, enlace de 1 h) y el enlace de cambios del cliente. La vista
+  // previa del agente solo mientras se revisa (después ya no existe).
+  if (p.marca === 'cartela') {
+    const { data: local } = await sb.from('cartela_locales').select('slug, url_carta').eq('proyecto_id', id).maybeSingle()
+    if (local?.url_carta) enlaces.push({ titulo: 'Carta', url: local.url_carta, estado: s?.fase === 'entregado' || s?.fase === 'cerrado' ? 'Publicada' : 'Para revisar', tono: null, icono: 'globe' })
+    const { data: qr } = local?.slug ? await sb.storage.from('cartela').createSignedUrl(`qr/${local.slug}.png`, 3600, { download: `QR ${local.slug}.png` }) : { data: null }
+    if (qr?.signedUrl) enlaces.push({ titulo: 'QR para imprimir', url: qr.signedUrl, estado: 'PNG', tono: null, icono: 'doc' })
+    const cambios = await enlaceCambios(id)
+    if (cambios) enlaces.push({ titulo: 'Cambios del cliente', url: cambios, estado: 'Su enlace', tono: null, icono: 'chat' })
+  }
+  if (s?.agente?.estado === 'lista' && s.agente.url && (p.marca !== 'cartela' || s.fase === 'comenzado')) enlaces.push({ titulo: MARCAS_TREATMENT.includes(p.marca || '') ? 'Treatment del agente' : 'Primera versión', url: s.agente.url, estado: s.fase === 'comenzado' ? 'Por revisar' : 'Lista', tono: s.fase === 'comenzado' ? 'aviso' : null, icono: 'pen' })
   const ronda = s?.rondas.length ? s.rondas[s.rondas.length - 1] : null
   if (ronda?.url) enlaces.push({ titulo: `Revisión ${ronda.ronda}`, url: ronda.url, estado: ronda.estado === 'comentada' ? `${ronda.comentarios} comentarios` : ronda.estado === 'abierta' ? 'Esperando al cliente' : 'Cerrada', tono: ronda.estado === 'comentada' ? 'aviso' : null, icono: 'chat' })
   if (p.drive_url) enlaces.push({ titulo: 'Carpeta de Drive', url: p.drive_url, estado: 'Compartida', tono: null, icono: 'folder' })
