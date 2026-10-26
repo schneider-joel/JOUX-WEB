@@ -1795,3 +1795,8 @@ COMMENT ON COLUMN leads.para_empezar IS 'Rediseño comercial, fase 3: lo que el 
 -- dentro si hay datos fiscales, o el enlace /datos si no), primera versión, recordatorio y entrega. {{url}} y el
 -- QR los pone Joux Hub (emails-proyecto.ts). Aplicado con OK de Joel con UPDATE plantillas … WHERE marca = 'cartela'
 -- AND idioma = 'es' AND clave IN ('proyecto.bienvenida', 'revision.lista', 'revision.recordatorio', 'entrega.final').
+
+-- DATOS (2026-10-26): la entrega lleva la factura del pago 2 (bienvenida.ts, clave entrega.final). En las cinco
+-- plantillas entrega.final (arkevo/custom es+en, cartela es) la frase «la factura te llega aparte» pasa a ser
+-- {{#factura_numero}}…te adjunto la factura del segundo 50 %, {{factura_numero}}, por {{factura_total}}…{{/factura_numero}}
+-- con la frase de antes en {{^factura_numero}}. Aplicado con OK de Joel con UPDATE … SET cuerpo = replace(…).
