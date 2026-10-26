@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { cargarWork, type LeadWork, type ProyectoWork } from '@/lib/work-datos'
-import { ETAPAS_VISTA, etapaVista, type Estado } from '@/lib/seguimiento'
+import { ETAPAS_VISTA, etapaVista, nombreCorto, type Estado } from '@/lib/seguimiento'
 import { ETAPAS_LEAD_VISTA, ETIQUETA_ESTADO, etapaLead, hace } from '@/lib/leads'
 
 export const dynamic = 'force-dynamic'
@@ -34,12 +34,8 @@ function TarjetaLead({ l }: { l: LeadWork }) {
   )
 }
 
-// El nombre que Joel reconoce es el del local o estudio («Web La Cola Del Pez · Cartela» → «La Cola Del Pez»),
-// no la razón social del cliente fiscal, que va debajo si es distinta.
-const nombreCorto = (p: ProyectoWork, marca: string) => p.nombre.replace(/^Web\s+/i, '').replace(` · ${marca}`, '').trim() || p.cliente
-
 function TarjetaProyecto({ p, marca }: { p: ProyectoWork; marca: string }) {
-  const titulo = nombreCorto(p, marca)
+  const titulo = nombreCorto(p.nombre, p.cliente, marca)  // la razón social va debajo si es distinta
   const sub = [titulo.toLowerCase() !== p.cliente.toLowerCase() ? p.cliente : null, p.plan, p.precio ? eur(p.precio) : null, p.prueba ? 'prueba' : null].filter(Boolean).join(' · ')
   return (
     <Link href={`/proyectos/${p.id}`} className="wk__card">
@@ -92,7 +88,7 @@ export default async function WorkPage({ searchParams }: { searchParams: { marca
             <details className="wk__cerrados">
               <summary className="copy caps">{[f.cerrados.length && `${f.cerrados.length} cerrado${f.cerrados.length === 1 ? '' : 's'}`, f.perdidos.length && `${f.perdidos.length} perdido${f.perdidos.length === 1 ? '' : 's'} o spam`].filter(Boolean).join(' · ')}</summary>
               <ul className="mk__filas">
-                {f.cerrados.map(p => <li key={`p${p.id}`}><Link href={`/proyectos/${p.id}`}><span>{nombreCorto(p, f.nombre)} <span className="dim">· {p.cliente}</span></span><span className="fx__tag ok">Cerrado</span></Link></li>)}
+                {f.cerrados.map(p => <li key={`p${p.id}`}><Link href={`/proyectos/${p.id}`}><span>{nombreCorto(p.nombre, p.cliente, f.nombre)} <span className="dim">· {p.cliente}</span></span><span className="fx__tag ok">Cerrado</span></Link></li>)}
                 {f.perdidos.map(l => <li key={`l${l.id}`}><Link href={`/leads/${l.id}`}><span>{l.empresa || l.nombre || l.email} <span className="dim">· {hace(l.recibido_en)}</span></span><span className="fx__tag">{ETIQUETA_ESTADO[l.estado]}</span></Link></li>)}
               </ul>
             </details>

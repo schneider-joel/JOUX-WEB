@@ -148,4 +148,7 @@ export function estadoDe(p: ProyectoSeguimiento, pago1Cobrado: boolean): Estado 
     : p.fase === 'entregado' ? 'Esperando el cobro final' : 'Sin etapa'
   return { k: parado ? 'parado' : 'espera', texto: conDias(espera, d) }
 }
+// El nombre que Joel reconoce es el del local o estudio («Web La Cola Del Pez · Cartela» → «La Cola Del Pez»),
+// no la razón social del cliente fiscal.
+export const nombreCorto = (nombre: string, cliente: string, marca: string) => nombre.replace(/^Web\s+/i, '').replace(` · ${marca}`, '').trim() || cliente
 export const ORDEN_ESTADO: Record<Estado['k'], number> = { tu: 0, parado: 1, espera: 2, ok: 3 }

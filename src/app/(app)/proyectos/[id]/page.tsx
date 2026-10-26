@@ -14,7 +14,8 @@ export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
 export const metadata = { title: 'Proyecto · JOUX Hub', robots: { index: false, follow: false } }
 
-// Ficha de un proyecto (rediseño, fase 2): todo lo suyo en una pantalla y la conversación en un panel.
+// Ficha de un proyecto (rediseño comercial, fase 2): etapa, lo que toca, el recorrido y a un lado dinero,
+// enlaces y cliente; la conversación en un panel.
 // Solo lee; las acciones (etapa, emails, agente, Drive, brief) son las mismas de Work › Proyectos.
 export default async function ProyectoPage({ params }: { params: { id: string } }) {
   const id = Number(params.id)
@@ -89,7 +90,7 @@ export default async function ProyectoPage({ params }: { params: { id: string } 
     // Webs y treatments que vienen de un lead: la bienvenida (con la factura del pago 1) se envía desde la ficha del lead.
     bienvenidaPendiente: !!lead && (cerrado || MARCAS_TREATMENT.includes(p.marca || '')) && !msgs.some(m => m.plantilla === 'proyecto.bienvenida' && m.estado === 'enviado'),
     hilo,
-    historial: evs.slice().reverse().filter(e => !['ia.borrador', 'mensaje.descartado', 'lead.estado'].includes(e.tipo)).slice(0, 40).map(e => ({ clave: e.id, fecha: e.created_at, texto: textoEvento(e), aviso: ['web.error', 'mensaje.rebotado', 'prueba.error'].includes(e.tipo) })),
+    historial: evs.slice().reverse().filter(e => !['ia.borrador', 'mensaje.descartado', 'lead.estado'].includes(e.tipo)).slice(0, 40).map(e => ({ clave: e.id, tipo: e.tipo, fecha: e.created_at, texto: textoEvento(e), aviso: ['web.error', 'mensaje.rebotado', 'prueba.error'].includes(e.tipo) })),
   }
   return <Ficha d={datos} />
 }

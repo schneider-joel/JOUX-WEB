@@ -1339,3 +1339,42 @@ div.ajustes { display: flex; flex-direction: column; gap: 48px; }
 .wk__cerrados .mk__filas { margin-top: 10px; }
 @media (hover: hover) and (pointer: fine) { .wk__card:hover { border-color: var(--line2); } }
 @media (max-width: 860px) { .wk__carriles { grid-template-columns: 1fr; } }
+
+/* Ficha del proyecto (rediseño comercial, fase 2): barra de 4 etapas, una caja con lo que toca, el recorrido
+   y a un lado dinero, enlaces y cliente. Mismo color que Work: ámbar te toca, rojo parado, gris esperando. */
+.fx__etapa { display: flex; flex-direction: column; gap: 10px; }
+.fx__barra .wk__barra i { height: 6px; border-radius: 3px; }
+.fx__barra .wk__etiqueta { margin-top: 8px; font-size: 12.5px; font-weight: 400; color: var(--dim); }
+.fx__barra .wk__etiqueta .is-ahora { color: var(--text); font-weight: 500; }
+.fx__cambiar { align-self: flex-start; }
+.fx__mover7 { display: flex; flex-direction: column; gap: 12px; padding-top: 6px; }
+.fx__caja { display: flex; flex-direction: column; gap: 12px; padding: 18px 20px; border-radius: 14px; border: 1px solid var(--line2); background: var(--surface); }
+.fx__caja > .caps { color: var(--dim); }
+.fx__caja h2 { font-size: 19px; font-weight: 600; letter-spacing: -.015em; line-height: 1.25; margin: 0; }
+.fx__caja.is-tu { border-color: color-mix(in srgb, var(--amber) 50%, transparent); background: var(--amber-dim); }
+.fx__caja.is-tu > .caps { color: var(--amber); }
+.fx__caja.is-parado { border-color: color-mix(in srgb, var(--red) 45%, transparent); }
+.fx__caja.is-parado > .caps { color: var(--red); }
+.fx__caja .trk__email { margin: 0; }
+.fx__caja .fx__mas { margin: 4px 0 0; }
+.fx__sub { margin: 0; color: var(--muted); font-size: 13.5px; }
+.fx__rec { list-style: none; margin: 0; padding: 0; }
+.fx__rec li { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 12px; padding: 8px 0; align-items: start; position: relative; font-size: 13.5px; }
+.fx__rec li::before { content: ''; position: absolute; left: 8px; top: 26px; bottom: -8px; width: 1px; background: var(--line2); }
+.fx__rec li:last-child::before { display: none; }
+.fx__o { width: 17px; height: 17px; border-radius: 50%; border: 1.5px solid var(--line2); background: var(--bg); display: grid; place-items: center; font-size: 9px; position: relative; z-index: 1; margin-top: 1px; }
+.fx__rec .is-hecho .fx__o { background: var(--muted); border-color: var(--muted); color: var(--bg); }
+.fx__rec .is-hecho.is-aviso .fx__o { background: var(--amber); border-color: var(--amber); }
+.fx__rec .is-ahora .fx__o { border-color: var(--text); box-shadow: 0 0 0 3px var(--hover); }
+.fx__rec .is-ahora.is-tu .fx__o { border-color: var(--amber); box-shadow: 0 0 0 3px var(--amber-dim); }
+.fx__rec .is-ahora.is-tu .caps { color: var(--amber); }
+.fx__rec .is-ahora.is-parado .fx__o { border-color: var(--red); }
+.fx__rec .is-viene { color: var(--dim); }
+.fx__ret { grid-column: 1 / -1; color: var(--dim); padding: 8px 0 2px 30px; }
+.fx__rmas { display: block !important; padding-left: 30px !important; }
+.fx__rmas::before { display: none; }
+.fx__links { list-style: none; margin: -6px 0 12px; padding: 0; }
+.fx__links a { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); color: inherit; text-decoration: none; font-size: 13.5px; }
+.fx__notas { margin-top: 12px; }
+.fx__notas summary { cursor: pointer; list-style: none; width: max-content; }
+.fx__notas summary::-webkit-details-marker { display: none; }
