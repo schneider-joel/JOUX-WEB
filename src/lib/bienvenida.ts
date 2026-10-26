@@ -4,6 +4,8 @@
 //   Treatments de The Pitch Lab: sin factura (se cobra todo a la entrega, desde el timesheet), solo el
 //   formulario de datos fiscales si el cliente es nuevo.
 // - `factura.pago`: cuando el cliente ha mandado sus datos, la factura del pago 1, en el mismo hilo.
+// - `entrega.final` (rediseño comercial, 2026-10-26): la entrega con la factura del pago 2 (50 % al publicar)
+//   en el hilo del lead, y el QR en Cartela. Sustituye a «Facturar pago 2» + un email aparte.
 // La factura sale de crear_factura_pago() (número correlativo, IVA/retención por país, bloqueos de
 // datos fiscales y ROI). Un proyecto de prueba factura con fiscal = false y número PRUEBA-… (ver schema.sql).
 // Nunca se llama sola: solo desde «Emitir y enviar», después de la vista previa.
@@ -17,8 +19,9 @@ import { desglose } from '@/lib/importes'
 import { pdfFactura } from '@/lib/pdf'
 import { nombreArchivoFactura } from '@/app/invoice/[id]/nombre-archivo'
 import { MARCAS_TREATMENT } from '@/lib/seguimiento'
+import { qrCartela } from '@/lib/emails-proyecto'
 
-export const CLAVES_INICIO = ['proyecto.bienvenida', 'factura.pago'] as const
+export const CLAVES_INICIO = ['proyecto.bienvenida', 'factura.pago', 'entrega.final'] as const
 export type ClaveInicio = typeof CLAVES_INICIO[number]
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 // Los enlaces van siempre a producción: desde local, un localhost no le sirve al cliente.
@@ -60,12 +63,15 @@ export async function vistaBienvenida(id: number, clave: ClaveInicio = 'proyecto
   const idioma = p.idioma === 'en' ? 'en' : 'es'
   const remitente = remitenteLead(p.marca || '', idioma)
   if (!remitente) return { error: 'Esta marca no tiene remitente de Gmail', status: 400 }
-  const esFactura = clave === 'factura.pago'
+  const esEntrega = clave === 'entrega.final'
+  // La entrega va con la factura del pago 2; como la del pago 1, necesita los datos fiscales.
+  const esFactura = clave === 'factura.pago' || esEntrega
+  const pago = esEntrega ? 2 : 1
 
   let factura: FacturaBienvenida | null = null, bloqueo: string | null = null, datos_url: string | null = null
   if (p.precio_cerrado != null) {
     const [{ data: f }, { data: cf }] = await Promise.all([
-      sb.from('facturas').select('id, numero, importe, tipo_factura').eq('proyecto_id', p.id).eq('pago', 1).maybeSingle(),
+      sb.from('facturas').select('id, numero, importe, tipo_factura').eq('proyecto_id', p.id).eq('pago', pago).maybeSingle(),
       sb.from('clientes_fiscales').select('pais').eq('cliente', p.cliente).maybeSingle(),
     ])
     // Sin ficha fiscal y con formulario: la bienvenida pide los datos y la factura va después.
@@ -82,7 +88,7 @@ export async function vistaBienvenida(id: number, clave: ClaveInicio = 'proyecto
         else if (!bloqueo && cf?.pais === 'UE') bloqueo = 'Cliente de la UE: sin alta en el ROI, consúltalo con el gestor antes de facturar'
         base = Math.round(Number(p.precio_cerrado) / 2 * 100) / 100
         espana = cf?.pais === 'ES'
-        numero = p.prueba ? `PRUEBA-${p.id}-1` : await numeroPrevisto()
+        numero = p.prueba ? `PRUEBA-${p.id}-${pago}` : await numeroPrevisto()
       }
       const d = desglose(base, espana)
       factura = { id: f?.id ?? null, numero, base, iva: d?.iva ?? 0, ret: d?.ret ?? 0, total: d?.total ?? base, espana, prueba: !!p.prueba }
@@ -103,9 +109,10 @@ export async function vistaBienvenida(id: number, clave: ClaveInicio = 'proyecto
   const faltan = pendientes(t.asunto + t.cuerpo)
   if (!bloqueo && faltan.length) bloqueo = `La plantilla tiene sin rellenar ${faltan.join(', ')}`
 
-  // La factura va en el hilo de la bienvenida: «Re: <asunto de la bienvenida>».
+  // La factura va en el hilo de la bienvenida: «Re: <asunto de la bienvenida>». La entrega, en el hilo del lead
+  // (enviarGmail le pone el asunto del hilo).
   let asunto = t.asunto
-  if (esFactura) {
+  if (clave === 'factura.pago') {
     const { data: b } = await sb.from('mensajes').select('asunto').eq('proyecto_id', p.id).eq('plantilla', 'proyecto.bienvenida').eq('estado', 'enviado').eq('canal', 'gmail').limit(1).maybeSingle()
     if (b?.asunto) asunto = `Re: ${b.asunto.replace(/^re:\s*/i, '')}`
   }
@@ -149,10 +156,11 @@ export async function enviarBienvenida(id: number, origen: string, clave: ClaveI
       const { data } = await sb.from('facturas').select('id, numero, importe, tipo_factura').eq('id', v.factura.id).single()
       factura = data
     } else {
-      const { data, error } = await sb.rpc('crear_factura_pago', { p_proyecto: id, p_pago: 1 })
+      const pago = clave === 'entrega.final' ? 2 : 1
+      const { data, error } = await sb.rpc('crear_factura_pago', { p_proyecto: id, p_pago: pago })
       if (error || !data) { await sb.from('mensajes').delete().eq('id', fila.id); return { error: error?.message || 'No se pudo crear la factura', status: 400 } }
       factura = data
-      await sb.from('eventos').insert({ proyecto_id: id, lead_id: p.lead_id, tipo: 'factura.emitida', fuente: 'joux-hub', datos: { factura_id: data.id, numero: data.numero, pago: 1, base: Number(data.importe), prueba: !!p.prueba } })
+      await sb.from('eventos').insert({ proyecto_id: id, lead_id: p.lead_id, tipo: 'factura.emitida', fuente: 'joux-hub', datos: { factura_id: data.id, numero: data.numero, pago, base: Number(data.importe), prueba: !!p.prueba } })
     }
   }
 
@@ -170,18 +178,28 @@ export async function enviarBienvenida(id: number, origen: string, clave: ClaveI
     },
   })
   if ('error' in t) return fallo(String(t.error), Number(t.status) || 500)
-  // La bienvenida abre hilo nuevo; la factura responde en el de la bienvenida.
-  const hilo = clave === 'factura.pago' ? lead?.gmail_hilo ?? null : null
+  // La bienvenida abre hilo nuevo; la factura y la entrega responden en el del lead.
+  const hilo = clave === 'proyecto.bienvenida' ? null : lead?.gmail_hilo ?? null
+  // Cartela: el QR para imprimir va con la entrega.
+  const qr = clave === 'entrega.final' ? await qrCartela(id).catch(() => null) : null
 
   try {
     const r = await enviarGmail({
-      de: v.remitente, para: v.para, asunto: v.asunto, texto: t.cuerpo, html: aHtml(t.cuerpo), hilo,
-      adjuntos: pdf && factura ? [{ nombre: `${nombreArchivoFactura(factura.numero, p.cliente)}.pdf`, tipo: 'application/pdf', datos: pdf }] : [],
+      de: v.remitente, para: v.para, asunto: v.asunto, texto: t.cuerpo, html: aHtml(t.cuerpo), hilo, mismoAsunto: clave === 'entrega.final',
+      adjuntos: [...(pdf && factura ? [{ nombre: `${nombreArchivoFactura(factura.numero, p.cliente)}.pdf`, tipo: 'application/pdf', datos: pdf }] : []), ...(qr ? [qr] : [])],
     })
     const ahora = new Date().toISOString()
-    await sb.from('mensajes').update({ id_proveedor: r.id, enviado_en: ahora, cuerpo: t.cuerpo, error: null }).eq('id', fila.id)
+    await sb.from('mensajes').update({ id_proveedor: r.id, enviado_en: ahora, cuerpo: t.cuerpo, asunto: r.asunto, error: null }).eq('id', fila.id)
     // El lead sigue el hilo de estos emails, así el tick lee las respuestas del cliente.
     if (p.lead_id) await sb.from('leads').update({ gmail_hilo: r.hilo, ultimo_contacto: ahora, updated_at: ahora }).eq('id', p.lead_id)
+    // Entrega: fuera los borradores de «Entrega final» sin factura que hubiera preparado un aviso, y la web a «entregado».
+    if (clave === 'entrega.final') {
+      await sb.from('mensajes').update({ estado: 'descartado' }).eq('proyecto_id', id).eq('plantilla', 'entrega.final').eq('estado', 'borrador')
+      if (p.fase && !['entregado', 'cerrado'].includes(p.fase)) {
+        await sb.from('proyectos').update({ fase: 'entregado' }).eq('id', id)
+        await sb.from('eventos').insert({ proyecto_id: id, lead_id: p.lead_id, tipo: 'proyecto.fase', fuente: 'joux-hub', datos: { de: p.fase, a: 'entregado', motivo: 'entrega enviada' } })
+      }
+    }
     await sb.from('eventos').insert({ proyecto_id: id, lead_id: p.lead_id, tipo: 'mensaje.enviado', fuente: 'joux-hub', datos: { mensaje_id: fila.id, plantilla: clave, de: v.remitente, para: v.para, asunto: v.asunto, factura: factura?.numero ?? null, pdf: !!pdf, datos_fiscales: !!v.datos_url } })
     // La bienvenida pide el material: el proyecto pasa a esa etapa.
     if (clave === 'proyecto.bienvenida' && (!p.fase || p.fase === 'confirmado')) {

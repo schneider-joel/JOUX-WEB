@@ -34,7 +34,7 @@ async function urlDelProyecto(p: { id: number; marca: string | null; web: string
 // QR de la carta (Cartela): la sesión de Cartela lo sube al publicar a `cartela/qr/<slug>.png` (bucket privado).
 // Va adjunto en la primera versión y en la entrega; si no está, el email sale igual, sin QR.
 const CON_QR = ['revision.lista', 'entrega.final']
-async function qrCartela(proyectoId: number) {
+export async function qrCartela(proyectoId: number) {
   const { data: local } = await sb.from('cartela_locales').select('slug').eq('proyecto_id', proyectoId).maybeSingle()
   if (!local?.slug) return null
   const { data } = await sb.storage.from('cartela').download(`qr/${local.slug}.png`)

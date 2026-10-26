@@ -7,11 +7,13 @@ import type { ClaveInicio, VistaBienvenida } from '@/lib/bienvenida'
 const eur = (n: number) => '€' + new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: 'always' } as unknown as Intl.NumberFormatOptions).format(n)
 
 // Bienvenida al aceptar: vista previa del email (con la carpeta de Drive) y de la factura del pago 1,
-// y «Emitir y enviar». Nada sale ni se factura hasta pulsar el botón (GET/POST /api/proyectos/[id]/bienvenida).
-export default function Bienvenida({ proyectoId, clave = 'proyecto.bienvenida' }: { proyectoId: number; clave?: ClaveInicio }) {
+// y «Emitir y enviar». Con clave «entrega.final», la entrega con la factura del pago 2 (y el QR en Cartela). Nada sale ni se factura hasta pulsar el botón (GET/POST /api/proyectos/[id]/bienvenida).
+export default function Bienvenida({ proyectoId, clave = 'proyecto.bienvenida', abiertoDeEntrada = false }: { proyectoId: number; clave?: ClaveInicio; abiertoDeEntrada?: boolean }) {
   const esFactura = clave === 'factura.pago'
+  const esEntrega = clave === 'entrega.final'
+  const n = esEntrega ? 2 : 1
   const router = useRouter()
-  const [abierto, setAbierto] = useState(false)
+  const [abierto, setAbierto] = useState(abiertoDeEntrada)
   const [v, setV] = useState<VistaBienvenida | null>(null)
   const [enviando, setEnviando] = useState(false)
   const [error, setError] = useState('')
@@ -36,13 +38,13 @@ export default function Bienvenida({ proyectoId, clave = 'proyecto.bienvenida' }
     router.refresh()
   }
 
-  if (hecho) return <p className="nota ok">✉ {esFactura ? 'Factura' : 'Bienvenida'} {hecho}</p>
-  if (!abierto) return <button type="button" className="pill pill--sm" style={{ alignSelf: 'flex-start' }} onClick={() => setAbierto(true)}>{esFactura ? 'Factura del pago 1 →' : 'Bienvenida →'}</button>
+  if (hecho) return <p className="nota ok">✉ {esEntrega ? 'Entrega' : esFactura ? 'Factura' : 'Bienvenida'} {hecho}</p>
+  if (!abierto) return <button type="button" className="pill pill--sm" style={{ alignSelf: 'flex-start' }} onClick={() => setAbierto(true)}>{esEntrega ? 'Entrega con la factura final →' : esFactura ? 'Factura del pago 1 →' : 'Bienvenida →'}</button>
 
   const f = v?.factura
   return (
     <div className="block" style={{ gap: 10 }}>
-      <p className="label caps"><span>{esFactura ? 'Factura del pago 1' : `Bienvenida${f ? ' · factura del pago 1' : v?.datos_url ? ' · pide los datos fiscales' : ''}`}</span><i className="rule" /></p>
+      <p className="label caps"><span>{esEntrega ? 'Entrega · factura del pago 2' : esFactura ? 'Factura del pago 1' : `Bienvenida${f ? ' · factura del pago 1' : v?.datos_url ? ' · pide los datos fiscales' : ''}`}</span><i className="rule" /></p>
       {!v && !error && <p className="nota">Preparando…</p>}
       {v && (
         <>
@@ -64,7 +66,7 @@ export default function Bienvenida({ proyectoId, clave = 'proyecto.bienvenida' }
             <div><dt>De</dt><dd>{v.remitente}</dd></div>
             <div><dt>Para</dt><dd>{v.para || '—'}</dd></div>
             <div><dt>Asunto</dt><dd>{v.asunto}</dd></div>
-            {f && <div><dt>Adjunto</dt><dd>Factura en PDF</dd></div>}
+            {f && <div><dt>Adjunto</dt><dd>Factura del pago {n} en PDF{esEntrega && v.cambios ? ' y el QR (si la carta lo subió)' : ''}</dd></div>}
           </dl>
           <pre className="nota" style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', margin: 0 }}>{v.cuerpo}</pre>
           {v.a_la_entrega && <p className="nota">Sin factura: el treatment se factura entero a la entrega, desde su timesheet.</p>}

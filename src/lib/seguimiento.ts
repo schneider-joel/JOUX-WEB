@@ -141,7 +141,8 @@ export function rondaSiguiente(p: Pick<ProyectoSeguimiento, 'fase' | 'rondas'>):
 }
 export const PASO_ARKEVO_REVISION = 'Se hace en la herramienta de revisión de Arkevo (desde su sesión): al abrir la ronda o entregar, Joux Hub se pone al día solo con su aviso.'
 
-export function estadoDe(p: ProyectoSeguimiento, pago1Cobrado: boolean): Estado {
+// `pago2Emitido`: si ya hay factura del pago 2 (las webs de precio cerrado la emiten con la entrega).
+export function estadoDe(p: ProyectoSeguimiento, pago1Cobrado: boolean, pago2Emitido = true): Estado {
   if (p.fase === 'cerrado') return { k: 'ok', texto: 'Cerrado' }
   const parado = estaParado(p), d = diasDesde(p.desde)
   if (antesDeComenzar(p) && pago1Cobrado && !p.agente) return { k: 'tu', texto: 'Pago 1 cobrado: comenzar' }
@@ -156,6 +157,7 @@ export function estadoDe(p: ProyectoSeguimiento, pago1Cobrado: boolean): Estado 
   if (toca) return { k: 'tu', texto: toca }
   if (p.fase === 'confirmado') return { k: 'tu', texto: 'Enviar la bienvenida' }
   if (p.fase === 'cambios') return { k: 'tu', texto: 'Aplicar cambios y preparar la siguiente ronda' }
+  if (p.fase === 'entregado' && p.precio && !pago2Emitido) return { k: 'tu', texto: 'Envía la entrega con la factura final' }
   const espera = p.fase === 'material' ? 'Esperando el pago 1'
     : p.fase === 'comenzado' ? (p.agente ? 'El agente está montando la primera versión' : 'La primera versión la haces tú')
     : p.fase === 'revision' ? 'Esperando comentarios del cliente'

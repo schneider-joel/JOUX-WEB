@@ -21,10 +21,11 @@ export async function cargarWork() {
     sb.from('leads').select('id, marca, estado, nombre, email, empresa, recibido_en, ultimo_contacto, prueba, para_empezar')
       .or(`estado.in.(${ABIERTOS.join(',')}),and(estado.in.(perdido,spam),recibido_en.gte.${hace60})`)
       .order('recibido_en', { ascending: false }).limit(300),
-    sb.from('facturas').select('proyecto_id').eq('pago', 1).eq('estado', 'cobrada'),
+    sb.from('facturas').select('proyecto_id, pago, estado').in('pago', [1, 2]),
   ])
-  const pago1 = new Set((cobrados || []).map(c => c.proyecto_id as number))
-  const proyectos: ProyectoWork[] = seg.lista.map(p => ({ ...p, estadoVista: estadoDe(p, pago1.has(p.id)) }))
+  const pago1 = new Set((cobrados || []).filter(c => c.pago === 1 && c.estado === 'cobrada').map(c => c.proyecto_id as number))
+  const pago2 = new Set((cobrados || []).filter(c => c.pago === 2).map(c => c.proyecto_id as number))
+  const proyectos: ProyectoWork[] = seg.lista.map(p => ({ ...p, estadoVista: estadoDe(p, pago1.has(p.id), pago2.has(p.id)) }))
   const conEstado: LeadWork[] = ((leads || []) as Omit<LeadWork, 'estadoVista'>[]).map(l => ({ ...l, estadoVista: estadoLead(l) }))
 
   // Marcas que reciben leads o tienen proyectos con etapa (Ambushed/BoldMove no: va por su timesheet).
