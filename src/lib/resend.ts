@@ -9,7 +9,8 @@ export function aHtml(texto: string) {
   return `<div style="font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif;font-size:15px;line-height:1.55;color:#1b1b19;max-width:560px">${parrafos.join('')}</div>`
 }
 
-export async function enviarEmail(m: { de: string; para: string; asunto: string; texto: string }): Promise<{ id?: string; error?: string }> {
+// `adjuntos`: archivos en base64 (p. ej. el QR de una carta de Cartela).
+export async function enviarEmail(m: { de: string; para: string; asunto: string; texto: string; adjuntos?: { filename: string; content: string }[] }): Promise<{ id?: string; error?: string }> {
   const clave = process.env.RESEND_API_KEY
   if (!clave) return { error: 'Falta RESEND_API_KEY' }
   // Las respuestas van al mismo remitente de la marca (que reenvía a joel@joelschneider.io).
@@ -17,7 +18,7 @@ export async function enviarEmail(m: { de: string; para: string; asunto: string;
   const r = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${clave}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: m.de, to: [m.para], reply_to: responder, subject: m.asunto, text: m.texto, html: aHtml(m.texto) }),
+    body: JSON.stringify({ from: m.de, to: [m.para], reply_to: responder, subject: m.asunto, text: m.texto, html: aHtml(m.texto), ...(m.adjuntos?.length ? { attachments: m.adjuntos } : {}) }),
   }).catch(() => null)
   const j = await r?.json().catch(() => ({}))
   if (!r?.ok) return { error: j?.message || 'Resend no respondió' }

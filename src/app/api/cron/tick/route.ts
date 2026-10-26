@@ -13,6 +13,7 @@ import { repetirPasada } from '@/lib/primera-version'
 import { copiarMaterial, revisarSubidas } from '@/lib/drive'
 import { proyectosConEncargo } from '@/lib/primera-version'
 import { avisarMaterial, cuentaComoFoto, guardarAdjuntos } from '@/lib/prueba-gratis'
+import { avanzarPorCobros } from '@/lib/etapas-solas'
 
 export const dynamic = 'force-dynamic'
 // supabase-js usa fetch: sin esto, Next guarda sus respuestas en el Data Cache y la lista sale vieja.
@@ -212,6 +213,8 @@ export async function POST(req: NextRequest) {
   try { resultado.gmail = await leerGmail() } catch (e: any) { console.error('tick gmail', e?.message); resultado.gmail = { error: e?.message || 'error' } }
   try { resultado.envios = await enviarAprobados() } catch (e: any) { console.error('tick envios', e?.message); resultado.envios = { error: e?.message || 'error' } }
   try { resultado.recordatorios = await recordatoriosRevision() } catch (e: any) { console.error('tick recordatorios', e?.message); resultado.recordatorios = { error: e?.message || 'error' } }
+  // Pago 1 cobrado → comenzado (y el agente); pago 2 cobrado → cerrado (rediseño comercial, fase 5).
+  try { resultado.cobros = await avanzarPorCobros() } catch (e: any) { console.error('tick cobros', e?.message); resultado.cobros = { error: e?.message || 'error' } }
   // Archivos que el cliente sube a su carpeta de Drive (solo con drive.metadata.readonly).
   try { resultado.drive = await revisarSubidas() } catch (e: any) { console.error('tick drive', e?.message); resultado.drive = { error: e?.message || 'error' } }
   // Material de las webs encargadas al agente de primera versión (solo con drive.readonly).

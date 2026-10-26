@@ -11,7 +11,33 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 // 'R2' → 2: las plantillas dicen «ronda {{ronda}} de 2».
 export const numeroRonda = (ronda: string) => Number(ronda.replace(/\D/g, '')) || ronda
 
-// Plantilla de un proyecto ya rellenada. Sin `url` se deja {{url}} para que Joel lo pegue.
+// {{url}} sin pegar a mano (rediseño comercial, fase 5): en Cartela, la carta del local; en las revisiones, la
+// última ronda; en la entrega, la web. Si no hay nada, se deja {{url}} para que Joel lo pegue.
+async function urlDelProyecto(p: { id: number; marca: string | null; web: string | null }, clave: string) {
+  if (p.marca === 'cartela') {
+    const { data: local } = await sb.from('cartela_locales').select('url_carta').eq('proyecto_id', p.id).maybeSingle()
+    if (local?.url_carta) return local.url_carta as string
+  }
+  if (clave.startsWith('revision.')) {
+    const { data: r } = await sb.from('revisiones').select('url').eq('proyecto_id', p.id).not('url', 'is', null).order('abierta_en', { ascending: false }).limit(1).maybeSingle()
+    if (r?.url) return r.url as string
+  }
+  if (clave === 'entrega.final' && p.web && /\./.test(p.web)) return /^https?:\/\//.test(p.web) ? p.web : `https://${p.web}`
+  return undefined
+}
+
+// QR de la carta (Cartela): la sesión de Cartela lo sube al publicar a `cartela/qr/<slug>.png` (bucket privado).
+// Va adjunto en la primera versión y en la entrega; si no está, el email sale igual, sin QR.
+const CON_QR = ['revision.lista', 'entrega.final']
+async function qrCartela(proyectoId: number) {
+  const { data: local } = await sb.from('cartela_locales').select('slug').eq('proyecto_id', proyectoId).maybeSingle()
+  if (!local?.slug) return null
+  const { data } = await sb.storage.from('cartela').download(`qr/${local.slug}.png`)
+  if (!data) return null
+  return { filename: `QR ${local.slug}.png`, content: Buffer.from(await data.arrayBuffer()).toString('base64') }
+}
+
+// Plantilla de un proyecto ya rellenada. Sin `url` (ni automática) se deja {{url}} para que Joel lo pegue.
 export async function plantillaProyecto(id: number | string, clave: string, extra: { ronda?: string; url?: string; vars?: Record<string, string | null> } = {}) {
   const { data: p } = await sb.from('proyectos').select('id, nombre, cliente, marca, web, idioma, contacto_email, contacto_nombre, lead_id, drive_url').eq('id', id).maybeSingle()
   if (!p) return { error: 'No existe', status: 404 } as const
@@ -34,7 +60,8 @@ export async function plantillaProyecto(id: number | string, clave: string, extr
   // {{web}}: la web, o el cliente si no hay (los treatments no tienen web).
   // {{cambios_url}}: el enlace de cambios del local (solo Cartela), donde también sube sus fotos.
   const cambios_url = p.marca === 'cartela' ? await enlaceCambios(p.id) : null
-  const vars = { nombre: (p.contacto_nombre || p.cliente).split(' ')[0], web: p.web || p.cliente, ronda, url: extra.url, drive_url: p.drive_url, cambios_url, ...extra.vars }
+  const url = extra.url || await urlDelProyecto(p, clave)
+  const vars = { nombre: (p.contacto_nombre || p.cliente).split(' ')[0], web: p.web || p.cliente, ronda, url, drive_url: p.drive_url, cambios_url, ...extra.vars }
   return { p, t, asunto: rellenar(t.asunto, vars), cuerpo: rellenar(t.cuerpo, vars) }
 }
 
@@ -45,7 +72,9 @@ export async function enviarEmailProyecto(m: {
   // La plantilla rellenada antes de que Joel la toque (para la métrica de ajustes) y si salió sin aprobación.
   original?: { asunto: string; cuerpo: string }; auto?: boolean
 }) {
-  const envio = await enviarEmail({ de: m.remitente, para: m.para, asunto: m.asunto, texto: m.cuerpo })
+  const { data: marca } = CON_QR.includes(m.clave) ? await sb.from('proyectos').select('marca').eq('id', m.proyectoId).maybeSingle() : { data: null }
+  const qr = marca?.marca === 'cartela' ? await qrCartela(m.proyectoId).catch(() => null) : null
+  const envio = await enviarEmail({ de: m.remitente, para: m.para, asunto: m.asunto, texto: m.cuerpo, ...(qr ? { adjuntos: [qr] } : {}) })
   // Un borrador que no sale vuelve a borrador (con el motivo) para reintentarlo desde /proyectos.
   const fila = {
     estado: envio.error ? (m.mensajeId ? 'borrador' : 'error') : 'enviado', remitente: m.remitente, para: m.para, asunto: m.asunto, cuerpo: m.cuerpo,
