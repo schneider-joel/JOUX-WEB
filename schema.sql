@@ -1718,3 +1718,52 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO cartela_locales (nombre, slug, plan, url_carta, prueba)
 VALUES ('Cresta', 'cresta', 'casa', 'https://cartela.live/ejemplos/cresta/', true)
 ON CONFLICT (slug) DO NOTHING;
+
+
+-- ============================================================
+-- MIGRACIÓN: plantillas de Cartela al servicio anual (2026-10-26, aplicada). Solo UPDATE de 3 filas de `plantillas` (marca cartela, es).
+-- Sin Drive y sin pedir fotos por correo: la carta y las fotos salen de su web/Instagram; si quiere mandar fotos
+-- mejores, las sube desde su enlace de cambios ({{cambios_url}}, lo crea «Marcar ganado»). Sin fecha de inicio.
+-- revision.lista, revision.recordatorio y factura.pago no cambian. material.recordatorio se queda para cuando
+-- no encontramos su carta online.
+
+UPDATE plantillas SET asunto = 'Empezamos con tu carta digital', cuerpo = $t$Hola, {{nombre}}:
+
+¡Empezamos! No tienes que preparar nada: tomamos tu carta, el logo y las fotos de tu web y de tu Instagram. Si algo no lo encontramos, te lo pedimos.
+
+{{#cambios_url}}Este es tu enlace de cambios. Guárdalo, es solo para ti: {{cambios_url}}
+Si tienes fotos mejores de los platos, súbelas desde ahí. Y cuando la carta esté publicada, es donde nos pides cualquier cambio: precios, platos, agotados, menú del día u horario. Cambios ilimitados, publicados en 24 h.
+
+{{/cambios_url}}En 5 días laborables te enseñamos una primera versión. La revisas, hacemos una ronda de ajustes y te mandamos la carta publicada y los QR para imprimir.
+
+{{#datos_url}}Para preparar la factura del primer pago (50 %), rellena tus datos de facturación aquí (son dos minutos): {{datos_url}}{{/datos_url}}{{#factura_numero}}Te adjuntamos la factura del primer pago (50 %), {{factura_numero}}, por {{factura_total}}. Los datos para la transferencia están en la propia factura.{{#factura_url}} Si no ves el adjunto, la tienes aquí: {{factura_url}}{{/factura_url}}{{/factura_numero}}
+
+Cualquier duda, responde a este correo.
+
+Joel
+Cartela$t$
+WHERE marca = 'cartela' AND clave = 'proyecto.bienvenida' AND idioma = 'es';
+
+UPDATE plantillas SET cuerpo = $t$Hola, {{nombre}}:
+
+¡Ya está! Tu carta: {{url}}
+
+- Te mandamos los QR listos para imprimir (mesa, barra y escaparate). Si los quieres en otro tamaño, dínoslo.
+{{#cambios_url}}- Para cualquier cambio (precios, platos, agotados, menú del día u horario), usa tu enlace de cambios: {{cambios_url}}. Cambios ilimitados, publicados en 24 h.{{/cambios_url}}{{^cambios_url}}- Para cualquier cambio (precios, platos, agotados, menú del día u horario), escríbenos a hola@cartela.live. Cambios ilimitados, publicados en 24 h.{{/cambios_url}}
+- La factura del segundo 50 % te llega aparte. El primer año incluye el servicio; un mes antes de que se cumpla te avisamos de la renovación.
+
+Una cosa más: ¿nos escribirías dos o tres frases sobre cómo ha ido? Nos ayuda mucho.
+
+Joel
+Cartela$t$
+WHERE marca = 'cartela' AND clave = 'entrega.final' AND idioma = 'es';
+
+UPDATE plantillas SET cuerpo = $t$Hola, {{nombre}}:
+
+Para montar tu carta nos falta la carta actual con los precios al día: no la hemos encontrado en tu web ni en tu Instagram. Respóndenos a este correo con una foto o un PDF y seguimos.
+
+{{#cambios_url}}Si además quieres mandarnos fotos de los platos, súbelas desde tu enlace de cambios: {{cambios_url}}
+
+{{/cambios_url}}Joel
+Cartela$t$
+WHERE marca = 'cartela' AND clave = 'material.recordatorio' AND idioma = 'es';
