@@ -1,19 +1,19 @@
 'use client'
 
-import { createContext, Suspense, useCallback, useContext, useEffect, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import Link from 'next/link'
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { esAgencia, porOrden, type Marca } from '@/lib/marcas'
+import { porOrden, type Marca } from '@/lib/marcas'
 import NotificacionesBoton from './notificaciones-boton'
 import ModoPrivado from './modo-privado'
 import { EstadoBancos, TemaBoton } from './marco'
 import { rutaDeTab } from './rutas'
 
 // Marco del hub (rediseño, fase 1): barra lateral agrupada con iconos, cabecera con migas y, en el
-// móvil, barra inferior. Solo presentación: lee las marcas y cuántos leads esperan, nada más.
-// Las insignias de Facturas y de cada marca las calcula el hub (hub.tsx), igual que antes en sus
-// pestañas, y las publica aquí; se recuerdan en esta pestaña del navegador para el resto de páginas.
+// móvil, barra inferior. Solo presentación: lee las marcas y cuántos leads y proyectos esperan, nada más.
+// Solo Hoy y Proyectos llevan insignia (rediseño comercial). La de Hoy la calcula el hub (hub.tsx) y la
+// publica aquí; se recuerda en esta pestaña del navegador para el resto de páginas.
 
 type Publicado = { insignias?: Record<string, number>; bancosSync?: number | null; actualizar?: () => void; datos?: string }
 const Ctx = createContext<(p: Publicado) => void>(() => {})
@@ -66,13 +66,13 @@ function Entrada({ it, sub }: { it: Item; sub?: boolean }) {
   )
 }
 
-type DatosMenu = { marcas: Marca[]; insignias: Record<string, number>; leads: number }
+type DatosMenu = { marcas: Marca[]; insignias: Record<string, number>; work: number }
 
 // Menú agrupado: el mismo en la barra lateral y en «Más» del móvil.
-function Menu({ datos, marcaQ }: { datos: DatosMenu; marcaQ: string | null }) {
+function Menu({ datos }: { datos: DatosMenu }) {
   const ruta = usePathname()
-  const { marcas, insignias, leads } = datos
-  const marcaAbierta = ruta.match(/^\/work\/([\w-]+)/)?.[1] || (ruta === '/leads' ? marcaQ : ruta.startsWith('/cartela/') ? 'cartela' : null)
+  const { marcas, insignias, work } = datos
+  const marcaAbierta = ruta.match(/^\/work\/([\w-]+)/)?.[1] || (ruta.startsWith('/cartela/') ? 'cartela' : null)
   return (
     <>
       <nav className="sh__grp" aria-label="Inicio">
@@ -81,23 +81,20 @@ function Menu({ datos, marcaQ }: { datos: DatosMenu; marcaQ: string | null }) {
       </nav>
       <nav className="sh__grp" aria-label="Work">
         <span className="sh__h caps">Work</span>
-        <Entrada it={{ href: '/leads', label: 'Leads', icono: I.inbox, n: leads, activo: ruta.startsWith('/leads') && !marcaQ }} />
-        <Entrada it={{ href: '/work', label: 'Proyectos', icono: I.flag, activo: ruta === '/work' || ruta.startsWith('/proyectos/') }} />
+        {/* Leads y proyectos van juntos en Proyectos (rediseño comercial, fase 1). Solo Hoy y Proyectos llevan insignia. */}
+        <Entrada it={{ href: '/work', label: 'Proyectos', icono: I.flag, n: work, activo: ruta === '/work' || ruta.startsWith('/proyectos/') || ruta.startsWith('/leads') }} />
       </nav>
-      {/* Las marcas, aparte de Leads y Proyectos (que son de todas): cada una con su pantalla. */}
+      {/* Las marcas, aparte de Proyectos (que es de todas): cada una con su pantalla de pagos y clientes. */}
       <nav className="sh__grp" aria-label="Marcas">
         <span className="sh__h caps">Marcas</span>
         {marcas.map(m => {
-          const web = esAgencia(m)
           const abierta = marcaAbierta === m.key
           return (
             <div key={m.key} className="sh__marca">
-              <Entrada it={{ href: `/work/${m.key}`, label: m.nombre, icono: ICONO_MARCA[m.key] || I.cube, n: insignias[`${web ? 'mk' : 'ts'}:${m.key}`], tranquilo: !web, activo: false }} />
-              {abierta && (
+              <Entrada it={{ href: `/work/${m.key}`, label: m.nombre, icono: ICONO_MARCA[m.key] || I.cube, activo: ruta === `/work/${m.key}` }} />
+              {abierta && m.key === 'cartela' && (
                 <div className="sh__subs">
-                  <Entrada sub it={{ href: `/work/${m.key}`, label: 'Proyectos', activo: ruta === `/work/${m.key}` }} />
-                  {m.key !== 'ab' && <Entrada sub it={{ href: `/leads?marca=${m.key}`, label: 'Leads', activo: ruta === '/leads' && marcaQ === m.key }} />}
-                  {m.key === 'cartela' && <Entrada sub it={{ href: '/cartela/cambios', label: 'Cambios', activo: ruta === '/cartela/cambios' }} />}
+                  <Entrada sub it={{ href: '/cartela/cambios', label: 'Cambios', activo: ruta === '/cartela/cambios' }} />
                 </div>
               )}
             </div>
@@ -106,7 +103,7 @@ function Menu({ datos, marcaQ }: { datos: DatosMenu; marcaQ: string | null }) {
       </nav>
       <nav className="sh__grp" aria-label="Finanzas">
         <span className="sh__h caps">Finanzas</span>
-        {FINANZAS.map(f => <Entrada key={f.tab} it={{ href: f.href, label: f.label, icono: f.icono, n: insignias[f.tab], activo: ruta === f.href }} />)}
+        {FINANZAS.map(f => <Entrada key={f.tab} it={{ href: f.href, label: f.label, icono: f.icono, activo: ruta === f.href }} />)}
       </nav>
       <nav className="sh__grp sh__pie" aria-label="Más">
         <Entrada it={{ href: '/compartidos', label: 'Compartidos', icono: I.users, activo: ruta === '/compartidos' }} />
@@ -116,8 +113,8 @@ function Menu({ datos, marcaQ }: { datos: DatosMenu; marcaQ: string | null }) {
   )
 }
 
-// Migas: la sección y la página. /leads?marca= y /leads/<id> dicen de qué marca.
-function Migas({ marcas, marcaQ }: { marcas: Marca[]; marcaQ: string | null }) {
+// Migas: la sección y la página. Un lead cuelga de Work › Proyectos.
+function Migas({ marcas }: { marcas: Marca[] }) {
   const ruta = usePathname()
   const nombre = (k: string | null) => (k && marcas.find(m => m.key === k)?.nombre) || k
   const f = FINANZAS.find(x => x.href === ruta)
@@ -126,9 +123,8 @@ function Migas({ marcas, marcaQ }: { marcas: Marca[]; marcaQ: string | null }) {
     : f ? [{ t: 'Finanzas' }, { t: f.label }]
     : ruta === '/work' ? [{ t: 'Work' }, { t: 'Proyectos' }]
     : ruta.startsWith('/work/') ? [{ t: 'Marcas' }, { t: nombre(ruta.split('/')[2]) || '' }]
-    : ruta === '/leads' ? [{ t: 'Work' }, { t: 'Leads', href: marcaQ ? '/leads' : undefined }, ...(marcaQ ? [{ t: nombre(marcaQ) || '' }] : [])]
     : ruta.startsWith('/proyectos/') ? [{ t: 'Work' }, { t: 'Proyectos', href: '/work' }, { t: `#${ruta.split('/')[2]}` }]
-    : ruta.startsWith('/leads/') ? [{ t: 'Work' }, { t: 'Leads', href: '/leads' }, { t: `#${ruta.split('/')[2]}` }]
+    : ruta.startsWith('/leads/') ? [{ t: 'Work' }, { t: 'Proyectos', href: '/work' }, { t: `Lead #${ruta.split('/')[2]}` }]
     : ruta === '/cartela/cambios' ? [{ t: 'Marcas' }, { t: nombre('cartela') || '', href: '/work/cartela' }, { t: 'Cambios' }]
     : ruta === '/compartidos' ? [{ t: 'Compartidos' }]
     : ruta === '/ajustes' ? [{ t: 'Ajustes' }]
@@ -159,18 +155,11 @@ function Hermanas({ marcas }: { marcas: Marca[] }) {
   )
 }
 
-// useSearchParams obliga a un Suspense en las páginas estáticas; mientras, el menú sale sin el filtro.
-function ConQuery({ hijo }: { hijo: (marcaQ: string | null) => React.ReactNode }) {
-  const q = useSearchParams()
-  return <>{hijo(q.get('marca'))}</>
-}
-const conQuery = (hijo: (marcaQ: string | null) => React.ReactNode) => <Suspense fallback={hijo(null)}><ConQuery hijo={hijo} /></Suspense>
-
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const ruta = usePathname()
   const router = useRouter()
   const [marcas, setMarcas] = useState<Marca[]>([])
-  const [leads, setLeads] = useState(0)
+  const [work, setWork] = useState(0)
   const [pub, setPub] = useState<Publicado>({})
   const [mas, setMas] = useState(false)
 
@@ -178,10 +167,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     try { const g = sessionStorage.getItem(CLAVE_INSIGNIAS); if (g) setPub(p => ({ insignias: JSON.parse(g), ...p })) } catch {}
     supabase.from('marcas').select('*').order('created_at').then(({ data }) => { if (data) setMarcas([...(data as Marca[])].sort(porOrden)) })
   }, [])
-  // Leads que esperan a Joel (los mismos que la tarjeta «Leads» del Overview). Se recuenta al cambiar de página.
+  // Leads y proyectos que esperan a Joel (lo mismo que pinta /work). Se recuenta al abrir y al moverse por Work,
+  // no en cada página: la cuenta carga todo el seguimiento.
+  const enWork = ruta === '/work' || ruta.startsWith('/proyectos/') || ruta.startsWith('/leads')
   useEffect(() => {
-    fetch('/api/leads').then(r => r.ok ? r.json() : null).then(j => { if (j) setLeads(j.nuevos?.length || 0) }).catch(() => {})
-  }, [ruta])
+    fetch('/api/work').then(r => r.ok ? r.json() : null).then(j => { if (j) setWork(j.pendientes || 0) }).catch(() => {})
+  }, [enWork ? ruta : ''])
   useEffect(() => { setMas(false) }, [ruta])
   useEffect(() => {
     if (!mas) return
@@ -194,14 +185,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     setPub(prev => ({ ...prev, ...p }))
     if (p.insignias) try { sessionStorage.setItem(CLAVE_INSIGNIAS, JSON.stringify(p.insignias)) } catch {}
   }, [])
-  const datos: DatosMenu = { marcas, insignias: pub.insignias || {}, leads }
+  const datos: DatosMenu = { marcas, insignias: pub.insignias || {}, work }
 
-  // Barra inferior del móvil: Hoy · Work · Leads · Finanzas · Más.
+  // Barra inferior del móvil: Hoy · Proyectos · Finanzas · Más.
   const abajo = [
     { href: '/', label: 'Hoy', icono: I.home, on: ruta === '/', n: pub.insignias?.hoy },
-    { href: '/work', label: 'Work', icono: I.cube, on: ruta.startsWith('/work') || ruta.startsWith('/proyectos/') },
-    { href: '/leads', label: 'Leads', icono: I.inbox, on: ruta.startsWith('/leads'), n: leads },
-    { href: '/finanzas', label: 'Finanzas', icono: I.euro, on: ruta.startsWith('/finanzas'), n: pub.insignias?.facturas },
+    { href: '/work', label: 'Proyectos', icono: I.flag, on: ruta.startsWith('/work') || ruta.startsWith('/proyectos/') || ruta.startsWith('/leads'), n: work },
+    { href: '/finanzas', label: 'Finanzas', icono: I.euro, on: ruta.startsWith('/finanzas') },
   ]
 
   return (
@@ -209,12 +199,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <div className="app shell">
         <aside className="sh__side" aria-label="Menú">
           <Link href="/" className="sh__brand"><i aria-hidden="true">J</i>JOUX HUB</Link>
-          {conQuery(q => <Menu datos={datos} marcaQ={q} />)}
+          <Menu datos={datos} />
         </aside>
 
         <div className="sh__cuerpo">
           <header className="sh__top">
-            {conQuery(q => <Migas marcas={marcas} marcaQ={q} />)}
+            <Migas marcas={marcas} />
             <div className="sh__tools caps">
               <EstadoBancos sync={pub.bancosSync ?? null} />
               {pub.actualizar && <button type="button" className="tgl hit" onClick={pub.actualizar} title={pub.datos ? `Datos de las ${pub.datos}. Volver a cargar` : 'Volver a cargar los datos'}>{I.refresh}<span className="sh__solo-ancho">Actualizar</span></button>}
@@ -241,7 +231,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <>
             <div className="sh__velo" onClick={() => setMas(false)} />
             <div className="sh__hoja" id="sh-mas" role="dialog" aria-label="Menú">
-              {conQuery(q => <Menu datos={datos} marcaQ={q} />)}
+              <Menu datos={datos} />
             </div>
           </>
         )}

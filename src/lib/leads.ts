@@ -48,3 +48,20 @@ export const hace = (iso: string) => {
 }
 
 export const fechaHora = (iso: string) => new Date(iso).toLocaleString('es-ES', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid' })
+
+// ---------- Vista simple de Work (rediseño comercial, fase 1) ----------
+// Los estados abiertos del lead en 3 etapas, y su línea de estado (misma regla de color que los proyectos).
+export const ETAPAS_LEAD_VISTA = ['Nuevo', 'Respondido', 'Propuesta'] as const
+export const etapaLead = (estado: string) => estado === 'propuesta' ? 2 : ['respondido', 'conversacion'].includes(estado) ? 1 : 0
+const DIAS_LEAD_PARADO = 7
+export function estadoLead(l: Pick<Lead, 'estado' | 'recibido_en' | 'ultimo_contacto'>): { k: 'tu' | 'espera' | 'parado' | 'ok'; texto: string } {
+  const desde = l.ultimo_contacto || l.recibido_en
+  const d = Math.max(0, Math.floor((Date.now() - new Date(desde).getTime()) / 86400000))
+  if (l.estado === 'nuevo') return { k: 'tu', texto: 'Sin responder' }
+  if (l.estado === 'borrador') return { k: 'tu', texto: 'Respuesta lista: revísala' }
+  if (l.estado === 'conversacion') return { k: 'tu', texto: 'Ha respondido: contéstale' }
+  if (l.estado === 'ganado') return { k: 'ok', texto: 'Ganado' }
+  if (l.estado === 'perdido' || l.estado === 'spam') return { k: 'ok', texto: ETIQUETA_ESTADO[l.estado] }
+  const texto = `${l.estado === 'propuesta' ? 'Propuesta enviada' : 'Esperando al cliente'}${d > 0 ? ` · ${d} d` : ''}`
+  return { k: d >= DIAS_LEAD_PARADO ? 'parado' : 'espera', texto }
+}

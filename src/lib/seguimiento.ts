@@ -43,6 +43,8 @@ export type ProyectoSeguimiento = {
   agente: AgenteWeb | null      // encargo al agente (diseño, custom o treatment)
   encargo_tipo: TipoEncargo | null  // qué agente le toca al pulsar «Comenzar» (null = lo hace Joel)
   plan: string | null
+  precio: number | null         // precio cerrado (webs); null en los treatments
+  prueba: boolean               // proyecto de prueba de Joel: su factura no tiene validez fiscal
   brief: Brief | null           // brief de dirección (solo custom de Arkevo)
   plantillas: string[]          // emails que tiene su marca (para proponer solo los que existen)
   material: { copiados: number; pendientes: number; errores: { ruta: string; error: string }[] } | null  // copia de Drive para el agente
@@ -117,3 +119,33 @@ export function queToca(p: ProyectoSeguimiento, parado: boolean): string | null 
   return null
 }
 
+
+// ---------- Vista simple de Work (rediseño comercial, fase 1) ----------
+// Las 7 fases de la base se enseñan como 4 etapas. Solo cambia lo que se ve: `proyectos.fase` no se toca.
+export const ETAPAS_VISTA = ['Preparando', 'Revisión', 'Entregado', 'Cobrado'] as const
+const VISTA_DE_FASE: Record<FaseProyecto, number> = { confirmado: 0, material: 0, comenzado: 0, revision: 1, cambios: 1, entregado: 2, cerrado: 3 }
+export const etapaVista = (fase: FaseProyecto | null) => fase ? VISTA_DE_FASE[fase] : 0
+
+// Una sola línea de estado por tarjeta: «tu» = te toca (ámbar), «espera» = esperando a otro (gris),
+// «parado» = lleva más días de la cuenta (rojo), «ok» = cerrado. La usan Work, su insignia y las fichas.
+export type Estado = { k: 'tu' | 'espera' | 'parado' | 'ok'; texto: string }
+const conDias = (texto: string, d: number) => d > 0 ? `${texto} · ${d} d` : texto
+
+export function estadoDe(p: ProyectoSeguimiento, pago1Cobrado: boolean): Estado {
+  if (p.fase === 'cerrado') return { k: 'ok', texto: 'Cerrado' }
+  const parado = estaParado(p), d = diasDesde(p.desde)
+  if (antesDeComenzar(p) && pago1Cobrado && !p.agente) return { k: 'tu', texto: 'Pago 1 cobrado: comenzar' }
+  const comentada = p.rondas.find(r => r.estado === 'comentada')
+  if (comentada) return { k: 'tu', texto: `Aplicar ${comentada.comentarios} comentario${comentada.comentarios === 1 ? '' : 's'} de ${comentada.ronda}` }
+  const toca = queToca(p, parado)
+  if (toca?.startsWith('Parado')) return { k: 'parado', texto: conDias('Parado: manda un recordatorio', d) }
+  if (toca) return { k: 'tu', texto: toca }
+  if (p.fase === 'confirmado') return { k: 'tu', texto: 'Enviar la bienvenida' }
+  if (p.fase === 'cambios') return { k: 'tu', texto: 'Aplicar cambios y preparar la siguiente ronda' }
+  const espera = p.fase === 'material' ? 'Esperando el pago 1'
+    : p.fase === 'comenzado' ? (p.agente ? 'El agente está montando la primera versión' : 'La primera versión la haces tú')
+    : p.fase === 'revision' ? 'Esperando comentarios del cliente'
+    : p.fase === 'entregado' ? 'Esperando el cobro final' : 'Sin etapa'
+  return { k: parado ? 'parado' : 'espera', texto: conDias(espera, d) }
+}
+export const ORDEN_ESTADO: Record<Estado['k'], number> = { tu: 0, parado: 1, espera: 2, ok: 3 }

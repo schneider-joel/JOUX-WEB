@@ -10,7 +10,7 @@ export async function cargarSeguimiento(filtro: { id?: number } = {}) {
   const { data: todas } = await sb.from('marcas').select('key, nombre, orden, modo').order('orden')
   const marcas = (todas || []).filter(m => m.modo === 'cerrado' || MARCAS_TREATMENT.includes(m.key))
   const webs = marcas.filter(m => m.modo === 'cerrado').map(m => m.key)
-  const base = sb.from('proyectos').select('id, nombre, cliente, marca, fase, plan, brief, lead_id, ref_entrega, drive_url, drive_error, created_at')
+  const base = sb.from('proyectos').select('id, nombre, cliente, marca, fase, plan, precio_cerrado, prueba, brief, lead_id, ref_entrega, drive_url, drive_error, created_at')
     .in('marca', marcas.map(m => m.key))
   // La ficha pide un proyecto aunque ya no esté activo ni tenga fase.
   const { data: crudos, error } = await (filtro.id != null ? base.eq('id', filtro.id) : base.or('status.eq.activo,fase.not.is.null'))
@@ -51,7 +51,7 @@ export async function cargarSeguimiento(filtro: { id?: number } = {}) {
       borradores: (borradores || []).filter(m => m.proyecto_id === p.id).map(m => ({ id: m.id, plantilla: m.plantilla || '', error: m.error })),
       agente: agentes.get(p.id) || null,
       encargo_tipo: tipoEncargo(p, (leads || []).find(l => l.id === p.lead_id)),
-      plan: p.plan, brief: (p.brief as Brief | null) || null,
+      plan: p.plan, precio: p.precio_cerrado == null ? null : Number(p.precio_cerrado), prueba: !!p.prueba, brief: (p.brief as Brief | null) || null,
       plantillas: Array.from(new Set((plantillas || []).filter(t => t.marca === p.marca).map(t => t.clave as string))),
       material: (() => {
         const c = (copias || []).filter(x => x.proyecto_id === p.id)

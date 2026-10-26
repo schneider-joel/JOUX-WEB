@@ -610,7 +610,7 @@ export default function Hub({ children }: { children?: React.ReactNode }) {
                 <span className="fx__v">€{fmt(totalPendiente)}</span>
                 <span className={`fx__s${vencidas ? ' aviso' : ''}`}>{vencidas ? `${vencidas} factura${vencidas === 1 ? '' : 's'} vencida${vencidas === 1 ? '' : 's'}` : `${facturasPendientes.length} pendientes`}</span>
               </Link>
-              <Link href="/leads" className="fx__kpi hoy__k">
+              <Link href="/work" className="fx__kpi hoy__k">
                 <span className="fx__l">Leads por atender</span>
                 <span className="fx__v">{hoy ? leadsHoy.length : '…'}</span>
                 <span className="fx__s">{leadsHoy.length ? Array.from(new Set(leadsHoy.map(l => l.sub.split(' · ')[0].replace('Lead de ', '')))).join(' · ') : 'Ninguno esperando'}</span>

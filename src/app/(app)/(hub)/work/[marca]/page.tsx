@@ -87,7 +87,7 @@ export default async function MarcaPage({ params }: { params: { marca: string } 
       <nav className="mk__tabs" aria-label={`Secciones de ${marca.nombre}`}>
         {conTablero && <a href="#tablero" aria-current="page">Proyectos<span>{enMarcha.length}</span></a>}
         <a href="#pagos">{marca.modo === 'cerrado' ? 'Pagos y clientes' : 'Timesheets'}</a>
-        {conLeads && <Link href={`/leads?marca=${marca.key}`}>Leads<span>{(leads || []).length}</span></Link>}
+        {conLeads && <Link href={`/work?marca=${marca.key}`}>Leads<span>{(leads || []).length}</span></Link>}
       </nav>
 
       {conTablero && (
