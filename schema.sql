@@ -1809,3 +1809,11 @@ COMMENT ON COLUMN leads.para_empezar IS 'Rediseño comercial, fase 3: lo que el 
 -- insert into plantillas (clave, marca, idioma, remitente, auto, asunto, cuerpo) values
 -- ('cambio.publicado', 'cartela', 'es', 'Cartela <hola@cartela.live>', false, 'Cambio hecho en tu carta',
 --  E'Hola, {{nombre}}:\n\nYa está: {{nota}}\nLo tienes publicado en {{url}}\n\nJoel · Cartela');
+
+-- DATOS (2026-10-27): Cartela, revisión y entrega separadas (con OK de Joel). Plantillas cartela es:
+-- revision.lista = solo la carta ({{#corregida}}«Aquí tienes la versión corregida»{{/corregida}}{{^corregida}}«Tu carta
+-- ya está montada»{{/corregida}}) y que responda al correo con correcciones; revision.recordatorio sin «la publicamos»;
+-- proyecto.bienvenida y material.recordatorio sin {{cambios_url}} (fotos respondiendo al correo); entrega.final con el
+-- enlace de cambios explicado en dos líneas. configuracion.piloto_auto = {"cartela":["ganar","comenzar_prueba","cambios"]}
+-- (en Cartela aprueba Joel con «Aprobar y entregar»). Prueba #216 devuelta a «comenzado»: borrados los eventos 344–346,
+-- el mensaje 68 y la petición 5.
