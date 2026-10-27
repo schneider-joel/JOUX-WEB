@@ -7,6 +7,11 @@ export const ETIQUETA_ESTADO: Record<EstadoLead, string> = {
 }
 export const esEstadoLead = (x: unknown): x is EstadoLead => typeof x === 'string' && (ESTADOS_LEAD as readonly string[]).includes(x)
 
+// Correos con los que Joel prueba las marcas (rediseño comercial, 2026-10-27): sus leads entran ya como prueba
+// (proyecto y facturas de prueba, numeración PRUEBA-…), y la bienvenida automática no sale si alguno no lo está.
+export const CORREOS_PRUEBA = ['schneiderjoel.js@gmail.com']
+export const esCorreoPrueba = (email: string | null | undefined) => !!email && CORREOS_PRUEBA.includes(email.trim().toLowerCase())
+
 export type Adjunto = { nombre?: string; url: string; bytes?: number; caduca?: string }
 export type Lead = {
   id: number; marca: string; origen: string; id_externo: string | null; estado: EstadoLead

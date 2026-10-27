@@ -53,11 +53,13 @@ export function sinCambios(m: { asunto: string | null; cuerpo: string; asunto_or
 
 // ---------- Piloto automático (rediseño comercial, 2026-10-26) ----------
 // Pasos del recorrido que pueden ir solos, por marca, en `configuracion.piloto_auto` ({"cartela": ["ganar", …]}).
-// Las facturas nunca: la bienvenida con la factura del pago 1 y la entrega con la del pago 2 las envía Joel.
+// Facturas: la del pago 1 solo con el paso «bienvenida» (2026-10-27, petición de Joel para Cartela); la entrega con la
+// del pago 2 la envía siempre Joel.
 // La pausa global (`auto_pausa`) también los para. Todo apagado por defecto.
 const CLAVE_PILOTO = 'piloto_auto'
 export const PASOS_PILOTO = {
   ganar: { titulo: 'Ganar el lead', detalle: 'Cuando «Para empezar» está completo y el cliente acepta: crea el cliente y el proyecto. Luego te toca la bienvenida con la factura.' },
+  bienvenida: { titulo: 'Enviar la bienvenida con la factura', detalle: 'Al ganar el lead (solo o a mano), sale sola la bienvenida con la factura del pago 1; en los proyectos de prueba, la factura de prueba. Si falta algo para facturar, queda para ti.' },
   comenzar_prueba: { titulo: 'Comenzar las pruebas', detalle: 'En proyectos de prueba no llega transferencia: el agente arranca al enviar la bienvenida.' },
   cambios: { titulo: 'Cambios por email', detalle: 'Con la carta ya entregada, los cambios que pida respondiendo al correo pasan al agente de cambios. Las correcciones de la revisión van a «Repetir» en la ficha.' },
   aprobar: { titulo: 'Dar por aprobada', detalle: 'Si el cliente dice que está bien, el proyecto pasa a Entregado y la caja te pide la entrega con la factura.' },

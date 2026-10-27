@@ -4,15 +4,18 @@
 import { randomBytes } from 'crypto'
 import { supabaseServer as sb } from '@/lib/supabase-server'
 import { faltaGanado, filasGanado, formInicial, precioPropuesto, type ClienteFiscal, type FormGanado } from '@/lib/ganado'
-import type { Lead } from '@/lib/leads'
+import { esCorreoPrueba, type Lead } from '@/lib/leads'
 import { crearCarpetaProyecto } from '@/lib/drive'
 import { SUBCARPETAS } from '@/lib/drive-carpetas'
 import { crearLocalCartela } from '@/lib/cartela-cambios'
 import { disenoDelLead } from '@/lib/prueba-gratis'
 import { notificar } from '@/lib/push'
+import { pilotoActivo } from '@/lib/autonomia'
+import { enviarBienvenida } from '@/lib/bienvenida'
 
 type Fallo = { error: string; status: number; proyecto_id?: number }
-export type Ganado = { ok: true; proyecto_id: number; drive: unknown; local: unknown }
+export type Ganado = { ok: true; proyecto_id: number; drive: unknown; local: unknown; bienvenida: Bienvenida }
+type Bienvenida = { enviada: true; factura: string | null } | { error: string } | null
 
 export async function ganarLead(leadId: number | string, form: FormGanado, fuente = 'joux-hub'): Promise<Fallo | Ganado> {
   const { data: lead } = await sb.from('leads').select('id, marca, estado, nombre, email, empresa, pais, idioma, interes, proyecto_id, prueba').eq('id', leadId).maybeSingle()
@@ -56,7 +59,27 @@ export async function ganarLead(leadId: number | string, form: FormGanado, fuent
     ? await crearLocalCartela(nuevo.id, { nombre: lead.empresa || proyecto.cliente, plan: proyecto.plan ?? null, email: lead.email || null, prueba: !!lead.prueba }).catch(e => ({ ok: false as const, error: String(e?.message || e) }))
     : null
   if (local && !local.ok) console.error('ganado/cartela', local.error)
-  return { ok: true, proyecto_id: nuevo.id, drive, local }
+  const bienvenida = await bienvenidaSola(nuevo.id, marca.key, lead)
+  return { ok: true, proyecto_id: nuevo.id, drive, local, bienvenida }
+}
+
+// Piloto «Enviar la bienvenida con la factura» (2026-10-27): al ganar, la bienvenida sale sola con la factura del pago 1
+// (PRUEBA-… en un proyecto de prueba; el comenzar de las pruebas va dentro de enviarBienvenida). Seguro: un lead
+// del correo de prueba de Joel que no esté marcado como prueba nunca factura solo. Si no sale, queda para Joel.
+const PUBLICA = 'https://joux-web.vercel.app'
+async function bienvenidaSola(proyectoId: number, marca: string, lead: { id: number; email: string | null; prueba: boolean | null }): Promise<Bienvenida> {
+  if (!(await pilotoActivo(marca, 'bienvenida'))) return null
+  const nombre = `proyecto-${proyectoId}`
+  if (esCorreoPrueba(lead.email) && !lead.prueba) {
+    await notificar({ titulo: 'Bienvenida sin enviar', cuerpo: 'El lead viene de tu correo de prueba y no está marcado como prueba: no facturo solo.', url: `/leads/${lead.id}`, etiqueta: nombre }).catch(() => {})
+    return { error: 'correo de prueba sin marcar' }
+  }
+  const r = await enviarBienvenida(proyectoId, PUBLICA, 'proyecto.bienvenida').catch(e => ({ error: String(e?.message || e), status: 500 }))
+  if ('error' in r) {
+    await notificar({ titulo: 'La bienvenida no salió sola', cuerpo: `${r.error}. Envíala tú desde la ficha del lead.`, url: `/leads/${lead.id}`, etiqueta: nombre }).catch(() => {})
+    return { error: r.error }
+  }
+  return { enviada: true, factura: r.factura }
 }
 
 // Piloto automático «Ganar el lead»: el mismo formulario que vería Joel en la ficha, relleno con lo que hay (datos
@@ -80,7 +103,9 @@ export async function ganarSolo(leadId: number) {
   const nombre = lead.empresa || lead.nombre || lead.email
   await notificar('error' in r
     ? { titulo: `Tiene todo, pero no se pudo ganar solo · ${nombre}`, cuerpo: `${r.error}. Márcalo ganado tú desde su ficha.`, url: `/leads/${leadId}`, etiqueta: `lead-${leadId}` }
-    : { titulo: `Ganado solo · ${nombre}`, cuerpo: 'Te toca la bienvenida con la factura del pago 1.', url: `/leads/${leadId}`, etiqueta: `lead-${leadId}` }
+    : r.bienvenida && 'enviada' in r.bienvenida
+      ? { titulo: `Ganado y bienvenida enviada · ${nombre}`, cuerpo: `${r.bienvenida.factura ? `Con la factura ${r.bienvenida.factura}.` : 'Sin factura todavía (datos fiscales por formulario).'}`, url: `/proyectos/${r.proyecto_id}`, etiqueta: `lead-${leadId}` }
+      : { titulo: `Ganado solo · ${nombre}`, cuerpo: r.bienvenida ? 'La bienvenida no salió sola: envíala tú.' : 'Te toca la bienvenida con la factura del pago 1.', url: `/leads/${leadId}`, etiqueta: `lead-${leadId}` }
   ).catch(e => console.error('ganar solo push', e?.message))
   return r
 }

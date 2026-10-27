@@ -8,7 +8,8 @@
 //   en el hilo del lead, y el QR en Cartela. Sustituye a «Facturar pago 2» + un email aparte.
 // La factura sale de crear_factura_pago() (número correlativo, IVA/retención por país, bloqueos de
 // datos fiscales y ROI). Un proyecto de prueba factura con fiscal = false y número PRUEBA-… (ver schema.sql).
-// Nunca se llama sola: solo desde «Emitir y enviar», después de la vista previa.
+// Desde «Emitir y enviar» (después de la vista previa) o, con el paso «bienvenida» del piloto encendido en su marca, sola
+// al ganar el lead (bienvenidaSola() en src/lib/ganar.ts). La entrega solo desde «Emitir y enviar».
 import { supabaseServer as sb } from '@/lib/supabase-server'
 import { plantillaProyecto } from '@/lib/emails-proyecto'
 import { pendientes } from '@/lib/emails'

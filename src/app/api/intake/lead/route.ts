@@ -5,6 +5,7 @@ import { notificar } from '@/lib/push'
 import { avisarMaterial, fotosFormulario } from '@/lib/prueba-gratis'
 import { generarBorrador } from '@/lib/ia'
 import { MAX_BYTES_INTAKE as MAX_BYTES, fuenteDeClave } from '@/lib/intake'
+import { esCorreoPrueba } from '@/lib/leads'
 
 export const dynamic = 'force-dynamic'
 // supabase-js usa fetch: sin esto, Next guarda sus respuestas en el Data Cache y la lista sale vieja.
@@ -109,6 +110,8 @@ export async function POST(req: NextRequest) {
     marca: b.marca, origen, id_externo: idExterno, idioma, email, ...contacto,
     interes: b.interes ?? {}, campos: b.campos ?? {}, mensaje, adjuntos,
     consentimiento: b.consentimiento === true,
+    // Joel probando desde su correo de prueba: entra ya como prueba (nada fiscal de verdad).
+    ...(esCorreoPrueba(email) ? { prueba: true } : {}),
     ...(recibidoEn ? { recibido_en: recibidoEn } : {}),
   }).select('id, estado').single()
 

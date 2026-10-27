@@ -5,7 +5,8 @@ import { ganarLead } from '@/lib/ganar'
 export const dynamic = 'force-dynamic'
 // supabase-js usa fetch: sin esto, Next guarda sus respuestas en el Data Cache y la lista sale vieja.
 export const fetchCache = 'force-no-store'
-export const maxDuration = 30
+// Con el piloto «bienvenida», ganar también imprime la factura en PDF y manda el email.
+export const maxDuration = 60
 
 // «Marcar ganado»: cliente fiscal (si es nuevo) + proyecto en fase «confirmado» + lead ganado + evento
 // (ganarLead() en src/lib/ganar.ts, común con el piloto automático).

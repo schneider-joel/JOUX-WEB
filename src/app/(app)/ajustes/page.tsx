@@ -108,10 +108,10 @@ export default async function AjustesPage({ searchParams }: { searchParams: { go
           <Pausa activo={autonomia.pausa} />
         </section>
 
-        {/* Piloto automático: los pasos del recorrido que van solos, por marca. Las facturas siempre las envía Joel. */}
+        {/* Piloto automático: los pasos del recorrido que van solos, por marca. La factura del pago 2 siempre la envía Joel. */}
         <section className="block" aria-label="Piloto automático">
-          <p className="label caps"><span>Piloto automático</span><i className="rule" /><span className="label__m">las facturas siempre las envías tú</span></p>
-          <p className="nota">Junto con «Respuestas a leads» y los emails de abajo, esto hace que un proyecto avance solo. Solo te quedan la bienvenida con la factura del pago 1 y la entrega con la del pago 2. La pausa de arriba lo para todo.</p>
+          <p className="label caps"><span>Piloto automático</span><i className="rule" /><span className="label__m">la entrega con la factura final siempre la envías tú</span></p>
+          <p className="nota">Junto con «Respuestas a leads» y los emails de abajo, esto hace que un proyecto avance solo. Con todo encendido solo te queda aprobar y enviar la entrega con la factura del pago 2. La pausa de arriba lo para todo.</p>
           {(marcas || []).filter(m => m.modo === 'cerrado').map(m => (
             <div key={m.key} className="ajustes__grupo">
               <p className="caps dim">{m.nombre}</p>
