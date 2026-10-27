@@ -59,7 +59,7 @@ const CLAVE_PILOTO = 'piloto_auto'
 export const PASOS_PILOTO = {
   ganar: { titulo: 'Ganar el lead', detalle: 'Cuando «Para empezar» está completo y el cliente acepta: crea el cliente y el proyecto. Luego te toca la bienvenida con la factura.' },
   comenzar_prueba: { titulo: 'Comenzar las pruebas', detalle: 'En proyectos de prueba no llega transferencia: el agente arranca al enviar la bienvenida.' },
-  cambios: { titulo: 'Cambios por email', detalle: 'Si el cliente pide cambios respondiendo al correo, pasan como petición al agente de cambios (Cartela).' },
+  cambios: { titulo: 'Cambios por email', detalle: 'Con la carta ya entregada, los cambios que pida respondiendo al correo pasan al agente de cambios. Las correcciones de la revisión van a «Repetir» en la ficha.' },
   aprobar: { titulo: 'Dar por aprobada', detalle: 'Si el cliente dice que está bien, el proyecto pasa a Entregado y la caja te pide la entrega con la factura.' },
 } as const
 export type PasoPiloto = keyof typeof PASOS_PILOTO

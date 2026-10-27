@@ -7,8 +7,10 @@ import { BUCKET_LEADS, type AdjuntoMensaje } from '@/lib/prueba-gratis'
 
 // Piloto automático en la etapa de proyecto: cada respuesta del cliente en el hilo del lead ganado se clasifica
 // (aprobado, cambios, pregunta, otro). Con el paso del piloto encendido en su marca:
-// - «cambios» en Cartela → petición en la bandeja de cambios (/cartela/cambios), que recoge el agente.
-// - «aprobado» en Revisión o Cambios → etapa Entregado. La entrega con la factura 2 la envía siempre Joel.
+// - «cambios» en una carta en revisión → `correcciones.sugeridas`, que la ficha pone en «Repetir» (siempre en Cartela).
+// - «cambios» en una carta ya entregada → petición en la bandeja de cambios (/cartela/cambios), que recoge el agente.
+// - «aprobado» en Revisión o Cambios → etapa Entregado (en Cartela solo un aviso: «Aprobar y entregar» es de Joel).
+//   La entrega con la factura 2 la envía siempre Joel.
 // Lo demás (o con el paso apagado) solo da el push de siempre, con el resumen de la IA.
 const MODELO = 'claude-sonnet-5-5'
 const cliente = () => new Anthropic({ timeout: 40_000, maxRetries: 1 })
@@ -78,8 +80,9 @@ export async function respuestaEnProyecto(proyectoId: number, leadId: number, me
   const { data: p } = await sb.from('proyectos').select('id, marca, fase, nombre, cliente').eq('id', proyectoId).maybeSingle()
   if (!p?.fase) return false
   const pasos = await Promise.all([pilotoActivo(p.marca, 'cambios'), pilotoActivo(p.marca, 'aprobar')])
-  // Sin ningún paso encendido en su marca no se llama a la IA: el push de siempre basta.
-  if (!pasos.some(Boolean)) return false
+  // Sin ningún paso encendido en su marca no se llama a la IA: el push de siempre basta. En Cartela siempre: las
+  // correcciones de la revisión se preparan para «Repetir».
+  if (!pasos.some(Boolean) && p.marca !== 'cartela') return false
   const [cambiosSolo, aprobarSolo] = pasos
 
   const { data: nuestro } = await sb.from('mensajes').select('cuerpo').eq('lead_id', leadId).eq('direccion', 'saliente').eq('estado', 'enviado')
@@ -89,8 +92,16 @@ export async function respuestaEnProyecto(proyectoId: number, leadId: number, me
   const quien = p.cliente || p.nombre
   await sb.from('eventos').insert({ proyecto_id: p.id, lead_id: leadId, tipo: 'respuesta.clasificada', fuente: 'piloto', datos: { mensaje_id: mensajeId, tipo: c.tipo, resumen: c.resumen.slice(0, 300) } })
 
-  // Con la carta ya publicada (desde la primera versión y durante el año de cambios, también ya cobrada).
-  if (c.tipo === 'cambios' && cambiosSolo && p.marca === 'cartela' && ['revision', 'cambios', 'entregado', 'cerrado'].includes(p.fase)) {
+  // Carta en revisión (o montándose): las correcciones no van a la bandeja de cambios (es del servicio anual), se
+  // dejan escritas en «Repetir» de la ficha para que Joel las revise y las pase al agente (2026-10-27).
+  if (c.tipo === 'cambios' && p.marca === 'cartela' && ['comenzado', 'revision', 'cambios'].includes(p.fase)) {
+    await sb.from('eventos').insert({ proyecto_id: p.id, lead_id: leadId, tipo: 'correcciones.sugeridas', fuente: 'piloto', datos: { mensaje_id: mensajeId, texto: (c.cambios.trim() || texto.trim()).slice(0, 4000), fotos: fotos.length } })
+    await notificar({ titulo: `Correcciones · ${quien}`, cuerpo: `${c.resumen} Revísalas y pulsa «Repetir».`, url: `/proyectos/${p.id}`, etiqueta: `proyecto-${p.id}` })
+    return true
+  }
+
+  // Carta ya entregada (durante el año de cambios, también ya cobrada): a la bandeja, que recoge el agente de cambios.
+  if (c.tipo === 'cambios' && cambiosSolo && p.marca === 'cartela' && ['entregado', 'cerrado'].includes(p.fase)) {
     const { data: local } = await sb.from('cartela_locales').select('id, nombre, prueba').eq('proyecto_id', p.id).neq('estado', 'baja').maybeSingle()
     if (local) {
       const { data: pet, error } = await sb.from('cartela_peticiones').insert({ local_id: local.id, texto: (c.cambios.trim() || texto.trim()).slice(0, 2000) }).select('id').single()
@@ -104,6 +115,12 @@ export async function respuestaEnProyecto(proyectoId: number, leadId: number, me
       }
       console.error('piloto cambios', error?.message)
     }
+  }
+
+  // Cartela: la entrega la aprueba siempre Joel con «Aprobar y entregar»; aquí solo se le avisa.
+  if (c.tipo === 'aprobado' && p.marca === 'cartela' && ['revision', 'cambios'].includes(p.fase)) {
+    await notificar({ titulo: `Da el OK · ${quien}`, cuerpo: `${c.resumen} Pulsa «Aprobar y entregar».`, url: `/proyectos/${p.id}`, etiqueta: `proyecto-${p.id}` })
+    return true
   }
 
   if (c.tipo === 'aprobado' && aprobarSolo && ['revision', 'cambios'].includes(p.fase)) {

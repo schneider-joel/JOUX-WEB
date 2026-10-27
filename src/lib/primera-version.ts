@@ -171,3 +171,25 @@ export async function proyectoAgente(id: number): Promise<{ error: string; statu
   const estado = (await estadosAgente([p.id])).get(p.id) || null
   return { p, estado }
 }
+
+// «Repetir» de una carta de Cartela en revisión (Joel, 2026-10-27): las correcciones del cliente (las pega Joel o
+// las deja la IA de su respuesta) van al agente como encargo nuevo (`pasada` + 1, `repetir` = texto, `anterior` = la
+// carta publicada) y el proyecto vuelve a «Comenzado» (Montando). Al llegar su web-lista sale otra vez el email de
+// revisión, «versión corregida».
+export async function repetirCarta(proyectoId: number, correcciones: string, fuente = 'joux-hub'): Promise<{ ok: true; pasada: number } | { omitido: string }> {
+  const { data: p } = await sb.from('proyectos').select('id, fase, marca, lead_id').eq('id', proyectoId).maybeSingle()
+  if (!p || p.marca !== 'cartela') return { omitido: 'No es una carta de Cartela' }
+  if (!['revision', 'cambios'].includes(p.fase || '')) return { omitido: 'La carta no está en revisión' }
+  const texto = correcciones.trim().slice(0, 4000)
+  if (!texto) return { omitido: 'Escribe las correcciones' }
+  const eventos = await eventosAgente([p.id])
+  const a = estadoAgente(eventos)
+  if (!a || a.tipo !== 'carta') return { omitido: 'Sin encargo de carta' }
+  if (a.estado === 'encargada' || a.estado === 'montandose') return { omitido: 'El agente ya está con otra pasada' }
+  const pasada = a.pasada + 1
+  const { error } = await sb.from('eventos').insert({ proyecto_id: p.id, lead_id: p.lead_id, tipo: 'web.encargo', fuente, datos: { tipo: 'carta', pasada, repetir: texto } })
+  if (error) throw new Error(error.message)
+  const { data: movido } = await sb.from('proyectos').update({ fase: 'comenzado' }).eq('id', p.id).eq('fase', p.fase).select('id').maybeSingle()
+  if (movido) await sb.from('eventos').insert({ proyecto_id: p.id, lead_id: p.lead_id, tipo: 'proyecto.fase', fuente, datos: { de: p.fase, a: 'comenzado', motivo: `correcciones · pasada ${pasada}` } })
+  return { ok: true, pasada }
+}

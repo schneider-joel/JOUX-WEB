@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { cargarWork, type LeadWork, type ProyectoWork } from '@/lib/work-datos'
-import { ETAPAS_VISTA, etapaVista, nombreCorto, type Estado } from '@/lib/seguimiento'
+import { etapasDe, etapaVista, nombreCorto, type Estado } from '@/lib/seguimiento'
 import { ETAPAS_LEAD_VISTA, ETIQUETA_ESTADO, etapaLead, hace } from '@/lib/leads'
 
 export const dynamic = 'force-dynamic'
@@ -40,7 +40,7 @@ function TarjetaProyecto({ p, marca }: { p: ProyectoWork; marca: string }) {
   return (
     <Link href={`/proyectos/${p.id}`} className="wk__card">
       <span className="wk__q"><b>{titulo}</b><span>{sub}</span></span>
-      <Barra etapas={ETAPAS_VISTA} actual={etapaVista(p.fase)} />
+      <Barra etapas={etapasDe(p.marca)} actual={etapaVista(p.fase)} />
       <Estado e={p.estadoVista} />
     </Link>
   )

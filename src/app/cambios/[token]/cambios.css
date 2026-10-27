@@ -50,3 +50,8 @@ html:has(.cz), body:has(.cz) { background: #E9E1CF; }
   .cz__chips button:hover, .cz__ghost:hover { border-color: var(--ink); }
   .cz__send:not(:disabled):hover { background: var(--red-t); }
 }
+.cz__carta { display: flex; align-items: center; gap: 14px; padding: 16px 18px; border-bottom: 1px solid var(--line); background: var(--slip); }
+.cz__carta img { flex: none; width: 96px; height: 96px; border-radius: 10px; background: #fff; border: 1px solid var(--line); image-rendering: pixelated; }
+.cz__carta div { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; min-width: 0; }
+.cz__link { font-weight: 700; color: var(--red-t); text-decoration: none; overflow-wrap: anywhere; }
+.cz__carta .cz__ghost { text-decoration: none; color: var(--ink); }

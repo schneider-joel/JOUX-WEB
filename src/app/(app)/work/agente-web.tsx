@@ -52,7 +52,7 @@ export default function AgenteWeb({ p, detalle = false }: { p: ProyectoSeguimien
   const lista = `${que.charAt(0).toUpperCase()}${que.slice(1)} ${a.tipo === 'treatment' ? 'listo' : 'lista'}`
   return (
     <>
-      {a.estado === 'encargada' && <span className="caps dim trk__agente">Agente · {que} encargada{a.pasada > 1 ? ` otra vez (material nuevo, pasada ${a.pasada})` : ''} {hora(a.fecha)}</span>}
+      {a.estado === 'encargada' && <span className="caps dim trk__agente">Agente · {que} encargada{a.pasada > 1 ? ` otra vez (${a.tipo === 'carta' ? 'correcciones' : 'material nuevo'}, pasada ${a.pasada})` : ''} {hora(a.fecha)}</span>}
       {a.estado === 'montandose' && <span className="caps dim trk__agente">Agente · montando {que}{pasada}</span>}
       {a.estado !== 'lista' && a.anterior && <a href={a.anterior} target="_blank" rel="noreferrer" className="copy caps trk__recordar">Pasada anterior ↗</a>}
       {a.estado === 'lista' && (a.url

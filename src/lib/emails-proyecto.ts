@@ -32,8 +32,9 @@ async function urlDelProyecto(p: { id: number; marca: string | null; web: string
 }
 
 // QR de la carta (Cartela): la sesión de Cartela lo sube al publicar a `cartela/qr/<slug>.png` (bucket privado).
-// Va adjunto en la primera versión y en la entrega; si no está, el email sale igual, sin QR.
-const CON_QR = ['revision.lista', 'entrega.final']
+// Va adjunto solo en la entrega (2026-10-27: la revisión lleva solo la carta); si no está, el email sale igual, sin QR.
+const CON_QR = ['entrega.final']
+const CON_CAMBIOS = ['entrega.final', 'cambio.publicado']
 export async function qrCartela(proyectoId: number) {
   const { data: local } = await sb.from('cartela_locales').select('slug').eq('proyecto_id', proyectoId).maybeSingle()
   if (!local?.slug) return null
@@ -63,8 +64,9 @@ export async function plantillaProyecto(id: number | string, clave: string, extr
     ronda = clave === 'revision.lista' ? (count || 0) + 1 : Math.max(1, count || 0)
   }
   // {{web}}: la web, o el cliente si no hay (los treatments no tienen web).
-  // {{cambios_url}}: el enlace de cambios del local (solo Cartela), donde también sube sus fotos.
-  const cambios_url = p.marca === 'cartela' ? await enlaceCambios(p.id) : null
+  // {{cambios_url}}: el enlace de cambios del local (solo Cartela). Es del servicio anual: solo sale desde la entrega
+  // (2026-10-27); antes, el cliente manda fotos y correcciones respondiendo al correo.
+  const cambios_url = p.marca === 'cartela' && CON_CAMBIOS.includes(clave) ? await enlaceCambios(p.id) : null
   const url = extra.url || await urlDelProyecto(p, clave)
   const vars = { nombre: (p.contacto_nombre || p.cliente).split(' ')[0], web: p.web || p.cliente, ronda, url, drive_url: p.drive_url, cambios_url, ...extra.vars }
   return { p, t, asunto: rellenar(t.asunto, vars), cuerpo: rellenar(t.cuerpo, vars) }

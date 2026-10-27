@@ -16,6 +16,7 @@ const ERRORES: Record<string, string> = {
   limite: 'Hoy ya nos has mandado muchos cambios. Si es urgente, escríbenos a hola@cartela.live.',
   pausado: 'Los cambios de esta carta están en pausa. Escríbenos a hola@cartela.live.',
   enlace: 'Este enlace ya no es válido.',
+  revision: 'Tu carta aún está en revisión: las correcciones, respondiendo a nuestro correo.',
 }
 
 const fecha = (iso: string) => new Date(iso).toLocaleString('es-ES', { weekday: 'long', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid' })
@@ -43,8 +44,8 @@ function Estado({ p }: { p: PeticionPublica }) {
   return <span className="cz__pill"><i />Recibido · lo aplicamos en 24 h laborables</span>
 }
 
-export default function Cambios({ token, nombre, urlCarta, pausado, inicial }: {
-  token: string; nombre: string; urlCarta: string | null; pausado: boolean; inicial: PeticionPublica[]
+export default function Cambios({ token, nombre, urlCarta, conQr, entregada, pausado, inicial }: {
+  token: string; nombre: string; urlCarta: string | null; conQr: boolean; entregada: boolean; pausado: boolean; inicial: PeticionPublica[]
 }) {
   const [lista, setLista] = useState(inicial)
   const [texto, setTexto] = useState('')
@@ -71,10 +72,25 @@ export default function Cambios({ token, nombre, urlCarta, pausado, inicial }: {
   return (
     <main className="cz__app">
       <header className="cz__top">
-        <div><b>{nombre}</b><span>Tu enlace de cambios · solo para ti</span></div>
-        {urlCarta && <a href={urlCarta} target="_blank" rel="noopener">Ver mi carta ↗</a>}
+        <div><b>{nombre}</b><span>Tu carta · enlace solo para ti</span></div>
       </header>
 
+      {(urlCarta || (entregada && conQr)) && (
+        <section className="cz__carta" aria-label="Tu carta">
+          {entregada && conQr && <img src={`/api/cambios/${token}/qr?ver=1`} alt={`QR de la carta de ${nombre}`} width={96} height={96} />}
+          <div>
+            {urlCarta && <a className="cz__link" href={urlCarta} target="_blank" rel="noopener">{urlCarta.replace(/^https?:\/\//, '').replace(/\/$/, '')} ↗</a>}
+            {entregada && conQr && <a className="cz__ghost" href={`/api/cambios/${token}/qr`} download>Descargar el QR</a>}
+          </div>
+        </section>
+      )}
+
+      {!entregada ? (
+        <section className="cz__pane">
+          <h1>Tu carta está en revisión</h1>
+          <p className="cz__sub">Mírala en el móvil y, si quieres corregir algo, respóndenos al correo (puedes mandar fotos). Cuando la demos por buena, aquí tendrás el QR y podrás pedir cambios cuando quieras.</p>
+        </section>
+      ) : (
       <section className="cz__pane">
         <h1>¿Qué cambiamos?</h1>
         <p className="cz__sub">Escríbelo como se lo dirías a un camarero. Lo cambiamos y te avisamos cuando esté en tu carta.</p>
@@ -104,6 +120,7 @@ export default function Cambios({ token, nombre, urlCarta, pausado, inicial }: {
           </article>
         ))}
       </section>
+      )}
     </main>
   )
 }

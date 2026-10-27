@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
       const { count } = await sb.from('proyectos').select('id', { count: 'exact', head: true }).eq('ref_entrega', ref)
       if (!count) refGuardada = !(await sb.from('proyectos').update({ ref_entrega: ref }).eq('id', p.id).is('ref_entrega', null)).error
     }
-    // Carta: URL y QR al local, y el email de primera versión listo para enviar (o enviado, si la plantilla es automática).
+    // Carta: URL y QR al local (el QR se usa en la entrega), y el email de revisión listo para enviar (o enviado, si es automático y sin notas).
     let email: unknown = null
     if (carta && local) {
       await sb.from('cartela_locales').update({ url_carta: url }).eq('id', local.id)
@@ -81,10 +81,13 @@ export async function POST(req: NextRequest) {
         const { error: errQr } = await sb.storage.from('cartela').upload(`qr/${local.slug}.png`, qr, { contentType: 'image/png', upsert: true })
         if (errQr) console.error('agente/web-lista qr', errQr.message)
       }
-      email = await prepararEmailProyecto(p.id, 'revision.lista', { url }, 'agente-web').catch(e => ({ error: e?.message }))
+      // Revisión (Joel, 2026-10-27): el email lleva solo la carta (el QR y el enlace de cambios van con la entrega). Con
+      // notas del agente queda en borrador: Joel añade las preguntas para el local antes de enviarlo.
+      email = await prepararEmailProyecto(p.id, 'revision.lista', { url, vars: { corregida: pasada > 1 ? 'sí' : null } }, 'agente-web', notas.length ? { auto: false } : {})
+        .catch(e => ({ error: e?.message }))
       await notificar({
-        titulo: `Primera versión de ${local.nombre || p.cliente} lista${pasada > 1 ? ` · pasada ${pasada}` : ''}`,
-        cuerpo: `Revisa la carta y envía el email con la URL${qr ? ' y el QR' : ''}.${notas.length ? ` ${notas.length} nota${notas.length === 1 ? '' : 's'} del agente.` : ''}`,
+        titulo: `${pasada > 1 ? 'Versión corregida' : 'Primera versión'} de ${local.nombre || p.cliente} lista${pasada > 1 ? ` · pasada ${pasada}` : ''}`,
+        cuerpo: notas.length ? `Mira las ${notas.length} nota${notas.length === 1 ? '' : 's'} del agente y envía el email de revisión.` : 'El email de revisión ha salido solo.',
         url: `/proyectos/${p.id}`, etiqueta: `proyecto-${p.id}`,
       }).catch(e => console.error('agente/web-lista push', e?.message))
       return json({ ok: true, pasada, url_guardada: true, qr_guardado: !!qr, email }, 201)

@@ -16,14 +16,28 @@ const MAX_TEXTO = 2000
 const MAX_FOTO = 5 * 1024 * 1024
 const TIPOS_FOTO: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/heic': 'heic' }
 
-export type Local = { id: number; nombre: string; slug: string; plan: string; url_carta: string | null; estado: string; prueba: boolean }
+export type Local = { id: number; nombre: string; slug: string; plan: string; url_carta: string | null; estado: string; prueba: boolean; proyecto_id: number | null }
 export type Peticion = { id: number; local_id: number; texto: string; adjuntos: string[]; estado: EstadoPeticion; nota: string | null; created_at: string; actualizada_at: string | null }
 
 export async function localDeToken(token: string): Promise<Local | null> {
   // 64 caracteres hex: cualquier otra cosa ni se consulta.
   if (!/^[0-9a-f]{64}$/.test(token)) return null
-  const { data } = await sb.from('cartela_locales').select('id, nombre, slug, plan, url_carta, estado, prueba').eq('token_cambios', token).maybeSingle()
+  const { data } = await sb.from('cartela_locales').select('id, nombre, slug, plan, url_carta, estado, prueba, proyecto_id').eq('token_cambios', token).maybeSingle()
   return data && data.estado !== 'baja' ? data as Local : null
+}
+
+// El enlace de cambios es del servicio anual: hasta que Joel aprueba y entrega la carta, la página solo dice que está
+// en revisión (las correcciones van respondiendo al correo). Un local sin proyecto (de ejemplo) ya está entregado.
+export async function cartaEntregada(local: Pick<Local, 'proyecto_id'>) {
+  if (!local.proyecto_id) return true
+  const { data } = await sb.from('proyectos').select('fase').eq('id', local.proyecto_id).maybeSingle()
+  return data?.fase === 'entregado' || data?.fase === 'cerrado'
+}
+
+// QR de la carta (lo sube el agente con web-lista a cartela/qr/<slug>.png), para descargarlo desde su página.
+export async function qrDelLocal(local: Pick<Local, 'slug'>) {
+  const { data } = await sb.storage.from(BUCKET_CARTELA).download(`qr/${local.slug}.png`)
+  return data ? Buffer.from(await data.arrayBuffer()) : null
 }
 
 export async function peticionesDe(localId: number, limite = 30) {
@@ -43,6 +57,7 @@ export async function crearPeticion(token: string, texto: string, foto: File | n
   const local = await localDeToken(token)
   if (!local) return { ok: false, error: 'enlace', status: 404 }
   if (local.estado === 'pausado') return { ok: false, error: 'pausado', status: 403 }
+  if (!(await cartaEntregada(local))) return { ok: false, error: 'revision', status: 409 }
   texto = texto.trim().slice(0, MAX_TEXTO)
   if (!texto && !foto) return { ok: false, error: 'vacio', status: 400 }
   if (foto && (!TIPOS_FOTO[foto.type] || foto.size > MAX_FOTO)) return { ok: false, error: 'foto', status: 400 }

@@ -117,7 +117,8 @@ export default async function AjustesPage({ searchParams }: { searchParams: { go
               <p className="caps dim">{m.nombre}</p>
               <ul className="list">
                 {(Object.entries(PASOS_PILOTO) as [keyof typeof PASOS_PILOTO, { titulo: string; detalle: string }][])
-                  .filter(([paso]) => paso !== 'cambios' || m.key === 'cartela')
+                  // «Cambios» es solo de Cartela; en Cartela la aprobación es de Joel («Aprobar y entregar»).
+                  .filter(([paso]) => paso === 'cambios' ? m.key === 'cartela' : paso === 'aprobar' ? m.key !== 'cartela' : true)
                   .map(([paso, d]) => (
                     <li key={paso}><PasoPilotoInterruptor marca={m.key} paso={paso} titulo={d.titulo} detalle={d.detalle} activo={(piloto[m.key] || []).includes(paso)} /></li>
                   ))}

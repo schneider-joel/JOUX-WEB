@@ -38,6 +38,7 @@ export type ProyectoSeguimiento = {
   rondas: { ronda: string; estado: 'abierta' | 'comentada' | 'cerrada'; comentarios: number; abierta_en: string; url: string }[]
   borradores: { id: number; plantilla: string; error: string | null }[]  // emails preparados por un aviso o el cron, sin enviar
   material_completo: boolean    // el cliente respondió «ya está todo» estando en «Material» (se propone «Comenzar»)
+  correcciones: string[]        // carta de Cartela en revisión: correcciones que la IA sacó de sus respuestas (para «Repetir»)
   drive_url: string | null      // carpeta de Drive compartida con el cliente
   drive_error: string | null    // por qué falló el último intento de crearla o compartirla
   agente: AgenteWeb | null      // encargo al agente (diseño, custom o treatment)
@@ -123,6 +124,9 @@ export function queToca(p: ProyectoSeguimiento, parado: boolean): string | null 
 // ---------- Vista simple de Work (rediseño comercial, fase 1) ----------
 // Las 7 fases de la base se enseñan como 4 etapas. Solo cambia lo que se ve: `proyectos.fase` no se toca.
 export const ETAPAS_VISTA = ['Preparando', 'Revisión', 'Entregado', 'Cobrado'] as const
+// Cartela (2026-10-27): las mismas cuatro, con los nombres de una carta.
+export const ETAPAS_CARTA = ['Montando', 'En revisión', 'Entregada', 'Cobrada'] as const
+export const etapasDe = (marca: string | null): readonly string[] => marca === 'cartela' ? ETAPAS_CARTA : ETAPAS_VISTA
 const VISTA_DE_FASE: Record<FaseProyecto, number> = { confirmado: 0, material: 0, comenzado: 0, revision: 1, cambios: 1, entregado: 2, cerrado: 3 }
 export const etapaVista = (fase: FaseProyecto | null) => fase ? VISTA_DE_FASE[fase] : 0
 
@@ -159,13 +163,23 @@ export function estadoDe(p: ProyectoSeguimiento, pago1Cobrado: boolean): Estado 
   if (toca?.startsWith('Parado')) return { k: 'parado', texto: conDias('Parado: manda un recordatorio', d) }
   if (toca) return { k: 'tu', texto: toca }
   if (p.fase === 'confirmado') return { k: 'tu', texto: 'Enviar la bienvenida' }
+  // Carta en revisión con correcciones del cliente: van al agente con «Repetir».
+  if (p.marca === 'cartela' && (p.fase === 'revision' || p.fase === 'cambios') && p.correcciones.length) return { k: 'tu', texto: 'Correcciones del cliente: pásalas al agente con «Repetir»' }
   if (p.fase === 'cambios') return { k: 'tu', texto: 'Aplicar cambios y preparar la siguiente ronda' }
   if (entregaPendiente(p)) return { k: 'tu', texto: 'Envía la entrega con la factura final' }
   const espera = p.fase === 'material' ? 'Esperando el pago 1'
-    : p.fase === 'comenzado' ? (p.agente ? 'El agente está montando la primera versión' : 'La primera versión la haces tú')
-    : p.fase === 'revision' ? 'Esperando comentarios del cliente'
+    : p.fase === 'comenzado' ? enMarcha(p)
+    : p.fase === 'revision' ? (p.marca === 'cartela' ? 'En revisión: esperando correcciones o el OK del cliente' : 'Esperando comentarios del cliente')
     : p.fase === 'entregado' ? 'Esperando el cobro final' : 'Sin etapa'
   return { k: parado ? 'parado' : 'espera', texto: conDias(espera, d) }
+}
+// «Comenzado»: encargada (aún no la ha cogido el agente) no es lo mismo que montándose.
+function enMarcha(p: ProyectoSeguimiento) {
+  if (!p.agente) return 'La primera versión la haces tú'
+  const que = p.agente.tipo === 'carta' && p.agente.pasada > 1 ? 'la carta corregida' : { diseno: 'la primera versión', custom: 'la web custom', treatment: 'el treatment', carta: 'la carta' }[p.agente.tipo]
+  if (p.agente.estado === 'encargada') return `Encargada: el agente recoge ${que} en su próxima pasada`
+  if (p.agente.estado === 'montandose') return `El agente está montando ${que}`
+  return `El agente está con ${que}`
 }
 // El nombre que Joel reconoce es el del local o estudio («Web La Cola Del Pez · Cartela» → «La Cola Del Pez»),
 // no la razón social del cliente fiscal.

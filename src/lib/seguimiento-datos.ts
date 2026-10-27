@@ -23,7 +23,7 @@ export async function cargarSeguimiento(filtro: { id?: number } = {}) {
   const [{ data: leads }, { data: plantillas }, { data: eventos }, { data: mensajes }, { data: borradores }, { data: rondas }, agentes, { data: copias }] = await Promise.all([
     leadIds.length ? sb.from('leads').select('id, interes, campos').in('id', leadIds) : vacio,
     sb.from('plantillas').select('clave, marca'),
-    ids.length ? sb.from('eventos').select('proyecto_id, tipo, datos, created_at').in('proyecto_id', ids).in('tipo', ['proyecto.fase', 'lead.ganado', 'material.completo']).order('created_at') : vacio,
+    ids.length ? sb.from('eventos').select('proyecto_id, tipo, datos, created_at').in('proyecto_id', ids).in('tipo', ['proyecto.fase', 'lead.ganado', 'material.completo', 'correcciones.sugeridas']).order('created_at') : vacio,
     // Los emails salen de `mensajes` (no de los eventos) para saber si Resend avisó luego de un rebote.
     ids.length ? sb.from('mensajes').select('proyecto_id, plantilla, estado, error, enviado_en, auto').in('proyecto_id', ids).eq('direccion', 'saliente').not('enviado_en', 'is', null).order('enviado_en') : vacio,
     ids.length ? sb.from('mensajes').select('id, proyecto_id, plantilla, error').in('proyecto_id', ids).eq('estado', 'borrador').order('created_at') : vacio,
@@ -35,7 +35,7 @@ export async function cargarSeguimiento(filtro: { id?: number } = {}) {
 
   const lista: ProyectoSeguimiento[] = proyectos.map(p => {
     const propios = (eventos || []).filter(e => e.proyecto_id === p.id)
-    const historial = propios.filter(e => e.tipo !== 'material.completo')
+    const historial = propios.filter(e => e.tipo === 'proyecto.fase' || e.tipo === 'lead.ganado')
       .map(e => ({ fase: e.tipo === 'lead.ganado' ? 'confirmado' : (e.datos as { a?: unknown })?.a, fecha: e.created_at as string }))
       .filter((h): h is ProyectoSeguimiento['historial'][number] => esFaseProyecto(h.fase))
     const emails = (mensajes || []).filter(m => m.proyecto_id === p.id)
@@ -43,8 +43,11 @@ export async function cargarSeguimiento(filtro: { id?: number } = {}) {
     const ultimo = [...historial].reverse().find(h => h.fase === p.fase)
     // El cliente avisó por email de que ya lo ha subido todo, después de entrar en «Material».
     const materialCompleto = p.fase === 'material' && propios.some(e => e.tipo === 'material.completo' && e.created_at >= (ultimo?.fecha || p.created_at))
+    // Correcciones de la carta que la IA sacó de sus respuestas desde que entró en la etapa (para «Repetir»).
+    const correcciones = propios.filter(e => e.tipo === 'correcciones.sugeridas' && e.created_at >= (ultimo?.fecha || p.created_at))
+      .map(e => String((e.datos as { texto?: unknown })?.texto || '').trim()).filter(Boolean)
     return {
-      id: p.id, nombre: p.nombre, cliente: p.cliente, marca: p.marca, lead_id: p.lead_id,
+      id: p.id, correcciones, nombre: p.nombre, cliente: p.cliente, marca: p.marca, lead_id: p.lead_id,
       fase: esFaseProyecto(p.fase) ? p.fase : null, desde: ultimo?.fecha || p.created_at, historial, emails,
       ref_entrega: p.ref_entrega, material_completo: materialCompleto, drive_url: p.drive_url, drive_error: p.drive_error,
       rondas: (rondas || []).filter(r => r.proyecto_id === p.id).map(({ proyecto_id, ...r }) => r),

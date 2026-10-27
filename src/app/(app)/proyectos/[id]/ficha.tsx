@@ -4,11 +4,12 @@ import { useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ETIQUETA_FASE, type FaseProyecto } from '@/lib/leads'
-import { ETAPAS_VISTA, NOMBRE_ENCARGO, entregaPendiente, PASO_ARKEVO_REVISION, alComenzar, antesDeComenzar, diasDesde, encargaAgente, estadoDe, estaParado, etapaVista, faltaBrief, nombreCorto, rondaSiguiente, type Estado, type ProyectoSeguimiento } from '@/lib/seguimiento'
+import { etapasDe, NOMBRE_ENCARGO, entregaPendiente, PASO_ARKEVO_REVISION, alComenzar, antesDeComenzar, diasDesde, encargaAgente, estadoDe, estaParado, etapaVista, faltaBrief, nombreCorto, rondaSiguiente, type Estado, type ProyectoSeguimiento } from '@/lib/seguimiento'
 import { EMAIL_AL_ENTRAR, EMAIL_RECORDATORIO, NOMBRE_EMAIL } from '@/lib/emails'
 import { ETIQUETA_PAGO, type Pago } from '@/lib/marcas'
 import EmailPanel from '../../work/email-panel'
 import AgenteWeb from '../../work/agente-web'
+import RevisionCarta from './revision-carta'
 import BriefPanel from '../../work/brief'
 import DriveCarpeta from '../../work/drive-carpeta'
 import RefEntrega from '../../work/ref-entrega'
@@ -43,7 +44,12 @@ const ESTADO_TS: Record<string, string> = { activo: 'Activo', completado: 'Compl
 // Lo que viene después de la etapa en la que está (rediseño comercial, fase 2): pasos genéricos por etapa,
 // con quién los hace. Los de la etapa actual no se enseñan: lo que toca ya sale en la caja de arriba.
 type Paso = { t: string; w: 'tú' | 'agente' | 'cliente' | 'banco' }
-const proximos = (treatment: boolean, agente: boolean): Paso[][] => [
+const proximos = (treatment: boolean, agente: boolean, carta: boolean): Paso[][] => carta ? [
+  [{ t: 'Bienvenida y factura del 50 %', w: 'tú' }, { t: 'Cobro del 50 %', w: 'banco' }, { t: 'Montar la carta', w: 'agente' }],
+  [{ t: 'Email de revisión con la carta', w: 'tú' }, { t: 'Correcciones o el OK', w: 'cliente' }, { t: 'Repetir con las correcciones', w: 'agente' }, { t: 'Aprobar y entregar', w: 'tú' }],
+  [{ t: 'Entrega con QR, enlace de cambios y factura final', w: 'tú' }, { t: 'Cobro del 50 % final', w: 'banco' }],
+  [{ t: 'Cerrado', w: 'tú' }],
+] : [
   treatment
     ? [{ t: 'Bienvenida', w: 'tú' }, { t: 'Material del cliente en Drive', w: 'cliente' }, { t: 'Dos direcciones del treatment', w: agente ? 'agente' : 'tú' }]
     : [{ t: 'Bienvenida y factura del 50 %', w: 'tú' }, { t: 'Cobro del 50 %', w: 'banco' }, { t: 'Primera versión', w: agente ? 'agente' : 'tú' }],
@@ -59,7 +65,7 @@ const HECHOS = ['lead.ganado', 'proyecto.fase', 'factura.emitida', 'mensaje.envi
 // Lo que te toca en este proyecto, de más a menos urgente. La primera va en la caja grande; si es un email,
 // el editor va dentro de la caja.
 type Boton = { texto: string; href?: string; externo?: boolean; hacer?: () => void }
-type Tarea = { titulo: string; sub?: string; email?: { clave: string; mensaje?: number }; panel?: 'brief' | 'agente' | 'drive' | 'aplicada' | 'entrega'; boton?: Boton; enlace?: Boton }
+type Tarea = { titulo: string; sub?: string; email?: { clave: string; mensaje?: number }; panel?: 'brief' | 'agente' | 'drive' | 'aplicada' | 'entrega' | 'repetir'; boton?: Boton; enlace?: Boton; notas?: string[] }
 
 export default function Ficha({ d }: { d: DatosFicha }) {
   const router = useRouter()
@@ -87,7 +93,10 @@ export default function Ficha({ d }: { d: DatosFicha }) {
   const conEntrega = !!s && d.dinero.tipo === 'cerrado' && !d.dinero.unica
   const pendienteEntrega = conEntrega && entregaPendiente(s!)
   const titulo = nombreCorto(p.nombre, p.cliente, p.marcaNombre)
+  const etapas = etapasDe(p.marca)
   const ronda = s?.rondas.length ? s.rondas[s.rondas.length - 1] : null
+  // Carta de Cartela en revisión con su versión lista: «Repetir» con correcciones o «Aprobar y entregar».
+  const cartaEnRevision = !!s && p.marca === 'cartela' && (fase === 'revision' || fase === 'cambios') && s.agente?.estado === 'lista'
 
   // Cambio de etapa: la misma llamada y las mismas reglas que antes (PATCH /api/proyectos/[id]/fase).
   const confirmar = async () => {
@@ -125,14 +134,19 @@ export default function Ficha({ d }: { d: DatosFicha }) {
   if (ronda?.estado === 'comentada') tareas.push({ titulo: `Aplica ${ronda.comentarios} comentario${ronda.comentarios === 1 ? '' : 's'} de ${ronda.ronda}`, panel: 'aplicada', boton: { texto: 'Ya he aplicado los cambios', hacer: () => { setError(''); setAplicar('pide') } }, enlace: ronda.url ? { texto: 'Ver la ronda', href: ronda.url, externo: true } : undefined })
   const siguiente = s ? rondaSiguiente(s) : null
   if (siguiente) tareas.push({ titulo: `Cambios aplicados: abre la ${siguiente} o entrega la web`, sub: PASO_ARKEVO_REVISION, boton: ronda?.url ? { texto: `Ver la ${ronda.ronda}`, href: ronda.url, externo: true } : undefined })
+  if (cartaEnRevision && s!.correcciones.length) tareas.push({ titulo: 'Correcciones del cliente: pásalas al agente', sub: 'Revisa el texto y pulsa «Repetir». Si ya está bien, «Aprobar y entregar».', panel: 'repetir' })
   if (pendienteEntrega) tareas.push({ titulo: 'Envía la entrega con la factura final', sub: `Factura del 50 % restante en PDF${p.marca === 'cartela' ? ' y el QR' : ''}, en la misma conversación con el cliente.`, panel: 'entrega' })
   if (d.bienvenidaPendiente && d.lead) tareas.push({ titulo: 'Envía la bienvenida al cliente', sub: d.dinero.tipo === 'cerrado' ? 'Con la factura del pago 1. Se envía desde la ficha del lead.' : 'Con la carpeta de Drive. Se envía desde la ficha del lead.', boton: { texto: 'Ir a la bienvenida', href: `/leads/${d.lead.id}` } })
   if (s) {
     // El borrador de «Entrega final» sin factura sobra si la entrega va a salir con ella.
-    for (const b of s.borradores.filter(b => !(b.plantilla === 'entrega.final' && pendienteEntrega))) tareas.push({ titulo: `Revisa y envía «${NOMBRE_EMAIL[b.plantilla] || b.plantilla}»`, sub: b.error ? `No salió: ${b.error}` : undefined, email: { clave: b.plantilla, mensaje: b.id } })
+    // El email de revisión de una carta queda en borrador cuando el agente trae notas: van encima, para añadir sus preguntas.
+    for (const b of s.borradores.filter(b => !(b.plantilla === 'entrega.final' && pendienteEntrega))) tareas.push({
+      titulo: `Revisa y envía «${NOMBRE_EMAIL[b.plantilla] || b.plantilla}»`, sub: b.error ? `No salió: ${b.error}` : b.plantilla === 'revision.lista' && s.agente?.estado === 'lista' && s.agente.notas.length ? 'Añade al email lo que haya que preguntar al local.' : undefined,
+      email: { clave: b.plantilla, mensaje: b.id }, notas: b.plantilla === 'revision.lista' && s.agente?.estado === 'lista' ? s.agente.notas : undefined,
+    })
     if (s.agente?.estado === 'error') tareas.push({ titulo: 'El agente no pudo terminar', sub: s.agente.motivo, panel: 'agente' })
     if (fase === 'comenzado' && s.encargo_tipo === 'custom' && !s.agente) tareas.push({ titulo: 'Escribe el brief de dirección', sub: 'El agente de custom empieza al guardarlo', panel: 'brief' })
-    if (s.agente?.estado === 'lista' && fase === 'comenzado') tareas.push({ titulo: `Revisa la ${NOMBRE_ENCARGO[s.agente.tipo]} del agente`, sub: `Terminada el ${fecha(s.agente.fecha)}${s.agente.diseno ? ` · ${s.agente.diseno}` : ''}. ${s.agente.tipo === 'carta' ? 'El email de primera versión ya lleva la URL y el QR.' : 'Cuando esté bien, abre la R1 y pásalo a Revisión.'}`, boton: s.agente.url ? { texto: 'Ver', href: s.agente.url, externo: true } : undefined })
+    if (s.agente?.estado === 'lista' && fase === 'comenzado') tareas.push({ titulo: `Revisa la ${NOMBRE_ENCARGO[s.agente.tipo]} del agente`, sub: `Terminada el ${fecha(s.agente.fecha)}${s.agente.diseno ? ` · ${s.agente.diseno}` : ''}. ${s.agente.tipo === 'carta' ? 'El email de revisión lleva solo la carta (el QR y el enlace de cambios van con la entrega).' : 'Cuando esté bien, abre la R1 y pásalo a Revisión.'}`, boton: s.agente.url ? { texto: 'Ver', href: s.agente.url, externo: true } : undefined })
     if (s.drive_error && !s.drive_url) tareas.push({ titulo: 'No se pudo crear la carpeta de Drive', sub: s.drive_error, panel: 'drive' })
     const rec = fase ? EMAIL_RECORDATORIO[fase] : undefined
     if (estaParado(s) && rec && s.plantillas.includes(rec) && !s.borradores.some(b => b.plantilla === rec) && email?.clave !== rec) tareas.push({ titulo: `Lleva ${diasDesde(s.desde)} días en ${ETIQUETA_FASE[fase!]}`, sub: 'Puedes mandarle un recordatorio', boton: { texto: 'Preparar recordatorio', hacer: () => { setEmail({ clave: rec }); setCerrada(false) } } })
@@ -143,12 +157,19 @@ export default function Ficha({ d }: { d: DatosFicha }) {
   // Recorrido: lo hecho (del historial, en orden), lo de ahora y lo que viene.
   const hechos = d.historial.filter(h => HECHOS.includes(h.tipo) || h.tipo.startsWith('revision.')).reverse()
   const hechosVista = verTodo ? hechos : hechos.slice(-8)
-  const viene = s ? proximos(treatment, !!s.encargo_tipo).slice(etapa + 1).flatMap((pasos, i) => pasos.map(x => ({ ...x, etapa: ETAPAS_VISTA[etapa + 1 + i] }))) : []
+  const viene = s ? proximos(treatment, !!s.encargo_tipo, p.marca === 'cartela').slice(etapa + 1).flatMap((pasos, i) => pasos.map(x => ({ ...x, etapa: etapas[etapa + 1 + i] }))) : []
 
   const boton = (b: Boton, clase = 'pill pill--sm') => b.href
     ? (b.externo ? <a className={clase} href={b.href} target="_blank" rel="noreferrer">{b.texto} ↗</a> : <Link className={clase} href={b.href}>{b.texto}</Link>)
     : <button type="button" className={clase} onClick={b.hacer}>{b.texto}</button>
   const cuerpoTarea = (t: Tarea): ReactNode => {
+    if (t.email && !cerrada && t.notas?.length) return (
+      <>
+        <details className="fx__notas" open><summary className="copy caps">{t.notas.length} nota{t.notas.length === 1 ? '' : 's'} del agente</summary><ol className="fx__notas-lista">{t.notas.map((n, i) => <li key={i}>{n}</li>)}</ol></details>
+        <EmailPanel key={`${t.email.clave}-${t.email.mensaje ?? ''}`} proyectoId={p.id} clave={t.email.clave} mensajeId={t.email.mensaje} onCerrar={() => { setCerrada(true); setEmail(null) }} />
+      </>
+    )
+    if (t.panel === 'repetir' && s) return <RevisionCarta proyectoId={p.id} correcciones={s.correcciones} url={s.agente?.estado === 'lista' ? s.agente.url : null} />
     if (t.email && !cerrada) return <EmailPanel key={`${t.email.clave}-${t.email.mensaje ?? ''}`} proyectoId={p.id} clave={t.email.clave} mensajeId={t.email.mensaje} onCerrar={() => { setCerrada(true); setEmail(null) }} />
     if (t.email) return <button type="button" className="pill pill--sm" onClick={() => setCerrada(false)}>Abrir el email</button>
     if (t.panel === 'brief' && s) return <BriefPanel p={s} />
@@ -189,9 +210,9 @@ export default function Ficha({ d }: { d: DatosFicha }) {
       {/* Etapa: 4 tramos. Las 7 fases de la base quedan plegadas en «Cambiar etapa» para moverlas a mano. */}
       {s && (
         <section className="fx__etapa" id="fx-etapas" aria-label="Etapa">
-          <div className="wk__etapas fx__barra" style={{ ['--n' as string]: ETAPAS_VISTA.length }}>
-            <span className="wk__barra" aria-hidden="true">{ETAPAS_VISTA.map((e, i) => <i key={e} className={fase === 'cerrado' || i < etapa ? 'is-hecho' : i === etapa ? 'is-ahora' : ''} />)}</span>
-            <span className="wk__etiqueta">{ETAPAS_VISTA.map((e, i) => <span key={e} className={i === etapa ? 'is-ahora' : ''}>{e}</span>)}</span>
+          <div className="wk__etapas fx__barra" style={{ ['--n' as string]: etapas.length }}>
+            <span className="wk__barra" aria-hidden="true">{etapas.map((e, i) => <i key={e} className={fase === 'cerrado' || i < etapa ? 'is-hecho' : i === etapa ? 'is-ahora' : ''} />)}</span>
+            <span className="wk__etiqueta">{etapas.map((e, i) => <span key={e} className={i === etapa ? 'is-ahora' : ''}>{e}</span>)}</span>
           </div>
           <button type="button" className="copy caps fx__cambiar" aria-expanded={verEtapas} onClick={() => { setVerEtapas(!verEtapas); setMover(null) }}>{verEtapas ? 'Cerrar' : 'Cambiar etapa'}</button>
           {verEtapas && (
@@ -237,6 +258,7 @@ export default function Ficha({ d }: { d: DatosFicha }) {
         {toca && cuerpoTarea(toca)}
         {/* El estado del agente, solo mientras monta o hay que revisar lo suyo; después su vista previa ya no sirve. */}
         {!toca && s?.agente && s.agente.estado !== 'error' && s.fase === 'comenzado' && <div className="fx__agente"><AgenteWeb p={s} /></div>}
+        {!toca && cartaEnRevision && <RevisionCarta proyectoId={p.id} correcciones={s!.correcciones} url={s!.agente?.estado === 'lista' ? s!.agente.url : null} />}
         {tareas.length > 1 && (
           <ul className="fx__mas">
             {tareas.slice(1).map((t, i) => (
