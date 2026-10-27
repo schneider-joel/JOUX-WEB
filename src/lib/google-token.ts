@@ -7,12 +7,14 @@ import { supabaseServer as sb } from '@/lib/supabase-server'
 import { notificar } from '@/lib/push'
 
 export const CUENTA_GOOGLE = 'joel@joelschneider.io'
-// Los 4 de siempre: Gmail (enviar y leer hilos de leads) y Drive (carpetas que crea la app y nombres de lo que sube el cliente).
+// Gmail (enviar y leer hilos de leads) y Drive: carpetas que crea la app, nombres de lo que sube el cliente y, desde el
+// 2026-10-27, su contenido (drive.readonly) para copiar el material al agente de primera versión (copiarMaterial()).
 export const PERMISOS_GOOGLE = [
   'https://www.googleapis.com/auth/gmail.send',
   'https://www.googleapis.com/auth/gmail.readonly',
   'https://www.googleapis.com/auth/drive.file',
   'https://www.googleapis.com/auth/drive.metadata.readonly',
+  'https://www.googleapis.com/auth/drive.readonly',
 ]
 export const rutaCallback = (origen: string) => `${origen}/api/google/callback`
 
