@@ -1817,3 +1817,9 @@ COMMENT ON COLUMN leads.para_empezar IS 'Rediseño comercial, fase 3: lo que el 
 -- enlace de cambios explicado en dos líneas. configuracion.piloto_auto = {"cartela":["ganar","comenzar_prueba","cambios"]}
 -- (en Cartela aprueba Joel con «Aprobar y entregar»). Prueba #216 devuelta a «comenzado»: borrados los eventos 344–346,
 -- el mensaje 68 y la petición 5.
+
+-- DATOS (2026-10-27, con OK de Joel): Cartela pide el material de marca en el primer correo (contexto de la IA).
+-- proyecto.bienvenida (cartela, es): «¡Empezamos! En 5 días laborables te enseñamos la primera versión de tu carta. Si
+-- tienes logo, guía de marca o fotos del local y de los platos que aún no nos hayas mandado, respóndenos con ellos; si no,
+-- seguimos con lo de tu web e Instagram.» Bucket `leads`: allowed_mime_types + 'application/postscript' (logos .ai/.eps).
+-- Prueba Vermudez #27 / proyecto 217 borrada entera (lead, proyecto, PRUEBA-217-1 y -2, cliente, local 5, QR).

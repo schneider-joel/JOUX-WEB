@@ -25,6 +25,8 @@ const MAX_BYTES = 25 * 1024 * 1024
 // Por extensión: Gmail a veces manda las HEIC del iPhone como application/octet-stream.
 const TIPOS: Record<string, string> = {
   jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', heic: 'image/heic', heif: 'image/heif', svg: 'image/svg+xml', pdf: 'application/pdf',
+  // Logos en vector (Cartela pide el material de marca en el primer correo): se guardan, pero no cuentan como fotos.
+  ai: 'application/postscript', eps: 'application/postscript',
 }
 // Las imágenes pequeñas pegadas en el cuerpo suelen ser la firma: se guardan, pero no cuentan como material.
 const MIN_BYTES_FOTO_EN_LINEA = 20 * 1024
