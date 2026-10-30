@@ -69,7 +69,7 @@ export async function resumenDiario({ forzar = false } = {}) {
     if (hora < HORA) return { omitido: 'antes de las 8' }
     const { data: conf } = await sb.from('configuracion').select('valor').eq('clave', CLAVE_FECHA).maybeSingle()
     if (conf?.valor === fecha) return { omitido: 'ya enviado hoy' }
-    // Se marca antes de enviar: si algo falla a medias no se repite cada 15 minutos.
+    // Se marca antes de enviar: si algo falla a medias no se repite en cada tick.
     await sb.from('configuracion').upsert({ clave: CLAVE_FECHA, valor: fecha }, { onConflict: 'clave' })
   }
   const r = await pendienteHoy()

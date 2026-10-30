@@ -21,7 +21,7 @@ export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
 export const maxDuration = 60
 
-// Tick del cron (Worker de Cloudflare `joux-cron`, cada 15 min). Público en el middleware: valida
+// Tick del cron (Worker de Cloudflare `joux-cron`, cada 5 min). Público en el middleware: valida
 // CRON_TICK_SECRET (distinta de CRON_SECRET, que es del cron de bancos). Se puede llamar las veces
 // que haga falta: los mensajes de Gmail no se duplican (índice único por id_proveedor) y los
 // envíos se reservan con un cambio de estado condicional.

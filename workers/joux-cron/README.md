@@ -1,6 +1,6 @@
 # joux-cron
 
-Worker de Cloudflare con cron cada 15 min que llama a `POST https://joux-web.vercel.app/api/cron/tick` (automatización, fase 2). El tick lee las respuestas de los leads en Gmail y envía los mensajes `aprobado` que ya tocan. Es idempotente: se puede disparar a mano sin miedo.
+Worker de Cloudflare con cron cada 5 min (antes 15; cambiado el 2026-10-26) que llama a `POST https://joux-web.vercel.app/api/cron/tick` (automatización, fase 2). El tick lee las respuestas de los leads en Gmail y envía los mensajes `aprobado` que ya tocan. Es idempotente: se puede disparar a mano sin miedo.
 
 - Secreto `CRON_TICK_SECRET`: el mismo valor que en `.env.local` y en Vercel. Se pone sin imprimirlo, desde la raíz de joux-hub:
 

@@ -1,4 +1,4 @@
-# Cron de Joux Hub: cada 15 min llama a POST /api/cron/tick (lee respuestas de Gmail y envía lo aprobado).
+# Cron de Joux Hub: cada 5 min llama a POST /api/cron/tick (lee respuestas de Gmail y envía lo aprobado).
 # Vercel Hobby solo permite crons diarios; por eso va aquí. Publicar desde esta carpeta con:  npx wrangler deploy
 # Secreto (una vez, sin imprimirlo):  ver README.md
 name = "joux-cron"
@@ -11,4 +11,4 @@ preview_urls = false
 JOUX_TICK_URL = "https://joux-web.vercel.app/api/cron/tick"
 
 [triggers]
-crons = ["*/15 * * * *"]
+crons = ["*/5 * * * *"]
