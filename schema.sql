@@ -1863,3 +1863,5 @@ CREATE INDEX IF NOT EXISTS cartela_accesos_local ON cartela_accesos (local_id, t
 -- DATOS (2026-11-02, con OK de Joel): Cresta (local 1, prueba) con email_aviso = schneiderjoel.js@gmail.com para probar el acceso por correo.
 -- DATOS (2026-11-02, con OK de Joel): Cresta (local 1, prueba) con url_carta = https://cresta.cartela.live/ (Worker de prueba
 -- carta-cresta) para probar los cambios desde la carta. Al terminar: devolverla a https://cartela.live/ejemplos/cresta/.
+-- DATOS (2026-11-02, con OK de Joel): prueba terminada. Worker carta-cresta borrado, url_carta de Cresta de vuelta a
+-- https://cartela.live/ejemplos/cresta/ y sus sesiones de prueba revocadas (cartela_accesos.revocado = true).
