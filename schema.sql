@@ -1861,3 +1861,5 @@ CREATE TABLE IF NOT EXISTS cartela_accesos (
 ALTER TABLE cartela_accesos ENABLE ROW LEVEL SECURITY;
 CREATE INDEX IF NOT EXISTS cartela_accesos_local ON cartela_accesos (local_id, tipo, created_at DESC);
 -- DATOS (2026-11-02, con OK de Joel): Cresta (local 1, prueba) con email_aviso = schneiderjoel.js@gmail.com para probar el acceso por correo.
+-- DATOS (2026-11-02, con OK de Joel): Cresta (local 1, prueba) con url_carta = https://cresta.cartela.live/ (Worker de prueba
+-- carta-cresta) para probar los cambios desde la carta. Al terminar: devolverla a https://cartela.live/ejemplos/cresta/.
