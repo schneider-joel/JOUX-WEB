@@ -8,6 +8,7 @@ import { estadoPrueba } from '@/lib/prueba-gratis'
 import { remitenteLead } from '@/lib/remitentes'
 import { textoEvento } from '@/lib/eventos-texto'
 import { enlaceCambios } from '@/lib/cartela-cambios'
+import { PIEZAS, rutaPieza, type Pieza } from '@/lib/cartela-piezas'
 import Ficha, { type DatosFicha, type ItemHilo } from './ficha'
 
 export const dynamic = 'force-dynamic'
@@ -67,6 +68,9 @@ export default async function ProyectoPage({ params }: { params: { id: string } 
     if (local?.url_carta) enlaces.push({ titulo: 'Carta', url: local.url_carta, estado: s?.fase === 'entregado' || s?.fase === 'cerrado' ? 'Publicada' : 'Para revisar', tono: null, icono: 'globe' })
     const { data: qr } = local?.slug ? await sb.storage.from('cartela').createSignedUrl(`qr/${local.slug}.png`, 3600, { download: `QR ${local.slug}.png` }) : { data: null }
     if (qr?.signedUrl) enlaces.push({ titulo: 'QR para imprimir', url: qr.signedUrl, estado: 'PNG', tono: null, icono: 'doc' })
+    // Las piezas que van con la entrega (pegatina, display y cartel), para verlas antes de enviarla.
+    const { data: piezas } = local?.slug ? await sb.storage.from('cartela').createSignedUrls((Object.keys(PIEZAS) as Pieza[]).map(x => rutaPieza(local.slug, x)), 3600) : { data: null }
+    ;(Object.keys(PIEZAS) as Pieza[]).forEach((x, i) => { if (piezas?.[i]?.signedUrl) enlaces.push({ titulo: PIEZAS[x], url: piezas[i].signedUrl, estado: 'PDF', tono: null, icono: 'doc' }) })
     const cambios = await enlaceCambios(id)
     if (cambios) enlaces.push({ titulo: 'Cambios del cliente', url: cambios, estado: 'Su enlace', tono: null, icono: 'chat' })
   }

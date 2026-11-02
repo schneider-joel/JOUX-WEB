@@ -7,7 +7,7 @@ import type { ClaveInicio, VistaBienvenida } from '@/lib/bienvenida'
 const eur = (n: number) => '€' + new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: 'always' } as unknown as Intl.NumberFormatOptions).format(n)
 
 // Bienvenida al aceptar: vista previa del email (con la carpeta de Drive) y de la factura del pago 1,
-// y «Emitir y enviar». Con clave «entrega.final», la entrega con la factura del pago 2 (y el QR en Cartela). Nada sale ni se factura hasta pulsar el botón (GET/POST /api/proyectos/[id]/bienvenida).
+// y «Emitir y enviar». Con clave «entrega.final», la entrega con la factura del pago 2 (y el QR y las piezas para imprimir en Cartela). Nada sale ni se factura hasta pulsar el botón (GET/POST /api/proyectos/[id]/bienvenida).
 export default function Bienvenida({ proyectoId, clave = 'proyecto.bienvenida', abiertoDeEntrada = false }: { proyectoId: number; clave?: ClaveInicio; abiertoDeEntrada?: boolean }) {
   const esFactura = clave === 'factura.pago'
   const esEntrega = clave === 'entrega.final'
@@ -66,7 +66,7 @@ export default function Bienvenida({ proyectoId, clave = 'proyecto.bienvenida', 
             <div><dt>De</dt><dd>{v.remitente}</dd></div>
             <div><dt>Para</dt><dd>{v.para || '—'}</dd></div>
             <div><dt>Asunto</dt><dd>{v.asunto}</dd></div>
-            {f && <div><dt>Adjunto</dt><dd>Factura del pago {n} en PDF{esEntrega && v.cambios ? ' y el QR (si la carta lo subió)' : ''}</dd></div>}
+            {f && <div><dt>Adjunto</dt><dd>Factura del pago {n} en PDF{esEntrega && v.cambios ? ', el QR y la pegatina, el display y el cartel para imprimir (si la carta los subió)' : ''}</dd></div>}
           </dl>
           <pre className="nota" style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', margin: 0 }}>{v.cuerpo}</pre>
           {v.a_la_entrega && <p className="nota">Sin factura: el treatment se factura entero a la entrega, desde su timesheet.</p>}

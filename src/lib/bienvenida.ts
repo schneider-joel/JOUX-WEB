@@ -5,7 +5,7 @@
 //   formulario de datos fiscales si el cliente es nuevo.
 // - `factura.pago`: cuando el cliente ha mandado sus datos, la factura del pago 1, en el mismo hilo.
 // - `entrega.final` (rediseño comercial, 2026-10-26): la entrega con la factura del pago 2 (50 % al publicar)
-//   en el hilo del lead, y el QR en Cartela. Sustituye a «Facturar pago 2» + un email aparte.
+//   en el hilo del lead, y el QR y las piezas para imprimir en Cartela. Sustituye a «Facturar pago 2» + un email aparte.
 // La factura sale de crear_factura_pago() (número correlativo, IVA/retención por país, bloqueos de
 // datos fiscales y ROI). Un proyecto de prueba factura con fiscal = false y número PRUEBA-… (ver schema.sql).
 // Desde «Emitir y enviar» (después de la vista previa) o, con el paso «bienvenida» del piloto encendido en su marca, sola
@@ -20,7 +20,7 @@ import { desglose } from '@/lib/importes'
 import { pdfFactura } from '@/lib/pdf'
 import { nombreArchivoFactura } from '@/app/invoice/[id]/nombre-archivo'
 import { MARCAS_TREATMENT } from '@/lib/seguimiento'
-import { qrCartela } from '@/lib/emails-proyecto'
+import { adjuntosCartela } from '@/lib/emails-proyecto'
 import { pilotoActivo } from '@/lib/autonomia'
 import { encargarWeb } from '@/lib/primera-version'
 import { enlaceFactura } from '@/lib/factura-enlace'
@@ -184,13 +184,13 @@ export async function enviarBienvenida(id: number, origen: string, clave: ClaveI
   if ('error' in t) return fallo(String(t.error), Number(t.status) || 500)
   // La bienvenida abre hilo nuevo; la factura y la entrega responden en el del lead.
   const hilo = clave === 'proyecto.bienvenida' ? null : lead?.gmail_hilo ?? null
-  // Cartela: el QR para imprimir va con la entrega.
-  const qr = clave === 'entrega.final' ? await qrCartela(id).catch(() => null) : null
+  // Cartela: el QR y las piezas para imprimir (pegatina, display y cartel) van con la entrega.
+  const cartela = clave === 'entrega.final' && p.marca === 'cartela' ? await adjuntosCartela(id).catch(() => []) : []
 
   try {
     const r = await enviarGmail({
       de: v.remitente, para: v.para, asunto: v.asunto, texto: t.cuerpo, html: aHtml(t.cuerpo), hilo, mismoAsunto: clave === 'entrega.final',
-      adjuntos: [...(pdf && factura ? [{ nombre: `${nombreArchivoFactura(factura.numero, p.cliente)}.pdf`, tipo: 'application/pdf', datos: pdf }] : []), ...(qr ? [qr] : [])],
+      adjuntos: [...(pdf && factura ? [{ nombre: `${nombreArchivoFactura(factura.numero, p.cliente)}.pdf`, tipo: 'application/pdf', datos: pdf }] : []), ...cartela],
     })
     const ahora = new Date().toISOString()
     await sb.from('mensajes').update({ id_proveedor: r.id, enviado_en: ahora, cuerpo: t.cuerpo, asunto: r.asunto, error: null }).eq('id', fila.id)

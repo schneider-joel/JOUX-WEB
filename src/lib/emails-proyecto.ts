@@ -10,6 +10,7 @@ import { remitenteLead } from '@/lib/remitentes'
 import { enviosPausados } from '@/lib/autonomia'
 import { MARCAS_TREATMENT } from '@/lib/seguimiento'
 import { enlaceCambios } from '@/lib/cartela-cambios'
+import { piezasCompletas, piezasDelLocal, type Adjunto } from '@/lib/cartela-piezas'
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -31,16 +32,22 @@ async function urlDelProyecto(p: { id: number; marca: string | null; web: string
   return undefined
 }
 
-// QR de la carta (Cartela): la sesión de Cartela lo sube al publicar a `cartela/qr/<slug>.png` (bucket privado).
-// Va adjunto solo en la entrega (2026-10-27: la revisión lleva solo la carta); si no está, el email sale igual, sin QR.
+// QR de la carta y piezas para imprimir (Cartela): la sesión de Cartela los sube al publicar a `cartela/qr/<slug>.png` y
+// `cartela/piezas/<slug>/` (bucket privado; src/lib/cartela-piezas.ts). Van adjuntos solo en la entrega (2026-10-27: la
+// revisión lleva solo la carta); lo que no esté no se adjunta y el email sale igual.
 const CON_QR = ['entrega.final']
 const CON_CAMBIOS = ['entrega.final', 'cambio.publicado']
-export async function qrCartela(proyectoId: number) {
+export async function adjuntosCartela(proyectoId: number): Promise<Adjunto[]> {
   const { data: local } = await sb.from('cartela_locales').select('slug').eq('proyecto_id', proyectoId).maybeSingle()
-  if (!local?.slug) return null
-  const { data } = await sb.storage.from('cartela').download(`qr/${local.slug}.png`)
-  if (!data) return null
-  return { nombre: `QR ${local.slug}.png`, tipo: 'image/png', datos: Buffer.from(await data.arrayBuffer()) }
+  if (!local?.slug) return []
+  const [{ data }, piezas] = await Promise.all([sb.storage.from('cartela').download(`qr/${local.slug}.png`), piezasDelLocal(local.slug)])
+  const qr = data ? [{ nombre: `QR ${local.slug}.png`, tipo: 'image/png', datos: Buffer.from(await data.arrayBuffer()) }] : []
+  return [...qr, ...piezas]
+}
+
+async function piezasDeProyecto(proyectoId: number) {
+  const { data: local } = await sb.from('cartela_locales').select('slug').eq('proyecto_id', proyectoId).maybeSingle()
+  return local?.slug && await piezasCompletas(local.slug) ? 'sí' : null
 }
 
 // Plantilla de un proyecto ya rellenada. Sin `url` (ni automática) se deja {{url}} para que Joel lo pegue.
@@ -67,8 +74,10 @@ export async function plantillaProyecto(id: number | string, clave: string, extr
   // {{cambios_url}}: el enlace de cambios del local (solo Cartela). Es del servicio anual: solo sale desde la entrega
   // (2026-10-27); antes, el cliente manda fotos y correcciones respondiendo al correo.
   const cambios_url = p.marca === 'cartela' && CON_CAMBIOS.includes(clave) ? await enlaceCambios(p.id) : null
+  // {{#piezas}}: la entrega de Cartela explica la pegatina, el display y el cartel solo si van las tres adjuntas.
+  const piezas = p.marca === 'cartela' && CON_QR.includes(clave) ? await piezasDeProyecto(p.id) : null
   const url = extra.url || await urlDelProyecto(p, clave)
-  const vars = { nombre: (p.contacto_nombre || p.cliente).split(' ')[0], web: p.web || p.cliente, ronda, url, drive_url: p.drive_url, cambios_url, ...extra.vars }
+  const vars = { nombre: (p.contacto_nombre || p.cliente).split(' ')[0], web: p.web || p.cliente, ronda, url, drive_url: p.drive_url, cambios_url, piezas, ...extra.vars }
   return { p, t, asunto: rellenar(t.asunto, vars), cuerpo: rellenar(t.cuerpo, vars) }
 }
 
@@ -91,7 +100,7 @@ export async function enviarEmailProyecto(m: {
   const leadId = m.leadId ?? p?.lead_id ?? null
   const { data: lead } = leadId ? await sb.from('leads').select('id, marca, idioma, gmail_hilo').eq('id', leadId).maybeSingle() : { data: null }
   const alias = lead?.gmail_hilo ? remitenteLead(lead.marca, lead.idioma) : null
-  const qr = CON_QR.includes(m.clave) && p?.marca === 'cartela' ? await qrCartela(m.proyectoId).catch(() => null) : null
+  const adjuntos = CON_QR.includes(m.clave) && p?.marca === 'cartela' ? await adjuntosCartela(m.proyectoId).catch(() => []) : []
   let idFila = m.mensajeId ?? 0
   const fallo = async (error: string, fila: Record<string, unknown>) => {
     // Sin lead_id en un borrador: si no, la ficha del lead lo tomaría por su respuesta pendiente.
@@ -111,14 +120,14 @@ export async function enviarEmailProyecto(m: {
     }
     try {
       // En el hilo, con el asunto del hilo («Re: …»): Gmail solo junta mensajes con el mismo asunto.
-      const r = await enviarGmail({ de: alias, para: m.para, asunto: m.asunto, texto: m.cuerpo, html: aHtml(m.cuerpo), hilo: lead.gmail_hilo, mismoAsunto: true, ...(qr ? { adjuntos: [qr] } : {}) })
+      const r = await enviarGmail({ de: alias, para: m.para, asunto: m.asunto, texto: m.cuerpo, html: aHtml(m.cuerpo), hilo: lead.gmail_hilo, mismoAsunto: true, ...(adjuntos.length ? { adjuntos } : {}) })
       await sb.from('mensajes').update({ id_proveedor: r.id, asunto: r.asunto, enviado_en: new Date().toISOString() }).eq('id', idFila)
       await sb.from('leads').update({ ultimo_contacto: new Date().toISOString() }).eq('id', lead.id)
     } catch (e) {
       return fallo((e as Error)?.message || 'Gmail no respondió', fila)
     }
   } else {
-    const envio = await enviarEmail({ de: m.remitente, para: m.para, asunto: m.asunto, texto: m.cuerpo, ...(qr ? { adjuntos: [{ filename: qr.nombre, content: qr.datos.toString('base64') }] } : {}) })
+    const envio = await enviarEmail({ de: m.remitente, para: m.para, asunto: m.asunto, texto: m.cuerpo, ...(adjuntos.length ? { adjuntos: adjuntos.map(a => ({ filename: a.nombre, content: a.datos.toString('base64') })) } : {}) })
     const fila = {
       estado: envio.error ? (m.mensajeId ? 'borrador' : 'error') : 'enviado', remitente: m.remitente, para: m.para, asunto: m.asunto, cuerpo: m.cuerpo,
       canal: 'resend', id_proveedor: envio.id || null, error: envio.error || null, enviado_en: envio.error ? null : new Date().toISOString(),
