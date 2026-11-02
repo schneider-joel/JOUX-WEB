@@ -1,5 +1,7 @@
 // PDF de una factura (solo servidor): imprime la vista pública /invoice/[id] con Chrome sin cabeza,
-// la misma plantilla que ve el cliente. En Vercel, @sparticuz/chromium; en local, el Chrome instalado.
+// la misma plantilla que ve el cliente, con su enlace firmado. En Vercel, @sparticuz/chromium; en local, el Chrome instalado.
+import { enlaceFactura } from './factura-enlace'
+
 export async function lanzarChrome() {
   const puppeteer = (await import('puppeteer-core')).default
   if (process.env.VERCEL) {
@@ -13,7 +15,7 @@ export async function pdfFactura(origen: string, id: number): Promise<Buffer> {
   const browser = await lanzarChrome()
   try {
     const page = await browser.newPage()
-    await page.goto(`${origen}/invoice/${id}`, { waitUntil: 'load', timeout: 30000 })
+    await page.goto(`${origen}${enlaceFactura(id)}`, { waitUntil: 'load', timeout: 30000 })
     return Buffer.from(await page.pdf({ format: 'A4', printBackground: true }))
   } finally {
     await browser.close()

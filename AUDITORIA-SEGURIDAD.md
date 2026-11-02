@@ -16,6 +16,7 @@ Resumen: **la base está bien cerrada** (RLS en todas las tablas, la service key
   1. Añadir a `facturas` una columna `token_publico` (`randomBytes(18)`, como `token_fiscal`), servir la vista pública en `/invoice/<token>` y dejar `/invoice/<id>` solo para la sesión. Los enlaces de los timesheets (`/ab`, `/th`, `/t`), del PDF (`src/lib/pdf.ts`) y de los emails pasarían a usar el token.
   2. Si el cambio tiene que ser mínimo: aceptar `/invoice/<id>?t=<token del timesheet>` y comprobar que la factura es de un cliente de ese grupo (`grupoDeToken()` en `src/app/t/cargar.tsx`).
   Después, revisar en los logs de Vercel si alguien ha recorrido `/invoice/*`.
+- **Estado (2026-11-02): corregido en código, pendiente de desplegar.** Se ha optado por una variante de la opción 1 que no necesita migración: el enlace público pasa a ser `/invoice/<id>?k=<firma>`, con un HMAC del id derivado de la service key (`src/lib/factura-enlace.ts`). Sin la cookie del hub y sin una firma válida, la página responde igual que si la factura no existiera, título incluido. Firman sus enlaces el timesheet público (`src/app/t/cargar.tsx`), el PDF (`src/lib/pdf.ts`), el ZIP trimestral y el enlace de respaldo de la bienvenida. Ningún email enviado contenía enlaces `/invoice/`, así que no se rompe ninguno. Si se rota la service key, cambian todas las firmas (los timesheets se regeneran solos).
 
 ## Alto
 

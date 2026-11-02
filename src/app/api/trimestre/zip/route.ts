@@ -3,6 +3,7 @@ import { cookies } from 'next/headers'
 import JSZip from 'jszip'
 import { supabaseServer } from '@/lib/supabase-server'
 import { lanzarChrome } from '@/lib/pdf'
+import { enlaceFactura } from '@/lib/factura-enlace'
 
 export const maxDuration = 60
 export const dynamic = 'force-dynamic'
@@ -51,7 +52,7 @@ export async function GET(req: NextRequest) {
       await Promise.all(Array.from({ length: Math.min(4, cola.length) }, async () => {
         const page = await browser!.newPage()
         for (let f = cola.shift(); f; f = cola.shift()) {
-          await page.goto(`${req.nextUrl.origin}/invoice/${f.id}`, { waitUntil: 'load', timeout: 30000 })
+          await page.goto(`${req.nextUrl.origin}${enlaceFactura(f.id)}`, { waitUntil: 'load', timeout: 30000 })
           zip.file(nombreVenta(f), Buffer.from(await page.pdf({ format: 'A4', printBackground: true })))
         }
         await page.close()

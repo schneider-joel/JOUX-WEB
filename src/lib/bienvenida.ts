@@ -23,6 +23,7 @@ import { MARCAS_TREATMENT } from '@/lib/seguimiento'
 import { qrCartela } from '@/lib/emails-proyecto'
 import { pilotoActivo } from '@/lib/autonomia'
 import { encargarWeb } from '@/lib/primera-version'
+import { enlaceFactura } from '@/lib/factura-enlace'
 
 export const CLAVES_INICIO = ['proyecto.bienvenida', 'factura.pago', 'entrega.final'] as const
 export type ClaveInicio = typeof CLAVES_INICIO[number]
@@ -176,7 +177,7 @@ export async function enviarBienvenida(id: number, origen: string, clave: ClaveI
       datos_url: v.datos_url,
       ...(factura ? {
         factura_numero: factura.numero, factura_total: dinero(d?.total ?? Number(factura.importe), idioma),
-        factura_url: pdf ? null : `${PUBLICA}/invoice/${factura.id}`,
+        factura_url: pdf ? null : `${PUBLICA}${enlaceFactura(factura.id)}`,
       } : {}),
     },
   })

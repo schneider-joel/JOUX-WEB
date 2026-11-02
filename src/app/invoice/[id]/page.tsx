@@ -1,11 +1,19 @@
 import { cookies } from 'next/headers'
 import { supabaseServer as supabase } from '@/lib/supabase-server'
+import { firmaFacturaValida } from '@/lib/factura-enlace'
 import InvoiceEditor from './invoice-editor'
 import { nombreArchivoFactura, nombreArchivoRef } from './nombre-archivo'
 
 // El título de la página es el nombre que propone el navegador al guardar el PDF.
 // Desde el link público del timesheet (?ref=1) lleva su nº de referencia del proyecto.
-type Props = { params: { id: string }; searchParams: { ref?: string } }
+type Props = { params: { id: string }; searchParams: { ref?: string; k?: string } }
+
+// Sin la cookie del hub, solo con la firma del enlace (enlaceFactura): el id es correlativo.
+function acceso({ params, searchParams }: Props) {
+  const c = cookies().get('joux_auth')?.value
+  const editable = !!c && !!process.env.APP_PASSWORD && c === process.env.APP_PASSWORD
+  return { editable, permitido: editable || firmaFacturaValida(params.id, searchParams.k) }
+}
 
 async function tituloPorRef(factura: { cliente: string; proyecto_id: number | null }, searchParams: Props['searchParams']) {
   if (searchParams.ref !== '1' || !factura.proyecto_id) return null
@@ -17,16 +25,17 @@ async function tituloPorRef(factura: { cliente: string; proyecto_id: number | nu
 }
 
 export async function generateMetadata({ params, searchParams }: Props) {
+  if (!acceso({ params, searchParams }).permitido) return { title: 'Factura', robots: { index: false, follow: false } }
   const { data: f } = await supabase.from('facturas').select('numero, cliente, proyecto_id').eq('id', params.id).maybeSingle()
   const title = f ? (await tituloPorRef(f, searchParams)) || nombreArchivoFactura(f.numero, f.cliente) : 'Factura'
   return { title, robots: { index: false, follow: false } }
 }
 
 export default async function InvoicePage({ params, searchParams }: Props) {
-  const authCookie = cookies().get('joux_auth')?.value
-  const editable = !!authCookie && !!process.env.APP_PASSWORD && authCookie === process.env.APP_PASSWORD
+  const { editable, permitido } = acceso({ params, searchParams })
 
-  const { data: factura } = await supabase.from('facturas').select('*').eq('id', params.id).single()
+  // Sin permiso, la misma respuesta que si no existiera: no se distingue un id válido.
+  const { data: factura } = permitido ? await supabase.from('facturas').select('*').eq('id', params.id).single() : { data: null }
 
   if (!factura) {
     return (

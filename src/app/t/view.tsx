@@ -39,7 +39,7 @@ export default function PublicTimesheetView({
   clientes: string[]
   proyectos: Proyecto[]
   dias: Dia[]
-  facturas: { id: number; proyecto_id: number }[]
+  facturas: { id: number; proyecto_id: number; enlace: string }[]
   clientesEspana?: string[]
 }) {
   const [query, setQuery] = useState('')
@@ -118,7 +118,7 @@ const Bajar = () => <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v8.
 
 // Un proyecto: nombre, cliente y referencia, total y estado; al desplegar, sus días, el total y la factura
 function FilaProyecto({ p, ds, total, imp, factura, abiertaAlEmpezar }: {
-  p: Proyecto; ds: Dia[]; total: number; imp: ReturnType<typeof desglose>; factura?: { id: number; proyecto_id: number }; abiertaAlEmpezar: boolean
+  p: Proyecto; ds: Dia[]; total: number; imp: ReturnType<typeof desglose>; factura?: { id: number; proyecto_id: number; enlace: string }; abiertaAlEmpezar: boolean
 }) {
   const [abierta, setAbierta] = useState(abiertaAlEmpezar)
   const porHora = p.modo_rate === 'hora'
@@ -171,7 +171,7 @@ function FilaProyecto({ p, ds, total, imp, factura, abiertaAlEmpezar }: {
           )}
           {p.status === 'facturado' && factura && (
             <div className="p__foot">
-              <a className="ghost" href={`/invoice/${factura.id}${/^(ambushed|boldmove)/i.test(p.cliente) ? '?ref=1' : ''}`} target="_blank" rel="noopener noreferrer"><Bajar />Invoice</a>
+              <a className="ghost" href={`${factura.enlace}${/^(ambushed|boldmove)/i.test(p.cliente) ? '&ref=1' : ''}`} target="_blank" rel="noopener noreferrer"><Bajar />Invoice</a>
             </div>
           )}
         </div>

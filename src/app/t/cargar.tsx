@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { supabaseServer as supabase } from '@/lib/supabase-server'
 import { GRUPOS_FIJOS, TOKEN_CLIENTE, grupoDeCliente, type GrupoTimesheet } from '@/lib/timesheets'
+import { enlaceFactura } from '@/lib/factura-enlace'
 import PublicTimesheetView from './view'
 
 export type RutaPublica = 'ab' | 'th' | 't'
@@ -63,7 +64,7 @@ export async function PaginaTimesheet({ ruta, token }: { ruta: RutaPublica; toke
       clientes={grupo.clientes}
       proyectos={proyectos || []}
       dias={diasRes.data || []}
-      facturas={facturasRes.data || []}
+      facturas={(facturasRes.data || []).map(f => ({ ...f, enlace: enlaceFactura(f.id) }))}
       clientesEspana={(fiscales || []).filter(c => c.pais === 'ES').map(c => c.cliente)}
     />
   )
