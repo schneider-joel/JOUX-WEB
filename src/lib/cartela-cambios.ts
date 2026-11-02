@@ -7,7 +7,7 @@ import { notificar } from '@/lib/push'
 
 export const BUCKET_CARTELA = 'cartela'
 const PUBLICA = 'https://joux-web.vercel.app'
-export const ESTADOS_PETICION = ['recibida', 'en_curso', 'publicada', 'escalada'] as const
+export const ESTADOS_PETICION = ['recibida', 'en_curso', 'publicada', 'escalada', 'cancelada'] as const
 export type EstadoPeticion = typeof ESTADOS_PETICION[number]
 
 // Uso razonable: no se anuncia como tope, solo corta abusos del enlace.
@@ -17,7 +17,13 @@ const MAX_FOTO = 5 * 1024 * 1024
 const TIPOS_FOTO: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/heic': 'heic' }
 
 export type Local = { id: number; nombre: string; slug: string; plan: string; url_carta: string | null; estado: string; prueba: boolean; proyecto_id: number | null }
-export type Peticion = { id: number; local_id: number; texto: string; adjuntos: string[]; estado: EstadoPeticion; nota: string | null; created_at: string; actualizada_at: string | null }
+export type Peticion = {
+  id: number; local_id: number; texto: string; adjuntos: string[]; estado: EstadoPeticion; nota: string | null; created_at: string; actualizada_at: string | null
+  // Desde la carta (2026-11-02): el plato tocado, qué se pidió (precio, agotado, quitar, otra, deshacer) y su valor.
+  plato_id: string | null; plato_nombre: string | null; op: string | null; valor: string | null; parar: boolean; deshace_id: number | null
+}
+export const COLUMNAS_PETICION = 'id, local_id, texto, adjuntos, estado, nota, created_at, actualizada_at, plato_id, plato_nombre, op, valor, parar, deshace_id'
+export const OPS = ['precio', 'agotado', 'quitar', 'otra', 'nuevo', 'horario', 'foto', 'deshacer'] as const
 
 export async function localDeToken(token: string): Promise<Local | null> {
   // 64 caracteres hex: cualquier otra cosa ni se consulta.
@@ -41,21 +47,42 @@ export async function qrDelLocal(local: Pick<Local, 'slug'>) {
 }
 
 export async function peticionesDe(localId: number, limite = 30) {
-  const { data } = await sb.from('cartela_peticiones').select('id, local_id, texto, adjuntos, estado, nota, created_at, actualizada_at')
-    .eq('local_id', localId).order('created_at', { ascending: false }).limit(limite)
+  const { data } = await sb.from('cartela_peticiones').select(COLUMNAS_PETICION)
+    .eq('local_id', localId).neq('estado', 'cancelada').order('created_at', { ascending: false }).limit(limite)
   return (data || []) as Peticion[]
 }
 
 // Lo que ve el cliente: sin rutas de adjuntos (solo cuántas fotos mandó).
-export const peticionPublica = (p: Peticion) => ({ id: p.id, texto: p.texto, fotos: p.adjuntos.length, estado: p.estado, nota: p.nota, created_at: p.created_at, actualizada_at: p.actualizada_at })
+export const peticionPublica = (p: Peticion) => ({
+  id: p.id, texto: p.texto, fotos: p.adjuntos.length, estado: p.estado, nota: p.nota, created_at: p.created_at, actualizada_at: p.actualizada_at,
+  plato_id: p.plato_id, plato_nombre: p.plato_nombre, op: p.op, valor: p.valor, parar: p.parar,
+})
 export type PeticionPublica = ReturnType<typeof peticionPublica>
 
 type Resultado = { ok: true; peticion: PeticionPublica } | { ok: false; error: string; status: number }
 
-// Guarda la petición del cliente (texto y, si la hay, una foto) y avisa a Joel por push.
+// Lo que llega de la carta además del texto (todo opcional; la página de /cambios/<token> solo manda texto y foto).
+export type Extra = { plato_id?: string | null; plato_nombre?: string | null; op?: string | null; valor?: string | null; deshace_id?: number | null }
+
+export const extraDeForm = (f: FormData): Extra => {
+  const t = (k: string, max: number) => { const v = String(f.get(k) ?? '').trim(); return v ? v.slice(0, max) : null }
+  const op = t('op', 20)
+  const deshace = Number(f.get('deshace_id'))
+  return {
+    plato_id: t('plato_id', 80), plato_nombre: t('plato_nombre', 120), op: op && (OPS as readonly string[]).includes(op) ? op : null,
+    valor: t('valor', 40), deshace_id: Number.isInteger(deshace) && deshace > 0 ? deshace : null,
+  }
+}
+
+// Desde el enlace de siempre (/cambios/<token>).
 export async function crearPeticion(token: string, texto: string, foto: File | null): Promise<Resultado> {
   const local = await localDeToken(token)
   if (!local) return { ok: false, error: 'enlace', status: 404 }
+  return crearPeticionDe(local, texto, foto, {})
+}
+
+// Guarda la petición del cliente (texto y, si la hay, una foto) y avisa a Joel por push.
+export async function crearPeticionDe(local: Local, texto: string, foto: File | null, extra: Extra): Promise<Resultado> {
   if (local.estado === 'pausado') return { ok: false, error: 'pausado', status: 403 }
   if (!(await cartaEntregada(local))) return { ok: false, error: 'revision', status: 409 }
   texto = texto.trim().slice(0, MAX_TEXTO)
@@ -66,7 +93,12 @@ export async function crearPeticion(token: string, texto: string, foto: File | n
   const { count } = await sb.from('cartela_peticiones').select('id', { count: 'exact', head: true }).eq('local_id', local.id).gte('created_at', desde)
   if ((count || 0) >= MAX_AL_DIA) return { ok: false, error: 'limite', status: 429 }
 
-  const { data: p, error } = await sb.from('cartela_peticiones').insert({ local_id: local.id, texto: texto || '(foto)' }).select('id, local_id, texto, adjuntos, estado, nota, created_at, actualizada_at').single()
+  // «Deshacer» solo de una petición publicada de este mismo local.
+  if (extra.deshace_id) {
+    const { data: d } = await sb.from('cartela_peticiones').select('id').eq('id', extra.deshace_id).eq('local_id', local.id).eq('estado', 'publicada').maybeSingle()
+    if (!d) extra = { ...extra, deshace_id: null }
+  }
+  const { data: p, error } = await sb.from('cartela_peticiones').insert({ local_id: local.id, texto: texto || '(foto)', ...extra }).select(COLUMNAS_PETICION).single()
   if (error || !p) { console.error('cartela/peticion', error?.message); return { ok: false, error: 'servidor', status: 500 } }
 
   let peticion = p as Peticion
@@ -75,7 +107,7 @@ export async function crearPeticion(token: string, texto: string, foto: File | n
     const subida = await sb.storage.from(BUCKET_CARTELA).upload(ruta, Buffer.from(await foto.arrayBuffer()), { contentType: foto.type, upsert: true })
     if (subida.error) console.error('cartela/foto', subida.error.message)
     else {
-      const { data } = await sb.from('cartela_peticiones').update({ adjuntos: [ruta] }).eq('id', peticion.id).select('id, local_id, texto, adjuntos, estado, nota, created_at, actualizada_at').single()
+      const { data } = await sb.from('cartela_peticiones').update({ adjuntos: [ruta] }).eq('id', peticion.id).select(COLUMNAS_PETICION).single()
       if (data) peticion = data as Peticion
     }
   }
@@ -84,7 +116,7 @@ export async function crearPeticion(token: string, texto: string, foto: File | n
   try {
     await notificar({
       titulo: `Cambio · ${local.nombre}${local.prueba ? ' (prueba)' : ''}`,
-      cuerpo: `${peticion.texto.slice(0, 140)}${peticion.adjuntos.length ? ' · 📷' : ''}`,
+      cuerpo: `${peticion.plato_nombre ? `${peticion.plato_nombre} · ` : ''}${peticion.texto.slice(0, 140)}${peticion.adjuntos.length ? ' · 📷' : ''}`,
       url: '/cartela/cambios',
       etiqueta: `cartela-peticion-${peticion.id}`,
     })
@@ -92,6 +124,26 @@ export async function crearPeticion(token: string, texto: string, foto: File | n
     console.error('cartela/aviso', e?.message)
   }
   return { ok: true, peticion: peticionPublica(peticion) }
+}
+
+// El local cambia, cancela o pide parar una petición suya. Solo se toca lo que nadie ha empezado:
+// cambiar y cancelar, en «recibida»; parar, en «en curso» (el agente ya no la recoge y Joel recibe un aviso).
+// Updates condicionales: si el agente la coge a la vez, gana él y el local ve un 409.
+export async function modificarPeticion(local: Local, id: number, accion: string, d: { texto?: string } & Extra) {
+  const ahora = new Date().toISOString()
+  let q
+  if (accion === 'cambiar') {
+    const texto = (d.texto || '').trim().slice(0, MAX_TEXTO)
+    if (!texto) return { ok: false as const, error: 'vacio', status: 400 }
+    q = sb.from('cartela_peticiones').update({ texto, op: d.op ?? null, valor: d.valor ?? null, actualizada_at: ahora }).eq('estado', 'recibida')
+  } else if (accion === 'cancelar') {
+    q = sb.from('cartela_peticiones').update({ estado: 'cancelada', actualizada_at: ahora }).eq('estado', 'recibida')
+  } else if (accion === 'parar') {
+    q = sb.from('cartela_peticiones').update({ parar: true, actualizada_at: ahora }).eq('estado', 'en_curso')
+  } else return { ok: false as const, error: 'accion', status: 400 }
+  const { data } = await q.eq('id', id).eq('local_id', local.id).select(COLUMNAS_PETICION).maybeSingle()
+  if (!data) return { ok: false as const, error: 'estado', status: 409 }
+  return { ok: true as const, peticion: data as Peticion }
 }
 
 // Panel: Joel mueve la petición de estado; al publicarla deja una nota corta de lo que cambió.
@@ -129,7 +181,11 @@ export async function crearLocalCartela(proyectoId: number, d: { nombre: string;
 }
 
 // {{cambios_url}} de los emails de un proyecto de Cartela: null si aún no tiene local.
+// Si la carta ya está en su subdominio, el enlace entra por la propia carta (deja el móvil recordado: <carta>/cambios);
+// si no, la página de siempre en el hub.
 export async function enlaceCambios(proyectoId: number) {
-  const { data } = await sb.from('cartela_locales').select('token_cambios').eq('proyecto_id', proyectoId).neq('estado', 'baja').maybeSingle()
-  return data ? `${PUBLICA}/cambios/${data.token_cambios}` : null
+  const { data } = await sb.from('cartela_locales').select('token_cambios, url_carta').eq('proyecto_id', proyectoId).neq('estado', 'baja').maybeSingle()
+  if (!data) return null
+  const origen = data.url_carta?.match(/^(https:\/\/[a-z0-9-]+\.cartela\.live)\//)?.[1]
+  return origen ? `${origen}/cambios/entrar?k=${data.token_cambios}` : `${PUBLICA}/cambios/${data.token_cambios}`
 }

@@ -1,6 +1,7 @@
 import { supabaseServer as sb } from '@/lib/supabase-server'
-import { firmarAdjuntos, type Peticion } from '@/lib/cartela-cambios'
-import { Peticiones } from './bandeja'
+import { COLUMNAS_PETICION, firmarAdjuntos, type Peticion } from '@/lib/cartela-cambios'
+import { accesosActivos } from '@/lib/cartela-acceso'
+import { CerrarAccesos, Peticiones } from './bandeja'
 
 export const dynamic = 'force-dynamic'
 // supabase-js usa fetch: sin esto, Next guarda sus respuestas en el Data Cache y la lista sale vieja.
@@ -12,11 +13,11 @@ export const metadata = { title: 'Cambios · Cartela · JOUX Hub' }
 export default async function CambiosCartelaPage() {
   const [{ data: locales }, { data: peticiones }] = await Promise.all([
     sb.from('cartela_locales').select('id, nombre, slug, plan, url_carta, token_cambios, estado, prueba').neq('estado', 'baja').order('nombre'),
-    sb.from('cartela_peticiones').select('id, local_id, texto, adjuntos, estado, nota, created_at, actualizada_at').order('created_at', { ascending: false }).limit(300),
+    sb.from('cartela_peticiones').select(COLUMNAS_PETICION).order('created_at', { ascending: false }).limit(300),
   ])
   const todas = (peticiones || []) as Peticion[]
-  const fotos = await firmarAdjuntos(todas.flatMap(p => p.adjuntos))
-  const abiertas = todas.filter(p => p.estado !== 'publicada').length
+  const [fotos, accesos] = await Promise.all([firmarAdjuntos(todas.flatMap(p => p.adjuntos)), accesosActivos((locales || []).map(l => l.id))])
+  const abiertas = todas.filter(p => p.estado !== 'publicada' && p.estado !== 'cancelada').length
 
   return (
     <main className="main">
@@ -38,6 +39,7 @@ export default async function CambiosCartelaPage() {
             <p className="nota">
               <a href={`/cambios/${l.token_cambios}`} target="_blank" rel="noopener">Su enlace de cambios ↗</a>
               {l.url_carta ? <> · <a href={l.url_carta} target="_blank" rel="noopener">Carta ↗</a></> : null}
+              <CerrarAccesos localId={l.id} activos={accesos.get(l.id) || 0} />
             </p>
             {suyas.length
               ? <Peticiones lista={suyas.map(p => ({ ...p, fotos: p.adjuntos.map(r => fotos.get(r)).filter(Boolean) as string[] }))} />

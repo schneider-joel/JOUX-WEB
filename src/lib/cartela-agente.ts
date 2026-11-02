@@ -14,8 +14,9 @@ const CADUCA_EN_CURSO_MIN = 120
 export async function cambiosPendientes() {
   if (!(await pilotoActivo('cartela', 'cambios'))) return { pausado: true, cambios: [] }
   const limite = new Date(Date.now() - CADUCA_EN_CURSO_MIN * 60_000).toISOString()
-  const { data } = await sb.from('cartela_peticiones').select('id, local_id, texto, adjuntos, estado, created_at, actualizada_at')
-    .or(`estado.eq.recibida,and(estado.eq.en_curso,actualizada_at.lt.${limite})`).order('created_at').limit(20)
+  // Las que el local pidió parar no vuelven al agente: las mira Joel.
+  const { data } = await sb.from('cartela_peticiones').select('id, local_id, texto, adjuntos, estado, created_at, actualizada_at, plato_id, plato_nombre, op, valor, deshace_id')
+    .or(`estado.eq.recibida,and(estado.eq.en_curso,actualizada_at.lt.${limite})`).eq('parar', false).order('created_at').limit(20)
   const pets = data || []
   if (!pets.length) return { pausado: false, cambios: [] }
   const { data: locales } = await sb.from('cartela_locales').select('id, slug, nombre, plan, url_carta, proyecto_id, prueba, estado')
@@ -29,6 +30,7 @@ export async function cambiosPendientes() {
       if (!l || l.estado !== 'activo') return []
       return [{
         peticion_id: p.id, texto: p.texto, recibida_en: p.created_at, reintento: p.estado === 'en_curso',
+        plato: p.plato_id ? { id: p.plato_id, nombre: p.plato_nombre } : null, op: p.op, valor: p.valor, deshace_id: p.deshace_id,
         fotos: (p.adjuntos as string[]).map(r => ({ nombre: r.split('/').pop(), url: urls.get(r) || null })).filter(f => f.url),
         local: { id: l.id, slug: l.slug, nombre: l.nombre, plan: l.plan, url_carta: l.url_carta, proyecto_id: l.proyecto_id, prueba: l.prueba },
       }]

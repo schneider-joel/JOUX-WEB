@@ -1823,3 +1823,41 @@ COMMENT ON COLUMN leads.para_empezar IS 'Rediseño comercial, fase 3: lo que el 
 -- tienes logo, guía de marca o fotos del local y de los platos que aún no nos hayas mandado, respóndenos con ellos; si no,
 -- seguimos con lo de tu web e Instagram.» Bucket `leads`: allowed_mime_types + 'application/postscript' (logos .ai/.eps).
 -- Prueba Vermudez #27 / proyecto 217 borrada entera (lead, proyecto, PRUEBA-217-1 y -2, cliente, local 5, QR).
+
+
+-- ============================================================
+-- MIGRACIÓN: cambios de Cartela sobre la propia carta (2026-11-02, aplicada con OK de Joel). Solo aditiva.
+-- El local abre <su carta>.cartela.live/cambios, toca un plato y pide el cambio; el Worker de la carta habla con
+-- /api/carta/* (clave CARTELA_CARTAS_KEY). Contrato en 01 Agencias web/cartela/joux-hub/CAMBIOS-EN-LA-CARTA.md.
+
+-- A qué plato se refiere cada petición y qué pidió (precio, agotado, quitar, otra, deshacer), para aplicarlo sin dudas.
+-- parar: el local pidió que no se haga una que ya estaba en marcha. deshace_id: la petición publicada que quiere deshacer.
+-- 'cancelada': el local la canceló antes de que nadie la empezara.
+ALTER TABLE cartela_peticiones
+  ADD COLUMN IF NOT EXISTS plato_id TEXT,
+  ADD COLUMN IF NOT EXISTS plato_nombre TEXT,
+  ADD COLUMN IF NOT EXISTS op TEXT,
+  ADD COLUMN IF NOT EXISTS valor TEXT,
+  ADD COLUMN IF NOT EXISTS parar BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS deshace_id INT REFERENCES cartela_peticiones(id) ON DELETE SET NULL;
+ALTER TABLE cartela_peticiones DROP CONSTRAINT IF EXISTS cartela_peticiones_estado_check;
+ALTER TABLE cartela_peticiones ADD CONSTRAINT cartela_peticiones_estado_check
+  CHECK (estado IN ('recibida','en_curso','publicada','escalada','cancelada'));
+
+-- Accesos a los cambios desde la carta, sin contraseña. 'enlace': el que llega al correo del local (un solo uso,
+-- 30 min). 'sesion': el móvil recordado (cookie de un año). Solo se guarda el sha256 del token, nunca el token.
+CREATE TABLE IF NOT EXISTS cartela_accesos (
+  id SERIAL PRIMARY KEY,
+  local_id INT NOT NULL REFERENCES cartela_locales(id) ON DELETE CASCADE,
+  tipo TEXT NOT NULL CHECK (tipo IN ('enlace','sesion')),
+  hash TEXT NOT NULL UNIQUE,
+  expira TIMESTAMPTZ NOT NULL,
+  usado_at TIMESTAMPTZ,
+  ultimo_uso TIMESTAMPTZ,
+  revocado BOOLEAN NOT NULL DEFAULT false,
+  dispositivo TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE cartela_accesos ENABLE ROW LEVEL SECURITY;
+CREATE INDEX IF NOT EXISTS cartela_accesos_local ON cartela_accesos (local_id, tipo, created_at DESC);
+-- DATOS (2026-11-02, con OK de Joel): Cresta (local 1, prueba) con email_aviso = schneiderjoel.js@gmail.com para probar el acceso por correo.

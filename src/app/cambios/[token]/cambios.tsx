@@ -70,7 +70,8 @@ const PASOS = ['Recibido', 'En marcha', 'Publicado']
 
 function Estado({ p }: { p: PeticionPublica }) {
   const paso = p.estado === 'publicada' ? 2 : p.estado === 'en_curso' ? 1 : 0
-  const texto = p.estado === 'publicada' ? `Publicado${p.actualizada_at ? ` ${cuando(p.actualizada_at)}` : ''}. Ya está en tu carta.`
+  const texto = p.parar ? 'Nos has pedido que lo paremos. Te avisamos de cómo queda.'
+    : p.estado === 'publicada' ? `Publicado${p.actualizada_at ? ` ${cuando(p.actualizada_at)}` : ''}. Ya está en tu carta.`
     : p.estado === 'en_curso' ? 'Lo estamos cambiando ahora.'
     : p.estado === 'escalada' ? 'Lo está revisando Joel. Te escribimos pronto.'
     : 'Lo aplicamos en 24 h laborables.'
@@ -223,6 +224,7 @@ export default function Cambios({ token, nombre, urlCarta, qr, entregada, pausad
           <h2 className="cz__h3">Tus cambios{enMarcha > 0 && <span>{enMarcha} en marcha</span>}</h2>
           {lista.length === 0 ? <p className="cz__nada">Aún no nos has pedido ninguno. Cuando lo hagas, aquí verás en qué punto está cada cambio.</p> : lista.map(p => (
             <article key={p.id} className={`cz__req${p.id === nueva ? ' cz__req--nueva' : ''}`}>
+              {p.plato_nombre && <p className="cz__plato">{p.plato_nombre}</p>}
               <p className="cz__q">«{p.texto}»</p>
               <p className="cz__when" suppressHydrationWarning>Pedido {cuando(p.created_at)}{p.fotos ? ` · ${p.fotos === 1 ? '1 foto' : `${p.fotos} fotos`}` : ''}</p>
               <Estado p={p} />

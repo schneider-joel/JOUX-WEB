@@ -8,6 +8,7 @@ export const metadata = { title: 'Tu carta · Cartela (demo)', robots: { index: 
 // ?estado=revision | pausado | vacio | sinqr
 const hace = (h: number) => new Date(Date.now() - h * 3600e3).toISOString()
 const QR = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 7 7" shape-rendering="crispEdges"><rect width="7" height="7" fill="#fff"/><path d="M0 0h3v3H0zM4 0h3v3H4zM0 4h3v3H0zM4 4h1v1H4zM6 5h1v2H6zM4 6h1v1H4z" fill="#231B17"/></svg>')}`
+const SIN_PLATO = { plato_id: null, plato_nombre: null, op: null, valor: null, parar: false }
 const PETICIONES = [
   { id: 4, texto: 'Hoy no hay pulpo', fotos: 0, estado: 'recibida' as const, nota: null, created_at: hace(0.3), actualizada_at: null },
   { id: 3, texto: 'Sube la caña a 2,80 y el tercio a 3,20', fotos: 0, estado: 'en_curso' as const, nota: null, created_at: hace(20), actualizada_at: hace(2) },
@@ -22,7 +23,7 @@ export default function CambiosDemo({ searchParams }: { searchParams: { estado?:
     <div className="cz">
       <Cambios token="demo" nombre="Bar Cresta" urlCarta="https://barcresta.cartela.live/"
         qr={e === 'sinqr' || e === 'revision' ? null : { ver: QR, descargar: QR }}
-        entregada={e !== 'revision'} pausado={e === 'pausado'} inicial={e === 'vacio' ? [] : PETICIONES} />
+        entregada={e !== 'revision'} pausado={e === 'pausado'} inicial={e === 'vacio' ? [] : PETICIONES.map(p => ({ ...SIN_PLATO, ...p }))} />
     </div>
   )
 }

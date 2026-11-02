@@ -86,6 +86,7 @@ html:has(.cz), body:has(.cz) { background: #E9E1CF; }
 .cz__nada { margin: 0; padding: 18px 16px; border-radius: 16px; border: 1.5px dashed var(--line); color: var(--muted); font-size: 14px; text-align: center; }
 .cz__req { background: var(--slip); border: 1px solid var(--line); border-radius: 16px; padding: 14px 15px; margin-bottom: 10px; }
 .cz__req--nueva { border-color: rgba(30,122,60,.45); animation: cz-entra .45s var(--ease); }
+.cz__plato { margin: 0 0 2px; font-size: 12.5px; font-weight: 700; color: var(--red-t); }
 .cz__q { margin: 0; font-weight: 600; overflow-wrap: anywhere; white-space: pre-line; }
 .cz__when { margin: 3px 0 0; font-size: 12.5px; color: var(--muted); }
 .cz__estado { margin-top: 12px; }
