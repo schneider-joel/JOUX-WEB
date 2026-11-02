@@ -1865,3 +1865,15 @@ CREATE INDEX IF NOT EXISTS cartela_accesos_local ON cartela_accesos (local_id, t
 -- carta-cresta) para probar los cambios desde la carta. Al terminar: devolverla a https://cartela.live/ejemplos/cresta/.
 -- DATOS (2026-11-02, con OK de Joel): prueba terminada. Worker carta-cresta borrado, url_carta de Cresta de vuelta a
 -- https://cartela.live/ejemplos/cresta/ y sus sesiones de prueba revocadas (cartela_accesos.revocado = true).
+
+
+-- ============================================================
+-- DATOS: plazos de Cartela a 48 h / 12 h, horas naturales (2026-11-02, decidido por Joel; PENDIENTE de aplicar con su OK).
+-- La primera versión de la carta pasa de «5 días laborables» a «48 h» y los cambios de «24 h» a «12 h». Una fila cada uno.
+UPDATE plantillas
+SET cuerpo = replace(cuerpo, 'En 5 días laborables te enseñamos la primera versión', 'En 48 h te enseñamos la primera versión')
+WHERE marca = 'cartela' AND clave = 'proyecto.bienvenida' AND idioma = 'es';
+
+UPDATE plantillas
+SET cuerpo = replace(cuerpo, 'Los aplicamos en 24 h, sin límite.', 'Los aplicamos en 12 h, sin límite.')
+WHERE marca = 'cartela' AND clave = 'entrega.final' AND idioma = 'es';

@@ -74,7 +74,7 @@ function Estado({ p }: { p: PeticionPublica }) {
     : p.estado === 'publicada' ? `Publicado${p.actualizada_at ? ` ${cuando(p.actualizada_at)}` : ''}. Ya está en tu carta.`
     : p.estado === 'en_curso' ? 'Lo estamos cambiando ahora.'
     : p.estado === 'escalada' ? 'Lo está revisando Joel. Te escribimos pronto.'
-    : 'Lo aplicamos en 24 h laborables.'
+    : 'Lo aplicamos en 12 h.'
   return (
     <div className={`cz__estado cz__estado--${p.estado}`}>
       {p.estado === 'escalada' ? <span className="cz__pill"><i />Revisándolo</span> : (
@@ -214,7 +214,7 @@ export default function Cambios({ token, nombre, urlCarta, qr, entregada, pausad
             <button type="button" className={`cz__send${vacio ? ' cz__send--vacio' : ''}`} disabled={enviando} onClick={enviar}>{enviando ? 'Enviando…' : 'Enviar cambio'}</button>
           </div>
           {error && <p className="cz__error" role="alert">{error}</p>}
-          {nueva && <p className="cz__ok" role="status"><b>Recibido.</b> Lo aplicamos en 24 h laborables y te avisamos cuando esté en tu carta.</p>}
+          {nueva && <p className="cz__ok" role="status"><b>Recibido.</b> Lo aplicamos en 12 h y te avisamos cuando esté en tu carta.</p>}
           <p className="cz__hint">Cambios ilimitados. Si algo toca alérgenos, te escribimos para confirmarlo antes de publicarlo.</p>
         </section>
       )}
