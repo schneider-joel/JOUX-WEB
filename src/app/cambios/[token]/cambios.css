@@ -6,52 +6,112 @@
 html:has(.cz), body:has(.cz) { background: #E9E1CF; }
 .cz {
   --paper: #F7EFDF; --slip: #FCF8EE; --ink: #231B17; --muted: #65574E; --red: #D3371E; --red-t: #B52C15;
-  --line: rgba(35,27,23,.14); --ok: #1E7A3C;
-  min-height: 100dvh; padding: 12px 0 40px; background: #E9E1CF; color: var(--ink);
+  --line: rgba(35,27,23,.14); --ok: #1E7A3C; --warn: #9A6400; --ease: cubic-bezier(.22,1,.36,1);
+  min-height: 100dvh; padding: 24px 16px 48px; background: #E9E1CF; color: var(--ink);
   font: 400 16px/1.5 'Instrument Sans', system-ui, sans-serif;
+  -webkit-tap-highlight-color: transparent;
 }
 .cz *, .cz *::before, .cz *::after { box-sizing: border-box; }
 .cz button, .cz textarea { font-family: inherit; color: inherit; }
-.cz__app { max-width: 440px; margin: 0 auto; background: var(--paper); border-radius: 22px; overflow: hidden; box-shadow: 0 30px 60px -30px rgba(35,27,23,.45); }
-@media (max-width: 460px) { .cz { padding: 0; } .cz__app { border-radius: 0; min-height: 100dvh; box-shadow: none; } }
-.cz__vacia { padding: 28px 18px; color: var(--muted); }
-.cz__top { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 18px; border-bottom: 1px solid var(--line); }
-.cz__top b { display: block; font: 800 19px/1.1 'Bricolage Grotesque', sans-serif; letter-spacing: -.02em; }
-.cz__top span { font-size: 13px; color: var(--muted); }
-.cz__top a { flex: none; font-size: 13px; font-weight: 600; color: var(--red-t); text-decoration: none; }
-.cz__pane { padding: 18px 18px 24px; }
-.cz h1 { margin: 0 0 4px; font: 800 24px/1.1 'Bricolage Grotesque', sans-serif; letter-spacing: -.02em; }
-.cz h2 { margin: 26px 0 10px; font: 700 13px/1 'Instrument Sans', sans-serif; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
-.cz__sub { margin: 0 0 14px; color: var(--muted); font-size: 14px; }
-.cz__chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
-.cz__chips button { padding: 8px 11px; border-radius: 99px; border: 1.5px solid var(--line); background: var(--slip); font-size: 13px; font-weight: 500; cursor: pointer; }
-.cz textarea { display: block; width: 100%; min-height: 110px; padding: 12px 14px; border-radius: 14px; border: 1.5px solid var(--line); background: #fff; font-size: 16px; line-height: 1.4; resize: vertical; }
-.cz textarea:focus { outline: none; border-color: var(--red); }
-.cz__row { display: flex; gap: 8px; margin-top: 10px; }
-.cz__ghost { display: inline-flex; align-items: center; gap: 6px; padding: 10px 13px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--slip); font-size: 13px; font-weight: 600; cursor: pointer; }
-.cz__send { margin-left: auto; padding: 11px 20px; border-radius: 99px; border: 0; background: var(--red); color: #fff !important; font-size: 14px; font-weight: 700; cursor: pointer; transition: opacity .2s; }
-.cz__send:disabled { opacity: .55; cursor: default; }
-.cz__att { margin: 8px 0 0; font-size: 13px; color: var(--muted); }
-.cz__att button { margin-left: 6px; border: 0; background: none; padding: 0; color: var(--red-t); font-size: 13px; font-weight: 600; cursor: pointer; }
-.cz__error { margin: 10px 0 0; padding: 9px 12px; border-radius: 10px; background: rgba(211,55,30,.1); color: var(--red-t); font-size: 14px; }
-.cz__hint { margin: 10px 0 0; font-size: 12.5px; color: var(--muted); }
-.cz__req { background: var(--slip); border: 1px solid var(--line); border-radius: 16px; padding: 13px 14px; margin-bottom: 10px; }
+.cz a { color: var(--red-t); }
+.cz :focus-visible { outline: 2px solid var(--red); outline-offset: 2px; }
+.cz__app { max-width: 460px; margin: 0 auto; background: var(--paper); border-radius: 22px; overflow: hidden; box-shadow: 0 30px 60px -30px rgba(35,27,23,.45); }
+@media (max-width: 500px) { .cz { padding: 0; } .cz__app { border-radius: 0; min-height: 100dvh; box-shadow: none; } }
+
+/* Cabecera: marca pequeña, nombre del local y para qué sirve el enlace */
+.cz__top { padding: 20px 20px 18px; }
+.cz__marca { display: flex; align-items: center; gap: 7px; margin: 0 0 18px; font: 800 15px/1 'Bricolage Grotesque', sans-serif; letter-spacing: -.025em; color: var(--ink); }
+.cz__simbolo { width: 18px; height: 18px; flex: none; }
+.cz h1 { margin: 0 0 6px; font: 800 30px/1.02 'Bricolage Grotesque', sans-serif; letter-spacing: -.025em; overflow-wrap: anywhere; }
+.cz h2 { margin: 0 0 4px; font: 800 23px/1.1 'Bricolage Grotesque', sans-serif; letter-spacing: -.02em; }
+.cz__sub { margin: 0; color: var(--muted); font-size: 14.5px; }
+.cz__pane .cz__sub { margin-bottom: 14px; }
+
+/* Su carta: QR, dirección y dos acciones */
+.cz__carta { display: flex; align-items: center; gap: 14px; margin: 0 20px; padding: 14px; border-radius: 18px; background: var(--slip); border: 1px solid var(--line); }
+.cz__qr { flex: none; display: block; line-height: 0; }
+.cz__qr img { width: 88px; height: 88px; border-radius: 10px; background: #fff; border: 1px solid var(--line); image-rendering: pixelated; }
+.cz__carta > div { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; }
+.cz__carta small { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.cz__url { margin: 1px 0 10px; font-weight: 600; font-size: 14.5px; overflow-wrap: anywhere; }
+.cz__acciones { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* Botones */
+.cz__btn { display: inline-flex; align-items: center; gap: 7px; min-height: 40px; padding: 9px 14px; border-radius: 99px; border: 1.5px solid var(--line); background: var(--slip); color: var(--ink) !important; font-size: 13.5px; font-weight: 600; line-height: 1; text-decoration: none; cursor: pointer; transition: border-color .2s var(--ease), background .2s var(--ease); }
+.cz__btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linejoin: round; }
+.cz__btn--tinta { background: var(--ink); border-color: var(--ink); color: var(--paper) !important; }
+.cz__send { margin-left: auto; min-height: 46px; padding: 12px 22px; border-radius: 99px; border: 0; background: var(--red); color: #fff !important; font-size: 15px; font-weight: 700; cursor: pointer; transition: background .2s var(--ease), opacity .2s var(--ease); }
+.cz__send--vacio { opacity: .5; }
+.cz__send:disabled { opacity: .6; cursor: progress; }
+
+/* Pedir un cambio */
+.cz__pane { padding: 24px 20px 4px; }
+.cz__chips { display: flex; gap: 6px; margin: 0 -20px 10px; padding: 0 20px 2px; overflow-x: auto; scrollbar-width: none; }
+.cz__chips::-webkit-scrollbar { display: none; }
+@media (min-width: 501px) { .cz__chips { flex-wrap: wrap; margin: 0 0 10px; padding: 0; overflow: visible; } }
+.cz__chips button { flex: none; min-height: 36px; padding: 8px 13px; border-radius: 99px; border: 1.5px solid var(--line); background: var(--slip); font-size: 13.5px; font-weight: 600; cursor: pointer; transition: border-color .2s var(--ease); }
+.cz__chips button::before { content: '+ '; color: var(--red); font-weight: 700; }
+.cz textarea { display: block; width: 100%; min-height: 120px; padding: 13px 14px; border-radius: 14px; border: 1.5px solid var(--line); background: #fff; font-size: 16px; line-height: 1.45; resize: vertical; transition: border-color .2s var(--ease), box-shadow .2s var(--ease); }
+.cz textarea:focus { outline: none; border-color: var(--red); box-shadow: 0 0 0 4px rgba(211,55,30,.12); }
+.cz textarea::placeholder { color: #9A8C80; }
+.cz__ejemplo { min-height: 0; margin: 6px 2px 0; font-size: 13px; color: var(--muted); }
+.cz__ejemplo:empty { display: none; }
+.cz__ejemplo i { font-style: normal; color: var(--ink); }
+.cz__adjunto { display: flex; align-items: center; gap: 10px; margin-top: 10px; padding: 8px; border-radius: 14px; background: #fff; border: 1px solid var(--line); }
+.cz__adjunto img { width: 48px; height: 48px; flex: none; border-radius: 9px; object-fit: cover; background: var(--slip); }
+.cz__adjunto span { flex: 1; min-width: 0; font-size: 14px; font-weight: 600; }
+.cz__adjunto small { display: block; font-size: 12.5px; font-weight: 400; color: var(--muted); }
+.cz__adjunto button { padding: 8px 10px; border: 0; border-radius: 10px; background: none; color: var(--red-t); font-size: 13.5px; font-weight: 600; cursor: pointer; }
+.cz__row { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+.cz__error, .cz__ok { margin: 12px 0 0; padding: 10px 13px; border-radius: 12px; font-size: 14px; }
+.cz__error { background: rgba(211,55,30,.1); color: var(--red-t); }
+.cz__ok { background: rgba(30,122,60,.11); color: #155A2C; animation: cz-entra .35s var(--ease); }
+.cz__hint { margin: 14px 0 0; font-size: 13px; color: var(--muted); }
+
+/* Revisión y pausa */
+.cz__revision { list-style: none; counter-reset: paso; margin: 16px 0 6px; padding: 0; }
+.cz__revision li { counter-increment: paso; position: relative; padding: 0 0 18px 42px; font-size: 14.5px; color: var(--muted); }
+.cz__revision li::before { content: counter(paso); position: absolute; left: 0; top: -1px; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; border: 1.5px solid var(--line); background: var(--slip); color: var(--muted); font: 800 14px/1 'Bricolage Grotesque', sans-serif; }
+.cz__revision li:not(:last-child)::after { content: ''; position: absolute; left: 13.5px; top: 32px; bottom: 4px; width: 1.5px; background: var(--line); }
+.cz__revision li.ahora::before { background: var(--red); border-color: var(--red); color: #fff; }
+.cz__revision b { display: block; color: var(--ink); font-size: 15px; }
+.cz__aviso { padding: 16px; border-radius: 16px; background: var(--slip); border: 1px solid var(--line); }
+.cz__aviso b { display: block; font: 800 19px/1.15 'Bricolage Grotesque', sans-serif; letter-spacing: -.02em; }
+.cz__aviso p { margin: 6px 0 0; font-size: 14.5px; color: var(--muted); }
+
+/* Historial */
+.cz__historial { padding-top: 30px; }
+.cz .cz__h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; font: 700 12.5px/1 'Instrument Sans', sans-serif; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.cz__h3 span { padding: 4px 8px; border-radius: 99px; background: rgba(240,180,60,.25); color: var(--warn); letter-spacing: .02em; text-transform: none; font-size: 12px; }
+.cz__nada { margin: 0; padding: 18px 16px; border-radius: 16px; border: 1.5px dashed var(--line); color: var(--muted); font-size: 14px; text-align: center; }
+.cz__req { background: var(--slip); border: 1px solid var(--line); border-radius: 16px; padding: 14px 15px; margin-bottom: 10px; }
+.cz__req--nueva { border-color: rgba(30,122,60,.45); animation: cz-entra .45s var(--ease); }
 .cz__q { margin: 0; font-weight: 600; overflow-wrap: anywhere; white-space: pre-line; }
-.cz__q small { font-weight: 500; color: var(--muted); }
-.cz__when { margin: 2px 0 0; font-size: 12.5px; color: var(--muted); }
-.cz__pill { display: inline-flex; align-items: center; gap: 6px; margin-top: 9px; padding: 5px 10px; border-radius: 99px; font-size: 12px; font-weight: 700; line-height: 1; background: rgba(35,27,23,.07); color: var(--muted); }
+.cz__when { margin: 3px 0 0; font-size: 12.5px; color: var(--muted); }
+.cz__estado { margin-top: 12px; }
+.cz__estado p { margin: 6px 0 0; font-size: 13px; color: var(--muted); }
+.cz__estado--publicada p { color: var(--ok); font-weight: 600; }
+.cz__pasos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin: 0; padding: 0; list-style: none; }
+.cz__pasos li { padding-top: 7px; border-top: 3px solid var(--line); font-size: 11.5px; font-weight: 600; color: #9A8C80; }
+.cz__pasos li.hecho, .cz__pasos li.ahora { color: var(--ink); border-color: var(--ink); }
+.cz__estado--en_curso .cz__pasos li.ahora { border-color: #E3A21A; }
+.cz__estado--publicada .cz__pasos li { border-color: var(--ok); }
+.cz__pill { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 99px; font-size: 12px; font-weight: 700; line-height: 1; background: rgba(211,55,30,.1); color: var(--red-t); }
 .cz__pill i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
-.cz__pill--ok { background: rgba(30,122,60,.12); color: var(--ok); }
-.cz__pill--curso { background: rgba(240,180,60,.25); color: #9A6400; }
-.cz__pill--rev { background: rgba(211,55,30,.1); color: var(--red-t); }
-.cz__nota { margin: 10px 0 0; padding: 8px 10px; border-radius: 10px; background: #fff; border: 1px solid var(--red); font-size: 14px; }
-.cz__nota small { display: block; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.cz__nota { margin: 10px 0 0; padding: 9px 11px; border-radius: 10px; background: #fff; border: 1px solid var(--line); border-left: 3px solid var(--ok); font-size: 14px; }
+.cz__nota small { display: block; margin-bottom: 1px; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+
+/* Pie */
+.cz__pie { margin-top: 26px; padding: 18px 20px 26px; border-top: 1px solid var(--line); font-size: 13.5px; color: var(--muted); }
+.cz__pie p { margin: 0; }
+.cz__pie a { font-weight: 600; text-decoration: none; }
+.cz__lema { margin-top: 4px !important; font: 800 14px/1.2 'Bricolage Grotesque', sans-serif; letter-spacing: -.02em; color: var(--ink); }
+
+@keyframes cz-entra { from { opacity: 0; transform: translateY(6px); } }
 @media (hover: hover) and (pointer: fine) {
-  .cz__chips button:hover, .cz__ghost:hover { border-color: var(--ink); }
+  .cz__chips button:hover, .cz__btn:hover { border-color: var(--ink); }
+  .cz__btn--tinta:hover { background: #3A2E27; }
   .cz__send:not(:disabled):hover { background: var(--red-t); }
+  .cz__adjunto button:hover { background: rgba(211,55,30,.08); }
 }
-.cz__carta { display: flex; align-items: center; gap: 14px; padding: 16px 18px; border-bottom: 1px solid var(--line); background: var(--slip); }
-.cz__carta img { flex: none; width: 96px; height: 96px; border-radius: 10px; background: #fff; border: 1px solid var(--line); image-rendering: pixelated; }
-.cz__carta div { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; min-width: 0; }
-.cz__link { font-weight: 700; color: var(--red-t); text-decoration: none; overflow-wrap: anywhere; }
-.cz__carta .cz__ghost { text-decoration: none; color: var(--ink); }
+@media (prefers-reduced-motion: reduce) { .cz *, .cz *::before, .cz *::after { animation: none !important; transition: none !important; } }
