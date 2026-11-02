@@ -1868,7 +1868,7 @@ CREATE INDEX IF NOT EXISTS cartela_accesos_local ON cartela_accesos (local_id, t
 
 
 -- ============================================================
--- DATOS: plazos de Cartela a 48 h / 12 h, horas naturales (2026-11-02, decidido por Joel; PENDIENTE de aplicar con su OK).
+-- DATOS: plazos de Cartela a 48 h / 12 h, horas naturales (2026-11-02, decidido por Joel; aplicado en producción con su OK).
 -- La primera versión de la carta pasa de «5 días laborables» a «48 h» y los cambios de «24 h» a «12 h». Una fila cada uno.
 UPDATE plantillas
 SET cuerpo = replace(cuerpo, 'En 5 días laborables te enseñamos la primera versión', 'En 48 h te enseñamos la primera versión')
