@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server'
+import { waitUntil } from '@vercel/functions'
 import { aceptarPresupuesto } from '@/lib/presupuestos'
 
 export const dynamic = 'force-dynamic'
 // supabase-js usa fetch: sin esto, Next guarda sus respuestas en el Data Cache.
 export const fetchCache = 'force-no-store'
+// Ganar el lead (con su carpeta de Drive) y la confirmación por Gmail siguen tras responder.
+export const maxDuration = 60
 
 // Aceptación pública de un presupuesto (/aceptar/<token>). Público en el middleware: el token es la llave.
 // La IP y el navegador van a la prueba de la aceptación. Errores con claves cortas que traduce la página.
@@ -13,5 +16,6 @@ export async function POST(req: Request, { params }: { params: { token: string }
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip') || null
   const r = await aceptarPresupuesto(params.token, { nombre: String(body.nombre ?? ''), acepto: body.acepto === true, ip, ua: req.headers.get('user-agent') })
   if ('error' in r) return NextResponse.json({ error: r.error }, { status: r.status })
+  if (r.despues) waitUntil(r.despues())
   return NextResponse.json({ ok: true })
 }
