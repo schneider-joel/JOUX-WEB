@@ -11,6 +11,9 @@ export function textoEvento(e: Pick<Evento, 'tipo' | 'datos'>) {
     return `Estado: ${de} → ${a}`
   }
   if (e.tipo === 'lead.ganado') return `Ganado: ${valor(e.datos.cliente)}${e.datos.cliente_nuevo ? ' (cliente nuevo)' : ''}${e.datos.tarifa_dia ? ` · €${valor(e.datos.tarifa_dia)}/día` : ''}`
+  if (e.tipo === 'presupuesto.creado') return `Presupuesto preparado: ${valor(e.datos.concepto)}${e.datos.precio ? ` · ${valor(e.datos.precio)} €` : e.datos.tarifa_dia ? ` · ${valor(e.datos.tarifa_dia)} €/día` : ''} · condiciones ${valor(e.datos.condiciones)}`
+  if (e.tipo === 'presupuesto.aceptado') return `Presupuesto aceptado por ${valor(e.datos.nombre)} · condiciones ${valor(e.datos.condiciones)}`
+  if (e.tipo === 'presupuesto.anulado') return 'Presupuesto anulado'
   if (e.tipo === 'lead.perdido') return `Perdido${e.datos.motivo ? `: ${valor(e.datos.motivo)}` : ''}`
   if (e.tipo === 'ia.borrador') return `Borrador de IA${e.datos.motivo === 'regenerar' ? ' (regenerado)' : e.datos.motivo === 'respuesta' ? ' para su respuesta' : ''}${e.datos.categoria ? ` · ${valor(e.datos.categoria)}` : ''}`
   if (e.tipo === 'mensaje.descartado') return 'Borrador descartado'

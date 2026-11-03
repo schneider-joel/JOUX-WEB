@@ -13,8 +13,9 @@ import type { NextRequest } from 'next/server'
 // /api/carta/* lo llama el Worker de cada carta de Cartela (cambios desde la propia carta) y valida CARTELA_CARTAS_KEY.
 // /fonts/ son las fuentes de esas páginas públicas.
 // /datos/<token> es el formulario de datos fiscales de un cliente; su API valida el mismo token.
+// /aceptar/<token> es el presupuesto que acepta el cliente (su API valida el mismo token) y /condiciones/<marca>, sus condiciones.
 // /api/resend/webhook lo llama Resend (rebotes, spam) y valida su firma con RESEND_WEBHOOK_SECRET.
-const PUBLIC_PATHS = [/^\/(ab|th|t|c|datos|cambios)\//, /^\/api\/datos\/[\w-]+$/, /^\/api\/cambios\/[0-9a-f]+(\/qr)?$/, /^\/api\/carta\/(acceso|cambios(\/\d+)?)$/, /^\/api\/bancos\/cron$/, /^\/api\/intake\/(lead|evento)$/, /^\/api\/resend\/webhook$/, /^\/api\/cron\/tick$/, /^\/api\/agente\/(pruebas-pendientes|prueba-lista|prueba-error|webs-pendientes|encargos-pendientes|web-empezada|web-lista|web-error|cambios-pendientes|cambio-empezado|cambio-hecho|cambio-escalado|piezas)$/, /^\/api\/compartidos$/, /^\/invoice\//, /^\/login$/, /^\/api\/login$/, /^\/icon/, /^\/apple-icon/, /^\/sw\.js$/, /^\/fonts\//, /^\/manifest\.webmanifest$/]
+const PUBLIC_PATHS = [/^\/(ab|th|t|c|datos|cambios|aceptar|condiciones)\//, /^\/api\/(datos|aceptar)\/[\w-]+$/, /^\/api\/cambios\/[0-9a-f]+(\/qr)?$/, /^\/api\/carta\/(acceso|cambios(\/\d+)?)$/, /^\/api\/bancos\/cron$/, /^\/api\/intake\/(lead|evento)$/, /^\/api\/resend\/webhook$/, /^\/api\/cron\/tick$/, /^\/api\/agente\/(pruebas-pendientes|prueba-lista|prueba-error|webs-pendientes|encargos-pendientes|web-empezada|web-lista|web-error|cambios-pendientes|cambio-empezado|cambio-hecho|cambio-escalado|piezas)$/, /^\/api\/compartidos$/, /^\/invoice\//, /^\/login$/, /^\/api\/login$/, /^\/icon/, /^\/apple-icon/, /^\/sw\.js$/, /^\/fonts\//, /^\/manifest\.webmanifest$/]
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl

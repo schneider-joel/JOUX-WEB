@@ -1877,3 +1877,62 @@ WHERE marca = 'cartela' AND clave = 'proyecto.bienvenida' AND idioma = 'es';
 UPDATE plantillas
 SET cuerpo = replace(cuerpo, 'Los aplicamos en 24 h, sin límite.', 'Los aplicamos en 12 h, sin límite.')
 WHERE marca = 'cartela' AND clave = 'entrega.final' AND idioma = 'es';
+
+-- ============================================================
+-- Presupuestos con aceptación online (2026-11-03, decidido por Joel; pendiente de aplicar con su OK).
+-- Joel prepara el presupuesto en la ficha del lead; el cliente lo abre en /aceptar/<token>, marca la casilla de
+-- las condiciones y pulsa «Aceptar». Eso guarda la prueba (nombre, email, fecha, IP, navegador, versión y sha256
+-- del texto) y marca el lead ganado con el precio del presupuesto. La factura la sigue enviando Joel.
+
+-- Condiciones del servicio, una fila por marca, versión e idioma. Una versión publicada no se toca nunca:
+-- para cambiar algo se inserta la siguiente. La vigente es la de versión más alta.
+CREATE TABLE IF NOT EXISTS condiciones (
+  id SERIAL PRIMARY KEY,
+  marca TEXT NOT NULL REFERENCES marcas(key),
+  version INT NOT NULL CHECK (version > 0),
+  idioma TEXT NOT NULL DEFAULT 'es' CHECK (idioma IN ('es','en')),
+  titulo TEXT NOT NULL,
+  texto TEXT NOT NULL,                       -- Markdown sencillo (## títulos, párrafos, listas con «- »)
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (marca, version, idioma)
+);
+ALTER TABLE condiciones ENABLE ROW LEVEL SECURITY;
+
+CREATE OR REPLACE FUNCTION condiciones_inmutables() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  RAISE EXCEPTION 'Las condiciones publicadas no se modifican: inserta una versión nueva';
+END $$;
+DROP TRIGGER IF EXISTS condiciones_inmutables ON condiciones;
+CREATE TRIGGER condiciones_inmutables BEFORE UPDATE ON condiciones FOR EACH ROW EXECUTE FUNCTION condiciones_inmutables();
+
+-- Un presupuesto por envío. 'enviado' → 'aceptado' (por el cliente) o 'anulado' (por Joel). modo: 'cerrado'
+-- (precio total, 50/50) o 'dia' (tarifa por día y días estimados, todo a la entrega). Importes sin IVA.
+CREATE TABLE IF NOT EXISTS presupuestos (
+  id SERIAL PRIMARY KEY,
+  lead_id BIGINT NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
+  marca TEXT NOT NULL REFERENCES marcas(key),
+  token TEXT NOT NULL UNIQUE,
+  idioma TEXT NOT NULL DEFAULT 'es' CHECK (idioma IN ('es','en')),
+  modo TEXT NOT NULL CHECK (modo IN ('cerrado','dia')),
+  concepto TEXT NOT NULL,                    -- «Web Estudio X · diseño Lino», «Treatment · spot Halden»
+  plan TEXT,
+  precio NUMERIC(10,2),                      -- modo cerrado
+  tarifa_dia NUMERIC(10,2),                  -- modo dia
+  dias NUMERIC(5,1),                         -- modo dia, estimados
+  incluye TEXT,                              -- una línea por punto
+  plazo TEXT,
+  caduca DATE,
+  condiciones_id INT NOT NULL REFERENCES condiciones(id),
+  estado TEXT NOT NULL DEFAULT 'enviado' CHECK (estado IN ('enviado','aceptado','anulado')),
+  aceptado_at TIMESTAMPTZ,
+  aceptado_nombre TEXT,
+  aceptado_email TEXT,
+  aceptado_ip TEXT,
+  aceptado_ua TEXT,
+  condiciones_sha256 TEXT,                   -- hash del texto aceptado, por si alguien duda de la versión
+  proyecto_id INT REFERENCES proyectos(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CHECK ((modo = 'cerrado' AND precio > 0) OR (modo = 'dia' AND tarifa_dia > 0))
+);
+ALTER TABLE presupuestos ENABLE ROW LEVEL SECURITY;
+CREATE INDEX IF NOT EXISTS presupuestos_lead ON presupuestos (lead_id, created_at DESC);

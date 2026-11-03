@@ -17,7 +17,8 @@ type Fallo = { error: string; status: number; proyecto_id?: number }
 export type Ganado = { ok: true; proyecto_id: number; drive: unknown; local: unknown; bienvenida: Bienvenida }
 type Bienvenida = { enviada: true; factura: string | null } | { error: string } | null
 
-export async function ganarLead(leadId: number | string, form: FormGanado, fuente = 'joux-hub'): Promise<Fallo | Ganado> {
+// `bienvenida: false`: la aceptación de un presupuesto gana sin enviar nada, aunque el piloto lo tenga encendido.
+export async function ganarLead(leadId: number | string, form: FormGanado, fuente = 'joux-hub', { bienvenida: conBienvenida = true } = {}): Promise<Fallo | Ganado> {
   const { data: lead } = await sb.from('leads').select('id, marca, estado, nombre, email, empresa, pais, idioma, interes, proyecto_id, prueba').eq('id', leadId).maybeSingle()
   if (!lead) return { error: 'No existe', status: 404 }
   if (lead.proyecto_id) return { error: 'Este lead ya tiene proyecto', status: 409 }
@@ -59,7 +60,7 @@ export async function ganarLead(leadId: number | string, form: FormGanado, fuent
     ? await crearLocalCartela(nuevo.id, { nombre: lead.empresa || proyecto.cliente, plan: proyecto.plan ?? null, email: lead.email || null, prueba: !!lead.prueba }).catch(e => ({ ok: false as const, error: String(e?.message || e) }))
     : null
   if (local && !local.ok) console.error('ganado/cartela', local.error)
-  const bienvenida = await bienvenidaSola(nuevo.id, marca.key, lead)
+  const bienvenida = conBienvenida ? await bienvenidaSola(nuevo.id, marca.key, lead) : null
   return { ok: true, proyecto_id: nuevo.id, drive, local, bienvenida }
 }
 

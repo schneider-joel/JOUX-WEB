@@ -3,7 +3,7 @@ import { supabaseServer as sb } from '@/lib/supabase-server'
 import { Fragment } from 'react'
 import { ETAPAS_LEAD_VISTA, ETIQUETA_ESTADO, PARA_EMPEZAR, esEstadoLead, estadoLead, etapaLead, fechaHora, hace, type Evento, type Lead, type Mensaje } from '@/lib/leads'
 import { remitenteLead } from '@/lib/remitentes'
-import { precioPropuesto, type ClienteFiscal } from '@/lib/ganado'
+import { nombreProyecto, precioPropuesto, type ClienteFiscal } from '@/lib/ganado'
 import { MARCAS_TREATMENT } from '@/lib/seguimiento'
 import { textoEvento } from '@/lib/eventos-texto'
 import CambiarEstado from './cambiar-estado'
@@ -13,6 +13,7 @@ import Respuesta, { type Borrador } from './respuesta'
 import PedirAjustes from './pedir-ajustes'
 import { BotonChat, PanelChat } from './lead-chat'
 import ParaEmpezarLista from './para-empezar'
+import Presupuesto, { type PresupuestoFicha } from './presupuesto'
 import type { ItemHilo } from '../../proyectos/[id]/ficha'
 import { disenoDelLead, estadoPrueba, urlsFirmadas, type AdjuntoMensaje } from '@/lib/prueba-gratis'
 
@@ -36,13 +37,15 @@ export default async function LeadPage({ params }: { params: { id: string } }) {
   const marco = (hijos: React.ReactNode) => <main className="main main--col">{hijos}</main>
   if (!lead) return marco(<p className="empty">Este lead no existe.</p>)
 
-  const [{ data: eventos }, { data: mensajes }, { data: marca }, { data: clientes }, { data: proyecto }, { data: pago1 }] = await Promise.all([
+  const [{ data: eventos }, { data: mensajes }, { data: marca }, { data: clientes }, { data: proyecto }, { data: pago1 }, { data: presupuestos }] = await Promise.all([
     sb.from('eventos').select('id, tipo, fuente, datos, created_at').eq('lead_id', lead.id).order('created_at', { ascending: false }),
     sb.from('mensajes').select('id, direccion, estado, generado_por, remitente, para, asunto, cuerpo, error, enviado_en, created_at, auto, plantilla, adjuntos, proyecto_id').eq('lead_id', lead.id).order('created_at', { ascending: false }),
     sb.from('marcas').select('key, nombre, modo').eq('key', lead.marca).maybeSingle(),
     sb.from('clientes_fiscales').select('cliente, identificador, direccion, pais').order('cliente'),
     lead.proyecto_id ? sb.from('proyectos').select('id, nombre, cliente, marca, fase, precio_cerrado, prueba, drive_url, drive_error').eq('id', lead.proyecto_id).maybeSingle() : Promise.resolve({ data: null }),
     lead.proyecto_id ? sb.from('facturas').select('id, numero').eq('proyecto_id', lead.proyecto_id).eq('pago', 1).maybeSingle() : Promise.resolve({ data: null }),
+    // El presupuesto vivo o el aceptado (los anulados no se enseñan), con la versión de sus condiciones.
+    sb.from('presupuestos').select('id, token, estado, concepto, precio, tarifa_dia, caduca, aceptado_at, aceptado_nombre, aceptado_ip, condiciones(version)').eq('lead_id', lead.id).neq('estado', 'anulado').order('created_at', { ascending: false }).limit(1),
   ])
   const interes = Object.entries(lead.interes || {}).filter(([, v]) => v != null && v !== '')
   const campos = Object.entries(lead.campos || {})
@@ -80,6 +83,10 @@ export default async function LeadPage({ params }: { params: { id: string } }) {
   const conBienvenida = !!proyecto && (marca?.modo === 'cerrado' || MARCAS_TREATMENT.includes(marca?.key || ''))
   const acciones = marca && !proyecto ? <AccionesLead lead={lead} marca={marca} clientes={(clientes || []) as ClienteFiscal[]}
     propuesto={marca.modo === 'cerrado' ? precioPropuesto(msgs.filter(m => m.direccion === 'saliente' && m.estado === 'enviado').map(m => ({ cuerpo: m.cuerpo, fecha: m.enviado_en || m.created_at })), lead.marca === 'arkevo' ? disenoDelLead(lead) : null) : null} /> : null
+  const pr = presupuestos?.[0] as (Omit<PresupuestoFicha, 'version'> & { condiciones: { version: number } | null }) | undefined
+  const presupuestoActual: PresupuestoFicha | null = pr ? { ...pr, version: pr.condiciones?.version ?? null } : null
+  const propuesto = marca?.modo === 'cerrado' ? precioPropuesto(msgs.filter(m => m.direccion === 'saliente' && m.estado === 'enviado').map(m => ({ cuerpo: m.cuerpo, fecha: m.enviado_en || m.created_at })), lead.marca === 'arkevo' ? disenoDelLead(lead) : null) : null
+  const conPresupuesto = !!marca && ['cerrado', 'dia'].includes(marca.modo) && (presupuestoActual?.estado === 'aceptado' || (!proyecto && !['perdido', 'spam'].includes(lead.estado)))
   const respuesta = <Respuesta leadId={lead.id} borrador={borrador as Borrador | null} remitente={remitente}
     conIa={['arkevo', 'pitchlab', 'custom', 'cartela'].includes(lead.marca)} resumen={lead.resumen_ia} categoria={lead.categoria_ia} />
 
@@ -184,6 +191,14 @@ export default async function LeadPage({ params }: { params: { id: string } }) {
             <section className="fx__card" aria-labelledby="ld-pe">
               <header><h2 id="ld-pe">Para empezar</h2><span className="caps dim">IA o tú</span></header>
               <ParaEmpezarLista leadId={lead.id} marca={lead.marca} valor={lead.para_empezar || {}} />
+            </section>
+          )}
+
+          {conPresupuesto && (
+            <section className="fx__card" aria-labelledby="ld-pr2">
+              <header><h2 id="ld-pr2">Presupuesto</h2><span className="caps dim">{presupuestoActual?.estado === 'aceptado' ? 'aceptado' : presupuestoActual ? 'enviado' : 'online'}</span></header>
+              <Presupuesto leadId={lead.id} modo={marca!.modo as 'cerrado' | 'dia'} idioma={lead.idioma || 'es'} actual={presupuestoActual}
+                inicial={{ concepto: nombreProyecto(lead.empresa?.trim() || lead.nombre?.trim() || lead.email, marca!), plan: propuesto?.diseno || '', precio: propuesto?.precio ?? null }} />
             </section>
           )}
 
