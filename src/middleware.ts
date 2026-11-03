@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { WEB_MARCA, marcaDeHost } from '@/lib/dominios-presupuesto'
 
 // /ab, /th y /t son los links públicos de los timesheets (protegidos por token).
 // /api/bancos/cron lo llama el cron de Vercel y valida su propio CRON_SECRET.
@@ -19,6 +20,20 @@ const PUBLIC_PATHS = [/^\/(ab|th|t|c|datos|cambios|aceptar|condiciones|marcas)\/
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
+
+  // presupuesto.<dominio de la marca>: solo el presupuesto (/<token>), las condiciones de esa marca y lo que necesitan
+  // para pintarse. Nunca el panel ni el login: cualquier otra ruta va a la web de la marca.
+  const marca = marcaDeHost(req.headers.get('host'))
+  if (marca) {
+    if (/^\/(_next|marcas|fonts)\//.test(pathname) || /^\/api\/aceptar\/[\w-]+$/.test(pathname) || /^\/(icon|apple-icon)/.test(pathname)) return NextResponse.next()
+    const token = pathname.match(/^\/([\w-]{20,40})$/)?.[1]
+    const version = pathname.match(/^\/condiciones(?:\/(\d{1,4}))?$/)
+    const destino = token ? `/aceptar/${token}` : version ? `/condiciones/${marca}${version[1] ? `/${version[1]}` : ''}` : null
+    if (!destino) return NextResponse.redirect(WEB_MARCA[marca])
+    const url = req.nextUrl.clone()
+    url.pathname = destino
+    return NextResponse.rewrite(url)
+  }
 
   if (PUBLIC_PATHS.some(re => re.test(pathname))) {
     return NextResponse.next()

@@ -14,6 +14,7 @@ import PedirAjustes from './pedir-ajustes'
 import { BotonChat, PanelChat } from './lead-chat'
 import ParaEmpezarLista from './para-empezar'
 import Presupuesto, { type PresupuestoFicha } from './presupuesto'
+import { enlacePresupuesto } from '@/lib/presupuestos'
 import type { ItemHilo } from '../../proyectos/[id]/ficha'
 import { disenoDelLead, estadoPrueba, urlsFirmadas, type AdjuntoMensaje } from '@/lib/prueba-gratis'
 
@@ -198,6 +199,7 @@ export default async function LeadPage({ params }: { params: { id: string } }) {
             <section className="fx__card" aria-labelledby="ld-pr2">
               <header><h2 id="ld-pr2">Presupuesto</h2><span className="caps dim">{presupuestoActual?.estado === 'aceptado' ? 'aceptado' : presupuestoActual ? 'enviado' : 'online'}</span></header>
               <Presupuesto leadId={lead.id} modo={marca!.modo as 'cerrado' | 'dia'} idioma={lead.idioma || 'es'} actual={presupuestoActual}
+                enlace={presupuestoActual ? enlacePresupuesto(presupuestoActual.token, lead.marca) : ''}
                 inicial={{ concepto: nombreProyecto(lead.empresa?.trim() || lead.nombre?.trim() || lead.email, marca!), plan: propuesto?.diseno || '', precio: propuesto?.precio ?? null }} />
             </section>
           )}

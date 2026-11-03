@@ -8,14 +8,13 @@ export type PresupuestoFicha = {
   caduca: string | null; aceptado_at: string | null; aceptado_nombre: string | null; aceptado_ip: string | null; version: number | null
 }
 
-const PUBLICA = 'https://joux-web.vercel.app'
 const eur = (n: number) => new Intl.NumberFormat('es-ES', { maximumFractionDigits: 2, useGrouping: 'always' } as Intl.NumberFormatOptions).format(n) + ' €'
 const fecha = (iso: string) => new Date(iso).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid' })
 
 // Presupuesto con aceptación online: Joel lo prepara aquí y pega el enlace en su email de propuesta. El cliente
 // acepta en /aceptar/<token> (casilla de las condiciones vigentes) y eso gana el lead. Uno vivo por lead.
-export default function Presupuesto({ leadId, modo, idioma, inicial, actual }: {
-  leadId: number; modo: 'cerrado' | 'dia'; idioma: string
+export default function Presupuesto({ leadId, modo, idioma, inicial, actual, enlace }: {
+  leadId: number; modo: 'cerrado' | 'dia'; idioma: string; enlace: string
   inicial: { concepto: string; plan: string; precio: number | null }; actual: PresupuestoFicha | null
 }) {
   const router = useRouter()
@@ -42,7 +41,6 @@ export default function Presupuesto({ leadId, modo, idioma, inicial, actual }: {
     if (!r?.ok) { setError(j?.error || 'No se pudo anular'); return }
     router.refresh()
   }
-  const enlace = actual ? `${PUBLICA}/aceptar/${actual.token}` : ''
   const copiar = async () => { await navigator.clipboard.writeText(enlace).catch(() => {}); setCopiado(true); setTimeout(() => setCopiado(false), 1600) }
 
   if (actual?.estado === 'aceptado') return (

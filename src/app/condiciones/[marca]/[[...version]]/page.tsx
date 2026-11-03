@@ -1,6 +1,9 @@
 import { readFile } from 'fs/promises'
+import { headers } from 'next/headers'
+import { redirect } from 'next/navigation'
+import { DOMINIO_PRESUPUESTO, marcaDeHost } from '@/lib/dominios-presupuesto'
 import { supabaseServer as sb } from '@/lib/supabase-server'
-import { condicionesVersion, condicionesVigentes, type Condiciones } from '@/lib/presupuestos'
+import { condicionesVersion, condicionesVigentes, enlaceCondiciones, type Condiciones } from '@/lib/presupuestos'
 import TextoCondiciones from '../../texto'
 import { Marco } from '../../../aceptar/marca'
 
@@ -13,6 +16,13 @@ export const metadata = { title: 'Condiciones del servicio', robots: { index: fa
 // tal cual, para ver una versión antes de insertarla.
 export default async function CondicionesPage({ params, searchParams }: { params: { marca: string; version?: string[] }; searchParams: { lang?: string; borrador?: string } }) {
   const idioma = searchParams.lang === 'en' ? 'en' : 'es'
+  // Las de una marca con subdominio se leen allí (presupuesto.<dominio>/condiciones); el middleware ya reescribe
+  // esa ruta a esta página con la marca del host, así que aquí solo se redirige desde Joux Hub.
+  const enSubdominio = !!marcaDeHost(headers().get('host'))
+  if (!enSubdominio && DOMINIO_PRESUPUESTO[params.marca] && !searchParams.borrador && process.env.NODE_ENV === 'production') {
+    const v = Number(params.version?.[0])
+    redirect(v > 0 ? enlaceCondiciones(params.marca, v, idioma) : `https://${DOMINIO_PRESUPUESTO[params.marca]}/condiciones${idioma === 'en' ? '?lang=en' : ''}`)
+  }
   const v = params.version?.[0]
   const c = !/^[a-z]+$/.test(params.marca) ? null
     : searchParams.borrador && process.env.NODE_ENV !== 'production' ? await borrador(params.marca, idioma)

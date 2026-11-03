@@ -1,5 +1,8 @@
 import { readFile } from 'fs/promises'
-import { presupuestoDeToken, enlaceCondiciones, type Presupuesto } from '@/lib/presupuestos'
+import { headers } from 'next/headers'
+import { redirect } from 'next/navigation'
+import { DOMINIO_PRESUPUESTO, marcaDeHost } from '@/lib/dominios-presupuesto'
+import { presupuestoDeToken, enlaceCondiciones, enlacePresupuesto, type Presupuesto } from '@/lib/presupuestos'
 import TextoCondiciones from '../../condiciones/texto'
 import { Marco } from '../marca'
 import FormAceptar from './form'
@@ -43,6 +46,11 @@ const CONTACTO: Record<string, string> = { arkevo: 'hola@arkevostudio.com', cart
 
 export default async function AceptarPage({ params, searchParams }: { params: { token: string }; searchParams: { estado?: string; modo?: string; marca?: string } }) {
   const d = params.token === 'demo' ? await demo(searchParams) : await presupuestoDeToken(params.token)
+  // En el subdominio de una marca solo se abren sus presupuestos; el enlace de Joux Hub de una marca con
+  // subdominio (los primeros que se enviaron) lleva al suyo.
+  const hostMarca = marcaDeHost(headers().get('host'))
+  if (d && hostMarca && d.p.marca !== hostMarca) return <Marco marca="otra" nombre=""><h1>Enlace no válido</h1><p className="pz__nota">Link not valid.</p></Marco>
+  if (d && !hostMarca && params.token !== 'demo' && DOMINIO_PRESUPUESTO[d.p.marca] && process.env.NODE_ENV === 'production') redirect(enlacePresupuesto(d.p.token, d.p.marca))
   if (!d) return <Marco marca="otra" nombre=""><h1>Enlace no válido</h1><p className="pz__nota">Link not valid. Revisa el enlace del email o responde a ese correo.</p></Marco>
   const { p, cond, lead } = d
   const t = T[p.idioma]

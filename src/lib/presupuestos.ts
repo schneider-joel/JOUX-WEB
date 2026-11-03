@@ -11,10 +11,14 @@ import { notificar } from '@/lib/push'
 import { enviarMensajeLead } from '@/lib/enviar-lead'
 import { remitenteLead } from '@/lib/remitentes'
 import type { Lead } from '@/lib/leads'
+import { DOMINIO_PRESUPUESTO } from '@/lib/dominios-presupuesto'
 
 export const PUBLICA = 'https://joux-web.vercel.app'
-export const enlacePresupuesto = (token: string) => `${PUBLICA}/aceptar/${token}`
-export const enlaceCondiciones = (marca: string, version: number, idioma: string) => `${PUBLICA}/condiciones/${marca}/${version}${idioma === 'en' ? '?lang=en' : ''}`
+// Con el subdominio de la marca si tiene (presupuesto.arkevostudio.com/<token>); si no, el de Joux Hub.
+export const enlacePresupuesto = (token: string, marca: string) =>
+  DOMINIO_PRESUPUESTO[marca] ? `https://${DOMINIO_PRESUPUESTO[marca]}/${token}` : `${PUBLICA}/aceptar/${token}`
+export const enlaceCondiciones = (marca: string, version: number, idioma: string) =>
+  (DOMINIO_PRESUPUESTO[marca] ? `https://${DOMINIO_PRESUPUESTO[marca]}/condiciones/${version}` : `${PUBLICA}/condiciones/${marca}/${version}`) + (idioma === 'en' ? '?lang=en' : '')
 
 export type Condiciones = { id: number; marca: string; version: number; idioma: string; titulo: string; texto: string; created_at: string }
 export type Presupuesto = {
@@ -166,8 +170,8 @@ export function textoConfirmacion(p: Pick<Presupuesto, 'marca' | 'idioma' | 'mod
     ? (en ? `${eur(precio, 'en')} + VAT, in two payments: 50% to start and 50% ${p.marca === 'cartela' ? 'on delivery' : 'before launch'}.` : `${eur(precio, 'es')} + IVA, en dos pagos: 50 % para empezar y 50 % ${p.marca === 'cartela' ? 'al entregar la carta' : 'antes de publicar'}.`)
     : (en ? `${eur(tarifa, 'en')}/day + VAT${Number(p.dias) > 0 ? `, about ${p.dias} days` : ''}, invoiced on delivery.` : `${eur(tarifa, 'es')}/día + IVA${Number(p.dias) > 0 ? `, unos ${p.dias} días` : ''}, a la entrega.`)
   const cuerpo = en
-    ? `Hi ${pila},\n\nThis confirms you have accepted the quote "${p.concepto}":\n\n${importe}\n\nTerms of service (v${cond.version}): ${enlaceCondiciones(cond.marca, cond.version, cond.idioma)}\nYour quote: ${enlacePresupuesto(p.token)}\n\nKeep this email as your copy. We will be in touch shortly with the next steps.\n\n${firma}`
-    : `Hola, ${pila}:\n\nTe confirmamos que has aceptado el presupuesto «${p.concepto}»:\n\n${importe}\n\nCondiciones del servicio (v${cond.version}): ${enlaceCondiciones(cond.marca, cond.version, cond.idioma)}\nTu presupuesto: ${enlacePresupuesto(p.token)}\n\nGuarda este correo como copia. En breve te escribimos con los siguientes pasos.\n\n${firma}`
+    ? `Hi ${pila},\n\nThis confirms you have accepted the quote "${p.concepto}":\n\n${importe}\n\nTerms of service (v${cond.version}): ${enlaceCondiciones(cond.marca, cond.version, cond.idioma)}\nYour quote: ${enlacePresupuesto(p.token, p.marca)}\n\nKeep this email as your copy. We will be in touch shortly with the next steps.\n\n${firma}`
+    : `Hola, ${pila}:\n\nTe confirmamos que has aceptado el presupuesto «${p.concepto}»:\n\n${importe}\n\nCondiciones del servicio (v${cond.version}): ${enlaceCondiciones(cond.marca, cond.version, cond.idioma)}\nTu presupuesto: ${enlacePresupuesto(p.token, p.marca)}\n\nGuarda este correo como copia. En breve te escribimos con los siguientes pasos.\n\n${firma}`
   return { asunto: en ? `Quote accepted · ${p.concepto}` : `Presupuesto aceptado · ${p.concepto}`, cuerpo }
 }
 
