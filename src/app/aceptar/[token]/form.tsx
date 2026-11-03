@@ -38,17 +38,17 @@ export default function FormAceptar({ token, idioma, nombre: inicial, version }:
   }
 
   return (
-    <form className="block" style={{ gap: 18 }} onSubmit={enviar}>
-      <div className="field">
-        <label className="caps" htmlFor="a-nombre">{t.nombre}</label>
+    <form className="pz__form" onSubmit={enviar}>
+      <div className="pz__campo">
+        <label className="pz__label" htmlFor="a-nombre">{t.nombre}</label>
         <input id="a-nombre" required minLength={2} maxLength={200} autoComplete="name" value={nombre} onChange={e => setNombre(e.target.value)} />
       </div>
-      <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer' }}>
-        <input type="checkbox" checked={acepto} onChange={e => setAcepto(e.target.checked)} style={{ marginTop: 3 }} />
-        <span>{t.casilla(version)}{t.particular && <><br /><span className="dim" style={{ fontSize: 13 }}>{t.particular}</span></>}</span>
+      <label className="pz__casilla">
+        <input type="checkbox" checked={acepto} onChange={e => setAcepto(e.target.checked)} />
+        <span>{t.casilla(version)}{t.particular && <small>{t.particular}</small>}</span>
       </label>
-      {error && <p className="nota error">{error}</p>}
-      <button type="submit" className="pill" disabled={enviando || !acepto || nombre.trim().length < 2} style={{ alignSelf: 'flex-start' }}>{enviando ? t.enviando : t.aceptar}</button>
+      {error && <p className="pz__error" role="alert">{error}</p>}
+      <button type="submit" className="pz__btn" disabled={enviando || !acepto || nombre.trim().length < 2}>{enviando ? t.enviando : t.aceptar}</button>
     </form>
   )
 }

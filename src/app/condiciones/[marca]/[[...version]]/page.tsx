@@ -2,6 +2,7 @@ import { readFile } from 'fs/promises'
 import { supabaseServer as sb } from '@/lib/supabase-server'
 import { condicionesVersion, condicionesVigentes, type Condiciones } from '@/lib/presupuestos'
 import TextoCondiciones from '../../texto'
+import { Marco } from '../../../aceptar/marca'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -17,23 +18,15 @@ export default async function CondicionesPage({ params, searchParams }: { params
     : searchParams.borrador && process.env.NODE_ENV !== 'production' ? await borrador(params.marca, idioma)
     : v ? (/^\d{1,4}$/.test(v) ? await condicionesVersion(params.marca, Number(v), idioma) : null)
     : await condicionesVigentes(params.marca, idioma)
-  if (!c) return <div className="app"><main className="publica publica--vacia"><p className="empty">No encontrado · Not found</p></main></div>
+  if (!c) return <Marco marca="otra" nombre=""><h1>No encontrado</h1><p className="pz__nota">Not found.</p></Marco>
   const { data: marca } = await sb.from('marcas').select('nombre').eq('key', c.marca).maybeSingle()
   const fecha = new Date(c.created_at).toLocaleDateString(c.idioma === 'en' ? 'en-GB' : 'es-ES', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/Madrid' })
   return (
-    <div className="app">
-      <main className="publica">
-        <div className="col">
-          <header className="page-header">
-            <div className="page-header__txt">
-              <p className="tags caps">{marca?.nombre || c.marca} · v{c.version} · {fecha}</p>
-              <h1 className="page-title">{c.titulo}</h1>
-            </div>
-          </header>
-          <TextoCondiciones texto={c.texto} />
-        </div>
-      </main>
-    </div>
+    <Marco marca={c.marca} nombre={marca?.nombre || c.marca}>
+      <span className="pz__label">{marca?.nombre || c.marca} · v{c.version} · {fecha}</span>
+      <h1>{c.titulo}</h1>
+      <section className="pz__sec pz__solo"><TextoCondiciones texto={c.texto} /></section>
+    </Marco>
   )
 }
 

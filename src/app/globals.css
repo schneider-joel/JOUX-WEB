@@ -637,14 +637,6 @@ a.d__btn { color: inherit; text-decoration: none; }
 /* la fecha lleva el año (formato inglés): columna más ancha que en Treatments */
 .dias--pub .d__fila { grid-template-columns: 104px minmax(0, 1fr) auto 14px; }
 .publica .p__head .st { white-space: nowrap; }
-/* Condiciones del servicio y presupuesto aceptable (/condiciones, /aceptar): texto largo, cómodo de leer */
-.condiciones { display: flex; flex-direction: column; gap: 12px; font-size: 15px; line-height: 1.6; color: var(--muted); }
-.condiciones h2 { font-size: 16px; font-weight: 500; color: var(--text); margin: 18px 0 0; letter-spacing: -.01em; }
-.condiciones p, .condiciones ul { margin: 0; }
-.condiciones > h2:first-child { margin-top: 0; }
-.condiciones ul, .condiciones__lista { padding-left: 18px; display: flex; flex-direction: column; gap: 6px; margin: 0; }
-.publica details > .condiciones { margin-top: 16px; }
-.publica details > summary { cursor: pointer; }
 
 /* Factura: la barra y la edición con el aspecto del hub; la hoja, siempre en claro (es lo que se imprime y se envía).
    Dentro de la hoja, solo dos líneas: bajo la cabecera de los conceptos y antes del total. */

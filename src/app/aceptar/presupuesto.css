@@ -1,0 +1,102 @@
+/* Presupuesto (/aceptar) y condiciones (/condiciones) con la identidad de cada marca. Todo cuelga de .pz;
+   el tema lo elige data-marca. Los valores salen de arkevo/web/assets/css/site.css, de cambios.css (Cartela) y
+   de personal/web (joelschneider.io). */
+@font-face { font-family: 'Geist'; font-weight: 400 600; font-display: swap; src: url(/fonts/joel/geist.woff2) format('woff2'); }
+@font-face { font-family: 'Geist Mono'; font-weight: 400 500; font-display: swap; src: url(/fonts/joel/geist-mono.woff2) format('woff2'); }
+@font-face { font-family: 'Instrument Sans'; font-weight: 400 700; font-display: swap; src: url(/fonts/cartela/instrument-sans-normal-400-700.woff2) format('woff2'); }
+@font-face { font-family: 'Bricolage Grotesque'; font-weight: 800; font-display: swap; src: url(/fonts/cartela/bricolage-grotesque-800.woff2) format('woff2'); }
+
+.pz {
+  --bg: #0B0B0B; --card: transparent; --ink: #EDEDEC; --muted: #A3A3A0; --line: rgba(237,237,236,.1);
+  --accent: #EDEDEC; --on-accent: #0B0B0B; --link: #EDEDEC; --ok: #3DD68C; --err: #E5484D;
+  --body: 'Geist', system-ui, sans-serif; --disp: 'Geist', system-ui, sans-serif; --disp-w: 500; --disp-ls: -.02em; --disp-st: 100%;
+  --label: 500 11px/1.2 'Geist Mono', ui-monospace, monospace; --label-ls: .08em;
+  --radio: 0px; --sombra: none; --ease: cubic-bezier(.22,1,.36,1);
+  min-height: 100dvh; padding: 56px 22px 72px; background: var(--bg); color: var(--ink);
+  font: 400 16px/1.55 var(--body); -webkit-font-smoothing: antialiased;
+}
+html:has(.pz), body:has(.pz) { background: #0B0B0B; }
+
+/* Arkevo: papel, tinta azul marino, Archivo ancho en los títulos y Geist Mono en las etiquetas */
+.pz[data-marca="arkevo"] {
+  --bg: #F3F0EA; --ink: #16233F; --muted: #66625A; --line: rgba(22,35,63,.12); --accent: #16233F; --on-accent: #F3F0EA;
+  --link: #2F5BD3; --ok: #1E7A3C; --err: #B3261E; --disp: var(--archivo), 'Archivo', sans-serif; --disp-w: 600; --disp-ls: -.035em; --disp-st: 112%;
+}
+html:has(.pz[data-marca="arkevo"]), body:has(.pz[data-marca="arkevo"]) { background: #F3F0EA; }
+
+/* Cartela: Vichy, tarjeta de papel sobre crema, Bricolage en los títulos y botón rojo */
+.pz[data-marca="cartela"] {
+  --bg: #E9E1CF; --card: #F7EFDF; --ink: #231B17; --muted: #65574E; --line: rgba(35,27,23,.14); --accent: #D3371E; --on-accent: #fff;
+  --link: #B52C15; --ok: #1E7A3C; --err: #B52C15; --body: 'Instrument Sans', system-ui, sans-serif;
+  --disp: 'Bricolage Grotesque', sans-serif; --disp-w: 800; --disp-ls: -.025em; --label: 700 11px/1.2 'Instrument Sans', sans-serif; --label-ls: .1em;
+  --radio: 22px; --sombra: 0 30px 60px -30px rgba(35,27,23,.45); padding-top: 32px;
+}
+html:has(.pz[data-marca="cartela"]), body:has(.pz[data-marca="cartela"]) { background: #E9E1CF; }
+
+/* joelschneider.io: negro, Geist y Geist Mono (los valores por defecto de .pz) */
+html:has(.pz[data-marca="custom"]), body:has(.pz[data-marca="custom"]) { background: #0B0B0B; }
+
+.pz *, .pz *::before, .pz *::after { box-sizing: border-box; }
+.pz a { color: var(--link); text-underline-offset: 3px; }
+.pz :focus-visible { outline: 2px solid var(--link); outline-offset: 3px; }
+.pz__app { max-width: 640px; margin: 0 auto; background: var(--card); border-radius: var(--radio); box-shadow: var(--sombra); }
+.pz[data-marca="cartela"] .pz__app { max-width: 560px; padding: 24px 24px 32px; }
+@media (max-width: 600px) {
+  .pz { padding: 32px 18px 56px; }
+  .pz[data-marca="cartela"] { padding: 0; }
+  .pz[data-marca="cartela"] .pz__app { border-radius: 0; min-height: 100dvh; box-shadow: none; padding: 22px 20px 40px; }
+}
+
+.pz__top { margin-bottom: 48px; }
+.pz__logo { display: block; height: 28px; width: auto; margin: 0; }
+.pz[data-marca="custom"] .pz__logo { height: 15px; }
+.pz__logo--cartela { display: flex; align-items: center; gap: 7px; height: auto; font: 800 17px/1 'Bricolage Grotesque', sans-serif; letter-spacing: -.025em; }
+.pz__logo--cartela .cz__simbolo { width: 20px; height: 20px; }
+.pz[data-marca="cartela"] .pz__top { margin-bottom: 28px; }
+
+.pz__label { display: block; margin: 0 0 10px; font: var(--label); letter-spacing: var(--label-ls); text-transform: uppercase; color: var(--muted); }
+.pz h1 { margin: 0 0 32px; font-family: var(--disp); font-weight: var(--disp-w); font-stretch: var(--disp-st); letter-spacing: var(--disp-ls);
+  font-size: clamp(30px, 6vw, 44px); line-height: 1.02; text-wrap: balance; overflow-wrap: anywhere; }
+.pz__sec { padding: 28px 0; border-top: 1px solid var(--line); }
+
+/* Detalle del presupuesto */
+.pz__kv { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px 20px; margin: 0; }
+.pz__kv dt { color: var(--muted); }
+.pz__kv dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.pz__kv dd.pz__precio { font-family: var(--disp); font-weight: var(--disp-w); font-stretch: var(--disp-st); letter-spacing: var(--disp-ls); font-size: 22px; line-height: 1.2; }
+.pz__lista { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; }
+.pz__nota { margin: 0; color: var(--muted); font-size: 14.5px; }
+.pz__sec > .pz__nota + .pz__nota { margin-top: 10px; }
+
+/* Condiciones: texto largo, cómodo de leer */
+.pz details summary { cursor: pointer; font-weight: 500; list-style: none; display: inline-flex; align-items: center; gap: 8px; }
+.pz details summary::-webkit-details-marker { display: none; }
+.pz details summary::before { content: '+'; display: inline-grid; place-items: center; width: 22px; height: 22px; border: 1px solid var(--line); border-radius: 99px; font-size: 14px; line-height: 1; }
+.pz details[open] summary::before { content: '−'; }
+.pz .condiciones { display: flex; flex-direction: column; gap: 12px; margin-top: 20px; font-size: 15px; line-height: 1.65; color: var(--muted); }
+.pz .condiciones h2 { margin: 18px 0 0; font-family: var(--body); font-size: 16px; font-weight: 600; color: var(--ink); letter-spacing: -.01em; }
+.pz .condiciones > h2:first-child { margin-top: 0; }
+.pz .condiciones p, .pz .condiciones ul { margin: 0; }
+.pz .condiciones ul { padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+.pz__solo .condiciones { margin-top: 0; }
+.pz__abrir { display: inline-block; margin-top: 14px; font-size: 14.5px; }
+
+/* Aceptar */
+.pz__form { display: flex; flex-direction: column; gap: 20px; }
+.pz__campo { display: flex; flex-direction: column; }
+.pz__campo input { width: 100%; min-height: 48px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: transparent; color: var(--ink); font: inherit; transition: border-color .2s var(--ease); }
+.pz[data-marca="cartela"] .pz__campo input { background: #fff; border-width: 1.5px; border-radius: 14px; }
+.pz__campo input:focus { outline: none; border-color: var(--link); }
+.pz__casilla { display: flex; gap: 12px; align-items: flex-start; cursor: pointer; }
+.pz__casilla input { flex: none; width: 20px; height: 20px; margin: 2px 0 0; accent-color: var(--accent); cursor: pointer; }
+.pz__casilla small { display: block; margin-top: 4px; color: var(--muted); font-size: 13px; }
+.pz__btn { align-self: flex-start; min-height: 50px; padding: 14px 26px; border: 0; border-radius: 99px; background: var(--accent); color: var(--on-accent); font: 600 15.5px/1 var(--body); cursor: pointer; transition: opacity .2s var(--ease), transform .2s var(--ease); }
+.pz__btn:disabled { opacity: .4; cursor: not-allowed; }
+.pz__btn:active:not(:disabled) { transform: scale(.98); }
+@media (max-width: 600px) { .pz__btn { align-self: stretch; } }
+.pz__error { margin: 0; color: var(--err); font-size: 14.5px; }
+.pz__hecho { margin: 0; padding: 18px 20px; border: 1px solid var(--line); border-radius: 14px; }
+.pz__hecho strong { display: block; margin-bottom: 4px; color: var(--ok); font-weight: 600; }
+
+.pz__pie { margin: 40px 0 0; color: var(--muted); font-size: 13px; }
+@media (prefers-reduced-motion: reduce) { .pz * { transition: none !important; } }
