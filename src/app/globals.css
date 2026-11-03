@@ -641,6 +641,7 @@ a.d__btn { color: inherit; text-decoration: none; }
 .condiciones { display: flex; flex-direction: column; gap: 12px; font-size: 15px; line-height: 1.6; color: var(--muted); }
 .condiciones h2 { font-size: 16px; font-weight: 500; color: var(--text); margin: 18px 0 0; letter-spacing: -.01em; }
 .condiciones p, .condiciones ul { margin: 0; }
+.condiciones > h2:first-child { margin-top: 0; }
 .condiciones ul, .condiciones__lista { padding-left: 18px; display: flex; flex-direction: column; gap: 6px; margin: 0; }
 .publica details > .condiciones { margin-top: 16px; }
 .publica details > summary { cursor: pointer; }
