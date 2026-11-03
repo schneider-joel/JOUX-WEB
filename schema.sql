@@ -1879,7 +1879,7 @@ SET cuerpo = replace(cuerpo, 'Los aplicamos en 24 h, sin límite.', 'Los aplicam
 WHERE marca = 'cartela' AND clave = 'entrega.final' AND idioma = 'es';
 
 -- ============================================================
--- Presupuestos con aceptación online (2026-11-03, decidido por Joel; pendiente de aplicar con su OK).
+-- Presupuestos con aceptación online (2026-11-03, decidido por Joel; aplicado en producción con su OK el mismo día).
 -- Joel prepara el presupuesto en la ficha del lead; el cliente lo abre en /aceptar/<token>, marca la casilla de
 -- las condiciones y pulsa «Aceptar». Eso guarda la prueba (nombre, email, fecha, IP, navegador, versión y sha256
 -- del texto) y marca el lead ganado con el precio del presupuesto. La factura la sigue enviando Joel.
@@ -1898,7 +1898,7 @@ CREATE TABLE IF NOT EXISTS condiciones (
 );
 ALTER TABLE condiciones ENABLE ROW LEVEL SECURITY;
 
-CREATE OR REPLACE FUNCTION condiciones_inmutables() RETURNS trigger LANGUAGE plpgsql AS $$
+CREATE OR REPLACE FUNCTION condiciones_inmutables() RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $$
 BEGIN
   RAISE EXCEPTION 'Las condiciones publicadas no se modifican: inserta una versión nueva';
 END $$;
