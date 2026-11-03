@@ -103,7 +103,7 @@ Panel financiero personal de Joel, autónomo en España: facturación, timesheet
 
 ## Estado actual
 
-- **Presupuestos con aceptación** (2026-11-03): código hecho y probado en local con la demo, **sin push**. Migración aplicada en producción el mismo día. Falta: (1) rellenar los `[[Joel: …]]` de `condiciones/*-v1.md`, revisión legal e insertar las cuatro v1; (2) probarlo con un lead de prueba de punta a punta.
+- **Presupuestos con aceptación** (2026-11-03): código hecho y probado en local con la demo, **sin push**. Migración aplicada en producción el mismo día. Falta: (1) que Joel revise las v1 de Arkevo, Cartela y Custom (NIF y alojamiento de Arkevo puestos) e insertarlas con `condiciones/insertar-v1.sql`; The Pitch Lab queda sin condiciones por ahora (decisión de Joel); (2) probarlo con un lead de prueba de punta a punta.
 
 - **Rediseño de la interfaz** (2026-10-20, fases 1–5 y ficha del lead en producción; ver «Interfaz» arriba). La factura volvió al diseño anterior al 15-10 (d3f0abc). Pendiente: fase 6 (suscripciones: Joel decide cómo cobrar las cuotas: transferencia con factura, domiciliación o tarjeta).
 - **Cartela** (2026-10-19): alta completa en código y en la base (fila en `marcas`, orden 5; plantillas `es` de proyecto.bienvenida, material.recordatorio, revision.lista, revision.recordatorio, entrega.final y factura.pago; `crear_factura_pago()` pone «Carta digital <plan>» en sus facturas). Dominio cartela.live; `hola@cartela.live` activo en «Enviar como» e `INTAKE_KEY_CARTELA` puesta (el primer lead llegó el 2026-10-23). Falta verificar cartela.live en Resend (sin eso no salen los emails de proyecto).

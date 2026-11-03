@@ -1,6 +1,6 @@
 ## Quién presta el servicio
 
-Arkevo es una marca de Joel Schneider Mena, diseñador autónomo con domicilio en Valencia (España), NIF [[Joel: NIF]]. Contacto: hola@arkevostudio.com. En estas condiciones, «nosotros» es Joel Schneider Mena y «el cliente» es quien acepta el presupuesto.
+Arkevo es una marca de Joel Schneider Mena, diseñador autónomo con domicilio en Valencia (España), NIF 15464978P. Contacto: hola@arkevostudio.com. En estas condiciones, «nosotros» es Joel Schneider Mena y «el cliente» es quien acepta el presupuesto.
 
 ## Qué se contrata
 
@@ -26,8 +26,10 @@ Están incluidas dos rondas de cambios sobre la web montada. Una ronda es una li
 ## Dominio, alojamiento y mantenimiento
 
 - El dominio está siempre a nombre del cliente.
-- [[Joel: qué pasa con el alojamiento sin mantenimiento — p. ej. «Sin mantenimiento contratado, entregamos la web publicada en el alojamiento del cliente» o «los primeros 12 meses de alojamiento van incluidos»]].
-- El mantenimiento (alojamiento, copias de seguridad, pequeños cambios y publicar obras nuevas) es opcional y se contrata aparte.
+- El alojamiento de la web y su certificado de seguridad (https) están incluidos durante el primer año desde la publicación.
+- Después, el alojamiento se renueva por años a 120 € + IVA al año, que avisamos con al menos 30 días de antelación. No incluye cambios en la web.
+- Si el cliente no renueva, le entregamos los archivos de la web para que la aloje donde quiera, y dejamos de alojarla 30 días después del vencimiento.
+- El mantenimiento (alojamiento, copias de seguridad, pequeños cambios y publicar obras nuevas) es opcional y se contrata aparte. Si se contrata, sustituye a la renovación del alojamiento.
 
 ## Propiedad de la web
 

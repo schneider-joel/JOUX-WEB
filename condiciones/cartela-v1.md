@@ -1,6 +1,6 @@
 ## Quién presta el servicio
 
-Cartela es una marca de Joel Schneider Mena, diseñador autónomo con domicilio en Valencia (España), NIF [[Joel: NIF]]. Contacto: hola@cartela.live. En estas condiciones, «nosotros» es Joel Schneider Mena y «el cliente» es el local o la empresa que acepta el presupuesto.
+Cartela es una marca de Joel Schneider Mena, diseñador autónomo con domicilio en Valencia (España), NIF 15464978P. Contacto: hola@cartela.live. En estas condiciones, «nosotros» es Joel Schneider Mena y «el cliente» es el local o la empresa que acepta el presupuesto.
 
 ## Qué se contrata
 

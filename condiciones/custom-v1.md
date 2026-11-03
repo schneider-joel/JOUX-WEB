@@ -1,6 +1,6 @@
 ## Quién presta el servicio
 
-Joel Schneider Mena, diseñador autónomo con domicilio en Valencia (España), NIF [[Joel: NIF]]. Contacto: joel@joelschneider.io. En estas condiciones, «yo» soy Joel Schneider Mena y «el cliente» es quien acepta el presupuesto.
+Joel Schneider Mena, diseñador autónomo con domicilio en Valencia (España), NIF 15464978P. Contacto: joel@joelschneider.io. En estas condiciones, «yo» soy Joel Schneider Mena y «el cliente» es quien acepta el presupuesto.
 
 ## Qué se contrata
 
