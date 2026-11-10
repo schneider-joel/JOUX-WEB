@@ -690,7 +690,7 @@ export default function Hub({ children }: { children?: React.ReactNode }) {
                     <li key={f.id} className="fila">
                       <div className="fila__main">
                         <span className="fila__t" title={`${f.cliente}${f.descripcion ? ` · ${f.descripcion}` : ''}`}>{f.cliente}{f.descripcion ? <span> · {f.descripcion}</span> : null}</span>
-                        <span className="fila__s caps" title={`Vence ${fmtDate(f.fecha_vencimiento || f.fecha)}${f.numero ? ` · ${f.numero}` : ''}${lineaImpuestos(f)}`}>Vence {fmtDate(f.fecha_vencimiento || f.fecha)}{f.numero ? ` · ${f.numero}` : ''}{lineaImpuestos(f)}</span>
+                        <span className="fila__s caps" title={`Vence ${fmtDate(f.fecha_vencimiento || f.fecha)}${f.numero ? ` · ${f.numero}` : ''}${f.numero_referencia ? ` · Ref. ${f.numero_referencia}` : ''}${lineaImpuestos(f)}`}>Vence {fmtDate(f.fecha_vencimiento || f.fecha)}{f.numero ? ` · ${f.numero}` : ''}{f.numero_referencia ? ` · Ref. ${f.numero_referencia}` : ''}{lineaImpuestos(f)}</span>
                       </div>
                       <span className="num">€{fmt(totalACobrar(f))}</span>
                       <button type="button" className="tick" onClick={() => marcarCobrada(f)} title="Marcar como cobrada" aria-label={`Marcar como cobrada: ${f.cliente}`}><Icon.check /></button>
@@ -1192,7 +1192,7 @@ function FilaFactura({ f, trim, fueraDeOrden, href, onCobrar, onBorrar }: { f: F
       <button type="button" className="p__head p__head--fa" aria-expanded={abierta} onClick={() => setAbierta(!abierta)}>
         <span className="fa__t">{f.cliente}{f.descripcion ? <span> · {f.descripcion}</span> : null}</span>
         <span className="p__s caps">
-          {f.numero ? `${f.numero} · ` : ''}{pendiente ? `Vence ${fmtDate(f.fecha_vencimiento || f.fecha)}` : f.fecha_cobro ? `Cobrada ${fmtDate(f.fecha_cobro)}` : `Emitida ${fmtDate(f.fecha)}`}
+          {f.numero ? `${f.numero} · ` : ''}{f.numero_referencia ? `Ref. ${f.numero_referencia} · ` : ''}{pendiente ? `Vence ${fmtDate(f.fecha_vencimiento || f.fecha)}` : f.fecha_cobro ? `Cobrada ${fmtDate(f.fecha_cobro)}` : `Emitida ${fmtDate(f.fecha)}`}
           {fueraDeOrden && <> · <span className="aviso" title="La fecha no sigue el orden de su número: revisala">fuera de orden</span></>}
         </span>
         <span className="p__v num">€{fmt(totalACobrar(f))}</span>

@@ -54,7 +54,7 @@ Panel financiero personal de Joel, autónomo en España: facturación, timesheet
 - **Qué mover** (Hoy; `src/lib/que-mover.ts`, servidor en `que-mover-server.ts`): regla de Joel (2026-10-22): al empezar el mes, BBVA cubre los fijos y Revolut los variables (400 €); de cada cobro, los impuestos a la hucha y el resto a ahorros. Se calcula sobre saldos: hucha frente a IRPF + IVA del trimestre en curso (y del anterior hasta su plazo si no hay cargo de Hacienda), Revolut frente a los variables que quedan, y lo que sobra en BBVA tras los fijos por pagar va a ahorros. El push de cobro añade el reparto. Los pagos a Hacienda (`CATEGORIA_IMPUESTOS`) no cuentan como gasto del mes.
 - Los movimientos pendientes (`estado = 'PDNG'`) se descartan cuando aparece su gemelo confirmado. Los marcados a mano se conservan.
 - Clasificación (`src/lib/movimientos.ts`): las reglas del usuario (`reglas_movimientos`) van antes que las de por defecto. Se compara primero con el comercio y luego con todo el texto. `clase`: cobro · ingreso · interno · personal · reembolso · gasto.
-- `conciliarTodo()` (`src/lib/conciliar.ts`) clasifica, enlaza compras, enlaza cobros con facturas (combinación exacta de importes) y sincroniza Compartidos. Cada cobro nuevo enlazado se guarda en `notificaciones` y se envía por push (`src/lib/push.ts`, Web Push con claves VAPID).
+- `conciliarTodo()` (`src/lib/conciliar.ts`) clasifica, enlaza compras, enlaza cobros con facturas (combinación exacta de importes; si varias suman lo mismo, gana la que encaja con las referencias del concepto —«274 to 277», «268 269», «to 277» cuando el banco corta el principio—, luego la que no se salta referencias y luego la de facturas pendientes: `combinacion()` / `referenciasDe()`) y sincroniza Compartidos. Cada cobro nuevo enlazado se guarda en `notificaciones` y se envía por push (`src/lib/push.ts`, Web Push con claves VAPID).
 - El trigger `sumar_factura_cobrada` no toca las cuentas sincronizadas con el banco.
 
 ## Otras piezas
@@ -102,6 +102,8 @@ Panel financiero personal de Joel, autónomo en España: facturación, timesheet
 - Commits con mensaje en inglés, en imperativo y descriptivo.
 
 ## Estado actual
+
+- **Conciliación por referencia** (2026-11-10): el cobro de Ambushed del 10-11 (1.903 €) se enlazó a 261 + 274 + 277 en vez de 274–277 (836 = 660 + 176). Corregido a mano en producción con OK de Joel (274–277 → pago del 10-11; 261 y 262 → pago del 9-9) y `combinacion()` ahora puntúa por la referencia. El nº de referencia sale en las filas de Finanzas › Facturas y en «Por cobrar» de Hoy (el timesheet ya lo enseñaba). Sin push.
 
 - **Limpieza de datos de prueba** (2026-11-04, con OK de Joel): borrados de producción los leads 13, 21, 28 y 30–34, los proyectos de prueba 220–221, los presupuestos 1–4, el local de Cartela Cresta (id 1, con sus peticiones y accesos) y 15 notificaciones de pruebas. Ninguna factura de prueba quedaba ni había gastado un número F- (F-2026-73 es de Ambushed). Siguen las carpetas de Drive de 220–221 en el Drive de joel@.
 
