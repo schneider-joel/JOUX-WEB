@@ -1936,3 +1936,34 @@ CREATE TABLE IF NOT EXISTS presupuestos (
 );
 ALTER TABLE presupuestos ENABLE ROW LEVEL SECURITY;
 CREATE INDEX IF NOT EXISTS presupuestos_lead ON presupuestos (lead_id, created_at DESC);
+
+-- MIGRACIÓN: la factura de timesheet hereda la marca del proyecto (2026-11-12,
+-- aplicada con el MCP: factura_desde_proyecto_copia_marca). Antes el trigger no
+-- copiaba proyectos.marca y las facturas creadas desde el 12-10 salían sin marca.
+CREATE OR REPLACE FUNCTION public.crear_factura_desde_proyecto()
+ RETURNS trigger LANGUAGE plpgsql AS $function$
+DECLARE
+  monto DECIMAL(10,2);
+  fecha_emision DATE;
+  tipo TEXT;
+BEGIN
+  IF NEW.status = 'facturado' AND (OLD.status IS DISTINCT FROM 'facturado') THEN
+    SELECT COALESCE(SUM(total_day), 0), MAX(fecha) INTO monto, fecha_emision FROM dias_trabajados WHERE proyecto_id = NEW.id;
+    IF fecha_emision IS NULL THEN fecha_emision := CURRENT_DATE; END IF;
+    SELECT CASE WHEN pais = 'ES' THEN 'dentro_ue' ELSE 'fuera_ue' END INTO tipo FROM clientes_fiscales WHERE cliente = NEW.cliente;
+    IF NOT EXISTS (SELECT 1 FROM facturas WHERE proyecto_id = NEW.id) THEN
+      INSERT INTO facturas (cliente, descripcion, importe, fecha, fecha_vencimiento, estado, origen, proyecto_id, numero_referencia, numero, tipo_factura, marca)
+      VALUES (NEW.cliente, NEW.nombre, monto, fecha_emision, fecha_emision + 30, 'pendiente', 'timesheet', NEW.id, NEW.numero_proyecto, siguiente_numero_factura(), COALESCE(tipo, 'fuera_ue'), NEW.marca);
+    END IF;
+  ELSIF OLD.status = 'facturado' AND NEW.status IS DISTINCT FROM 'facturado' THEN
+    DELETE FROM facturas WHERE proyecto_id = NEW.id AND estado = 'pendiente';
+  END IF;
+  RETURN NEW;
+END;
+$function$;
+
+-- DATOS: marca de las facturas que se quedaron sin ella (2026-11-12, aplicado con el MCP).
+-- Los pagos de afiliado de Framer (Dub Partners) van a custom.
+UPDATE facturas SET marca = 'pitchlab' WHERE numero = 'F-2026-69';
+UPDATE facturas SET marca = 'ab'       WHERE numero IN ('F-2026-72','F-2026-73','F-2026-74');
+UPDATE facturas SET marca = 'custom'   WHERE marca IS NULL AND cliente = 'Framer (Dub Technologies Inc.)';
