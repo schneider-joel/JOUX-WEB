@@ -29,14 +29,14 @@ type Mov = { id: string; fecha: string; importe: number; contraparte: string | n
 type Rep = { id: number; movimiento_id: string | null; fecha: string; importe: number; concepto: string | null }
 type FilaLinea = Linea & { id: number; reparto_id: number }
 
-// Columnas fijas de la tabla; las del resto salen de los ajustes.
-const COLUMNAS: { destino: Linea['destino']; titulo: string }[] = [
-  { destino: 'impuestos', titulo: 'Impuestos' },
-  { destino: 'regularizacion', titulo: 'Regulariz.' },
-  { destino: 'autonomo', titulo: 'Autónomo ›' },
-  { destino: 'fijos', titulo: 'Fijos ›' },
-  { destino: 'variables', titulo: 'Variables ›' },
-]
+// Color de cada destino en la barra y los botones: impuestos ámbar,
+// regularización rojo, la reserva del mes siguiente en grises azulados y el
+// resto con el color de su cuenta (el mismo punto que en Huchas y Patrimonio).
+const COLOR: Partial<Record<Linea['destino'], string>> = {
+  impuestos: 'var(--amber)', regularizacion: 'var(--red)',
+  autonomo: '#9AA3B5', fijos: '#7C8799', variables: '#5E6A7D',
+}
+const COLOR_CRYPTO = '#8A8A87'
 
 export default function RepartoTab({ cuentas, facturas, compras, fijos, variables, cuotaReal, reales, reload }: {
   cuentas: Cuenta[]; facturas: Factura[]; compras: Compra[]
@@ -52,6 +52,7 @@ export default function RepartoTab({ cuentas, facturas, compras, fijos, variable
   const [resto, setResto] = useState<ParteResto[]>([])
   const [desde, setDesde] = useState('2026-11-01')
   const [excluidos, setExcluidos] = useState<string[]>([])
+  const [verQuitados, setVerQuitados] = useState(false)
   const [cargado, setCargado] = useState(false)
   const [ocupado, setOcupado] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -131,13 +132,6 @@ export default function RepartoTab({ cuentas, facturas, compras, fijos, variable
     cuotaReal, cuotaTramo: autonomo.tramo.cuota, factorIrpf, resto, huchaRegularizacion: huchaReg,
   }), [cobros, cuentas, fijos, variables, cuotaReal, autonomo.tramo.cuota, factorIrpf, resto, huchaReg])
 
-  // Columnas del resto: las de los ajustes (siempre, aunque este mes no quede resto)
-  // y las que aparezcan en repartos guardados.
-  const columnasResto = useMemo(() => {
-    const out: string[] = resto.filter(p => p.pct > 0).map(p => p.destino === 'crypto' ? 'Crypto' : cuentas.find(c => c.id === p.cuenta_id)?.nombre || 'Otro')
-    for (const ls of Array.from(propuesta.values())) for (const l of ls) if (l.destino === 'resto' && !out.includes(l.etiqueta)) out.push(l.etiqueta)
-    return out
-  }, [propuesta, resto, cuentas])
 
   // Lo que hay que tener el día 1 del mes siguiente en la operativa.
   const fijosSinCuota = fijos.filter(f => !esCuotaAutonomo(f.nombre)).reduce((t, f) => t + Number(f.limite), 0)
@@ -194,6 +188,14 @@ export default function RepartoTab({ cuentas, facturas, compras, fijos, variable
     setOcupado(false)
   }
 
+  async function devolver(id: string) {
+    setOcupado(true)
+    const lista = excluidos.filter(x => x !== id)
+    const { error: e } = await supabase.from('configuracion').upsert({ clave: 'reparto_excluidos', valor: JSON.stringify(lista) })
+    if (e) setError(e.message); else setExcluidos(lista)
+    setOcupado(false)
+  }
+
   // Vuelve a la propuesta calculada (borra lo guardado y lo que llevó a las huchas).
   async function recalcular(c: Cobro) {
     if (!c.reparto_id) return
@@ -205,18 +207,13 @@ export default function RepartoTab({ cuentas, facturas, compras, fijos, variable
     await cargar(); reload(); setOcupado(false)
   }
 
-  const celda = (c: Cobro, l: Linea | undefined) => {
-    if (!l) return <td className="rp__c"><span className="dim">—</span></td>
-    return (
-      <td className="rp__c">
-        <button type="button" className={`rp__chk${l.hecho ? ' on' : ''}`} disabled={ocupado} onClick={() => marcar(c, l.orden, !l.hecho)}
-          title={`${l.etiqueta}${l.detalle ? ` · ${l.detalle}` : ''}${l.cuenta_id ? ` → ${cuentas.find(x => x.id === l.cuenta_id)?.nombre}` : ''}`}
-          aria-pressed={!!l.hecho} aria-label={`${l.etiqueta} €${fmt2(l.importe)}${l.hecho ? ', hecho' : ''}`}>
-          <i aria-hidden>{l.hecho ? '✓' : ''}</i>€{fmt(l.importe)}
-        </button>
-      </td>
-    )
+  const colorDe = (l: Linea) => COLOR[l.destino] || (l.cuenta_id ? cuentas.find(x => x.id === l.cuenta_id)?.color : null) || COLOR_CRYPTO
+  // Nombre corto del botón: la reserva lleva el mes al que va.
+  const nombreDe = (l: Linea, c: Cobro) => {
+    const mes = nombreMes(mesSiguiente(c.fecha)).slice(0, 3)
+    return l.destino === 'autonomo' ? `Cuota ${mes}` : l.destino === 'fijos' ? `Fijos ${mes}` : l.destino === 'variables' ? `Variables ${mes}` : l.etiqueta
   }
+  const ayuda = (l: Linea) => `${l.etiqueta}${l.detalle ? ` · ${l.detalle}` : ''}${l.cuenta_id ? ` → ${cuentas.find(x => x.id === l.cuenta_id)?.nombre}` : ''}`
 
   return (
     <div className="col rp">
@@ -230,52 +227,98 @@ export default function RepartoTab({ cuentas, facturas, compras, fijos, variable
       {error && <p className="nota error">{error}</p>}
 
       <section className="fx__card" aria-labelledby="rp-cobros">
-        <header><h2 id="rp-cobros">Cobros y reparto</h2><span className="caps dim">desde el {fecha(desde)} · toca para marcar ✓</span></header>
-        {!cargado ? <p className="nota">Cargando…</p> : filas.length === 0 ? <p className="nota">Sin cobros desde el {fecha(desde)}.</p> : (
-          <div className="rp__scroll">
-            <table className="rp__t">
-              <thead>
-                <tr>
-                  <th>Cobro</th><th className="rp__n">Importe</th>
-                  {COLUMNAS.filter(k => k.destino !== 'regularizacion' || huchaReg).map(k => <th key={k.destino}>{k.titulo}</th>)}
-                  {columnasResto.map(t => <th key={t}>{t}</th>)}
-                  <th aria-label="Acciones" />
-                </tr>
-              </thead>
-              {meses.map(mes => {
-                const del = filas.filter(c => c.fecha.startsWith(mes))
+        <header><h2 id="rp-cobros">Cobros</h2><span className="caps dim">toca un destino cuando hayas hecho el traspaso</span></header>
+        {!cargado ? <p className="nota">Cargando…</p> : filas.length === 0 ? <p className="nota">Sin cobros desde el {fecha(desde)}.</p> : meses.map(mes => {
+          const del = filas.filter(c => c.fecha.startsWith(mes))
+          const reservado = Math.min(objetivoReserva, del.flatMap(c => propuesta.get(c) || []).filter(l => l.destino === 'autonomo' || l.destino === 'fijos' || l.destino === 'variables').reduce((t, l) => t + Number(l.importe), 0))
+          const pctReserva = objetivoReserva > 0 ? reservado / objetivoReserva * 100 : 100
+          const sig = nombreMes(mesSiguiente(mes))
+          return (
+            <div key={mes} className="rp__mes">
+              <div className="rp__mesh">
+                <h3>{mesLargo(mes).replace(/ de \d{4}$/, '')}<span className="dim"> · €{fmt(del.reduce((t, c) => t + c.importe, 0))}</span></h3>
+                <div className="rp__res" title={`Cuota €${fmt(cuotaReal)} + fijos €${fmt(fijosSinCuota)} + variables €${fmt(variablesMes)}`}>
+                  <span className="dim">Reserva de {sig}</span>
+                  <span className="rp__meter"><i style={{ width: `${pctReserva}%` }} /></span>
+                  <b className={pctReserva >= 100 ? 'ok' : ''}>{pctReserva >= 100 ? 'Cubierta ✓' : `€${fmt(reservado)} / €${fmt(objetivoReserva)}`}</b>
+                </div>
+              </div>
+              {del.map(c => {
+                const ls = propuesta.get(c) || []
+                const hechos = ls.filter(l => l.hecho).length
+                const todo = ls.length > 0 && hechos === ls.length
                 return (
-                  <tbody key={mes}>
-                    <tr className="rp__mes"><th colSpan={4 + COLUMNAS.length + columnasResto.length} className="caps dim">{mesLargo(mes)} · €{fmt(del.reduce((t, c) => t + c.importe, 0))} · reserva de {nombreMes(mesSiguiente(mes))}: €{fmt(Math.min(objetivoReserva, del.flatMap(c => propuesta.get(c) || []).filter(l => l.destino === 'autonomo' || l.destino === 'fijos' || l.destino === 'variables').reduce((t, l) => t + Number(l.importe), 0)))} de €{fmt(objetivoReserva)}</th></tr>
-                    {del.map(c => {
-                      const ls = propuesta.get(c) || []
-                      const todo = ls.length > 0 && ls.every(l => l.hecho)
-                      return (
-                        <tr key={c.movimiento_id || `r${c.reparto_id}`} className={todo ? 'rp__ok' : ''}>
-                          <td className="rp__q">
-                            <b>{c.concepto}</b>
-                            <small className="dim">{fecha(c.fecha)}{c.facturas.length ? ` · ${c.facturas.map(f => f.numero).join(', ')}` : ' · sin factura'}{c.reparto_id ? ' · guardado' : ''}</small>
-                          </td>
-                          <td className="rp__n num">€{fmt2(c.importe)}</td>
-                          {COLUMNAS.filter(k => k.destino !== 'regularizacion' || huchaReg).map(k => <td key={k.destino} className="rp__td">{celda(c, ls.find(l => l.destino === k.destino))}</td>)}
-                          {columnasResto.map(t => <td key={t} className="rp__td">{celda(c, ls.find(l => l.destino === 'resto' && l.etiqueta === t))}</td>)}
-                          <td className="rp__acc">
-                            {!todo && <button type="button" className="copy caps" disabled={ocupado} onClick={() => marcar(c, 'todo', true)}>✓ todo</button>}
-                            {c.reparto_id && <button type="button" className="copy caps" disabled={ocupado} onClick={() => recalcular(c)}>Recalcular</button>}
-                            {!c.reparto_id && c.movimiento_id && <button type="button" className="copy caps" disabled={ocupado} onClick={() => excluir(c)} title="No es un cobro: sacarlo del reparto">Quitar</button>}
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
+                  <article key={c.movimiento_id || `r${c.reparto_id}`} className={`rp__cob${todo ? ' ok' : ''}`}>
+                    <header className="rp__cobh">
+                      <div className="rp__quien">
+                        <b>{c.concepto}</b>
+                        <small className="dim">{fecha(c.fecha)} · {c.facturas.length ? c.facturas.map(f => f.numero).join(', ') : 'sin factura'}</small>
+                      </div>
+                      <div className="rp__cuanto">
+                        <b className="num">€{fmt2(c.importe)}</b>
+                        <small className={todo ? 'ok' : 'dim'}>{todo ? 'Repartido ✓' : `${hechos} de ${ls.length} hechos`}</small>
+                      </div>
+                    </header>
+                    <div className="rp__bar" role="img" aria-label={ls.map(l => `${nombreDe(l, c)} €${fmt(l.importe)}`).join(', ')}>
+                      {ls.map(l => <i key={l.orden} className={l.hecho ? 'on' : ''} style={{ flex: Number(l.importe), background: colorDe(l) }} title={`${nombreDe(l, c)} · €${fmt2(l.importe)}`} />)}
+                    </div>
+                    <div className="rp__chips">
+                      {ls.map(l => (
+                        <button key={l.orden} type="button" className={`rp__chip${l.hecho ? ' on' : ''}`} disabled={ocupado}
+                          onClick={() => marcar(c, l.orden, !l.hecho)} title={ayuda(l)} aria-pressed={!!l.hecho}
+                          style={{ '--c': colorDe(l) } as React.CSSProperties}>
+                          <i aria-hidden>{l.hecho ? '✓' : ''}</i><span>{nombreDe(l, c)}</span><b className="num">€{fmt(l.importe)}</b>
+                        </button>
+                      ))}
+                    </div>
+                    <footer className="rp__cobf">
+                      {!todo && <button type="button" className="pill pill--sm" disabled={ocupado} onClick={() => marcar(c, 'todo', true)}>✓ Todo hecho</button>}
+                      <span className="rp__mas">
+                        {c.reparto_id && <button type="button" className="copy caps" disabled={ocupado} onClick={() => recalcular(c)}>Recalcular</button>}
+                        {!c.reparto_id && c.movimiento_id && c.facturas.length === 0 && <button type="button" className="copy caps" disabled={ocupado} onClick={() => excluir(c)} title="No es un cobro: sacarlo del reparto">No es un cobro</button>}
+                      </span>
+                    </footer>
+                  </article>
                 )
               })}
-            </table>
-          </div>
-        )}
-        <p className="nota rp__ley">
-          Cascada: impuestos de sus facturas (IRPF al {Math.round(20 * factorIrpf)} % efectivo) → regularización hasta €{fmt(autonomo.diferencia)}/mes → reserva del mes siguiente (›): cuota €{fmt(cuotaReal)} + fijos €{fmt(fijosSinCuota)} + variables €{fmt(variablesMes)}, que se quedan en BBVA (el día 1 pasas los variables a Revolut) → el resto en %. Lo que ya cubrió un cobro anterior no se vuelve a pedir.
-        </p>
+            </div>
+          )
+        })}
+
+        {(() => {
+          const quitados = movs.filter(m => excluidos.includes(m.id) && m.fecha >= desde)
+          if (!quitados.length) return null
+          return (
+            <div className="rp__fuera">
+              <button type="button" className="copy" onClick={() => setVerQuitados(!verQuitados)}>
+                {quitados.length} movimiento{quitados.length === 1 ? '' : 's'} fuera del reparto {verQuitados ? '−' : '+'}
+              </button>
+              {verQuitados && (
+                <ul>
+                  {quitados.map(m => (
+                    <li key={m.id}>
+                      <span className="dim">{fecha(m.fecha)}</span>
+                      <span>{m.contraparte || m.concepto || 'Movimiento'}</span>
+                      <b className="num">€{fmt2(Number(m.importe))}</b>
+                      <button type="button" className="copy caps" disabled={ocupado} onClick={() => devolver(m.id)}>Devolver</button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )
+        })()}
+
+        <details className="rp__como">
+          <summary>¿Cómo se reparte cada cobro?</summary>
+          <ol>
+            <li><i style={{ background: COLOR.impuestos }} /><b>Impuestos</b><span>IRPF ({Math.round(20 * factorIrpf)} % efectivo) y el IVA si el cliente es de España → hucha de impuestos</span></li>
+            <li><i style={{ background: COLOR.regularizacion }} /><b>Regularización</b><span>hasta €{fmt(autonomo.diferencia)} al mes: tu tramo (€{fmt(autonomo.tramo.cuota)}) menos lo que pagas (€{fmt(cuotaReal)}) → BBVA Ahorros</span></li>
+            <li><i style={{ background: COLOR.fijos }} /><b>Reserva del mes siguiente</b><span>cuota €{fmt(cuotaReal)} + fijos €{fmt(fijosSinCuota)} + variables €{fmt(variablesMes)}: se queda en BBVA; el día 1 pasas los variables a Revolut</span></li>
+            <li><i style={{ background: 'var(--green)' }} /><b>El resto</b><span>{resto.filter(p => p.pct > 0).map(p => `${Math.round(p.pct)} % ${p.destino === 'crypto' ? 'crypto' : cuentas.find(c => c.id === p.cuenta_id)?.nombre || ''}`).join(' · ')}</span></li>
+          </ol>
+          <p className="dim">Cada paso solo pide lo que falta: si un cobro anterior ya cubrió la reserva, el siguiente va directo al resto. Al marcar el primer destino, el reparto de ese cobro queda guardado.</p>
+        </details>
       </section>
 
       <Huchas cuentas={cuentas} huchas={huchas} asignado={asignado} hmovs={hmovs} recargar={async () => { await cargar(); reload() }} />
