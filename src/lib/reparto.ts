@@ -1,11 +1,12 @@
 // Reparto de cada cobro (Finanzas › Reparto). Regla de Joel (2026-11-17), en
 // cascada: 1) impuestos de sus facturas (IVA + IRPF) a la hucha de impuestos;
-// 2) la cuota de autónomo del mes (la que se paga, en la operativa) y la
-// diferencia con la del tramo real a la hucha «Regularización autónomo»;
-// 3) lo que falte para los fijos del mes; 4) lo que falte para los variables
-// (Revolut); 5) el resto en % (`configuracion.reparto_resto`).
-// Los pasos 2–4 son del mes: lo que ya cubrió un cobro anterior del mismo
-// mes no se vuelve a pedir. Sin dependencias de servidor.
+// 2) la diferencia entre la cuota del tramo real y la que se paga, a la hucha
+// «Regularización autónomo» (se acumula por mes trabajado); 3) la reserva del
+// MES SIGUIENTE: cuota de autónomo, fijos y variables, que se quedan en la
+// operativa (Joel carga BBVA y Revolut el día 1, así que lo que cobra durante
+// el mes paga el mes que viene; el día 1 los variables pasan a Revolut);
+// 4) el resto en % (`configuracion.reparto_resto`). Cada objetivo cuenta lo
+// que ya cubrieron los cobros anteriores. Sin dependencias de servidor.
 import type { Cuenta, Factura } from './supabase'
 
 export const IVA = 0.21
@@ -78,12 +79,27 @@ export function impuestosDe(c: Pick<Cobro, 'importe' | 'facturas'>, factorIrpf: 
   return { iva: r2(iva), irpf: r2(irpf) }
 }
 
+// Mes siguiente a una fecha (AAAA-MM).
+export const mesSiguiente = (fecha: string) => {
+  const [a, m] = fecha.slice(0, 7).split('-').map(Number)
+  return m === 12 ? `${a + 1}-01` : `${a}-${String(m + 1).padStart(2, '0')}`
+}
+const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
+export const nombreMes = (ym: string) => MESES[Number(ym.slice(5, 7)) - 1]
+
+// A qué mes cuenta cada destino: la regularización, al mes del cobro; la
+// reserva (autónomo, fijos, variables), al mes siguiente.
+const claveDe = (destino: Destino, fecha: string) =>
+  destino === 'regularizacion' ? `${destino}:${fecha.slice(0, 7)}` : `${destino}:${mesSiguiente(fecha)}`
+
 // Propuesta de cada cobro, en orden de fecha. Los congelados se respetan tal
-// cual y cuentan para lo ya cubierto en su mes.
+// cual y cuentan primero para lo ya cubierto.
 export function repartir(cobros: Cobro[], ctx: Contexto): Map<Cobro, Linea[]> {
   const { op, hucha, variables } = cuentasDelReparto(ctx.cuentas)
   const regDif = Math.max(0, ctx.cuotaTramo - ctx.cuotaReal)
-  const cubierto: Record<string, Record<'autonomo' | 'regularizacion' | 'fijos' | 'variables', number>> = {}
+  const cubierto: Record<string, number> = {}
+  const sumar = (destino: Destino, fecha: string, n: number) => { const k = claveDe(destino, fecha); cubierto[k] = (cubierto[k] || 0) + n; return n }
+  const ya = (destino: Destino, fecha: string) => cubierto[claveDe(destino, fecha)] || 0
   const out = new Map<Cobro, Linea[]>()
   const orden = [...cobros].sort((a, b) => a.fecha.localeCompare(b.fecha) || (a.movimiento_id || '').localeCompare(b.movimiento_id || ''))
 
@@ -91,15 +107,13 @@ export function repartir(cobros: Cobro[], ctx: Contexto): Map<Cobro, Linea[]> {
   // anterior sin guardar volvería a pedir lo que ya cubrió uno guardado.
   for (const c of orden) {
     if (!c.lineas) continue
-    const acc = (cubierto[c.fecha.slice(0, 7)] ||= { autonomo: 0, regularizacion: 0, fijos: 0, variables: 0 })
-    for (const l of c.lineas) if (l.destino in acc) acc[l.destino as keyof typeof acc] += Number(l.importe)
+    for (const l of c.lineas) if (l.destino !== 'impuestos' && l.destino !== 'resto') sumar(l.destino, c.fecha, Number(l.importe))
     out.set(c, c.lineas)
   }
 
   for (const c of orden) {
     if (c.lineas) continue
-    const mes = c.fecha.slice(0, 7)
-    const acc = (cubierto[mes] ||= { autonomo: 0, regularizacion: 0, fijos: 0, variables: 0 })
+    const sig = nombreMes(mesSiguiente(c.fecha))
     let queda = r2(Number(c.importe))
     const lineas: Linea[] = []
     const poner = (l: Omit<Linea, 'orden' | 'importe'>, quiere: number) => {
@@ -113,11 +127,11 @@ export function repartir(cobros: Cobro[], ctx: Contexto): Map<Cobro, Linea[]> {
     const imp = impuestosDe(c, ctx.factorIrpf)
     poner({ destino: 'impuestos', etiqueta: 'Impuestos', cuenta_id: hucha?.id ?? null, hucha_id: null,
       detalle: [imp.iva ? `IVA ${eur(imp.iva)}` : '', `IRPF ${eur(imp.irpf)}`, c.facturas.length ? '' : 'sin factura'].filter(Boolean).join(' · ') }, imp.iva + imp.irpf)
-    acc.autonomo += poner({ destino: 'autonomo', etiqueta: 'Autónomo', cuenta_id: op?.id ?? null, hucha_id: null, detalle: `cuota del mes ${eur(ctx.cuotaReal)}` }, ctx.cuotaReal - acc.autonomo)
     if (ctx.huchaRegularizacion && regDif > 0)
-      acc.regularizacion += poner({ destino: 'regularizacion', etiqueta: 'Regularización', cuenta_id: ctx.huchaRegularizacion.cuenta_id, hucha_id: ctx.huchaRegularizacion.id, detalle: `tramo ${eur(ctx.cuotaTramo)} − pagas ${eur(ctx.cuotaReal)}` }, regDif - acc.regularizacion)
-    acc.fijos += poner({ destino: 'fijos', etiqueta: 'Fijos', cuenta_id: op?.id ?? null, hucha_id: null, detalle: `fijos del mes ${eur(ctx.fijosMes)}` }, ctx.fijosMes - acc.fijos)
-    acc.variables += poner({ destino: 'variables', etiqueta: 'Variables', cuenta_id: variables?.id ?? null, hucha_id: null, detalle: `variables del mes ${eur(ctx.variablesMes)}` }, ctx.variablesMes - acc.variables)
+      sumar('regularizacion', c.fecha, poner({ destino: 'regularizacion', etiqueta: 'Regularización', cuenta_id: ctx.huchaRegularizacion.cuenta_id, hucha_id: ctx.huchaRegularizacion.id, detalle: `tramo ${eur(ctx.cuotaTramo)} − pagas ${eur(ctx.cuotaReal)}` }, regDif - ya('regularizacion', c.fecha)))
+    sumar('autonomo', c.fecha, poner({ destino: 'autonomo', etiqueta: 'Autónomo', cuenta_id: op?.id ?? null, hucha_id: null, detalle: `cuota de ${sig} ${eur(ctx.cuotaReal)}, se queda en ${op?.nombre || 'la operativa'}` }, ctx.cuotaReal - ya('autonomo', c.fecha)))
+    sumar('fijos', c.fecha, poner({ destino: 'fijos', etiqueta: 'Fijos', cuenta_id: op?.id ?? null, hucha_id: null, detalle: `fijos de ${sig} ${eur(ctx.fijosMes)}, se quedan en ${op?.nombre || 'la operativa'}` }, ctx.fijosMes - ya('fijos', c.fecha)))
+    sumar('variables', c.fecha, poner({ destino: 'variables', etiqueta: 'Variables', cuenta_id: op?.id ?? null, hucha_id: null, detalle: `variables de ${sig} ${eur(ctx.variablesMes)}: déjalos en ${op?.nombre || 'la operativa'} y pásalos a ${variables?.nombre || 'variables'} el día 1` }, ctx.variablesMes - ya('variables', c.fecha)))
 
     // El resto, en %: si no suman 100 se reparte en proporción; el último se lleva el redondeo.
     const partes = ctx.resto.filter(p => p.pct > 0)

@@ -11,7 +11,7 @@ import { supabase, batchQuery, type Compra, type Cuenta, type Factura, type Pres
 import { calcular, type Reales } from '@/lib/impuestos'
 import { cuotaAutonomo } from '@/lib/autonomo'
 import {
-  repartir, aportesAuto, asignadoPorHucha, parseResto, esCuotaAutonomo,
+  repartir, aportesAuto, asignadoPorHucha, parseResto, esCuotaAutonomo, mesSiguiente, nombreMes,
   type Cobro, type Hucha, type HuchaMov, type Linea, type ParteResto,
 } from '@/lib/reparto'
 
@@ -32,10 +32,10 @@ type FilaLinea = Linea & { id: number; reparto_id: number }
 // Columnas fijas de la tabla; las del resto salen de los ajustes.
 const COLUMNAS: { destino: Linea['destino']; titulo: string }[] = [
   { destino: 'impuestos', titulo: 'Impuestos' },
-  { destino: 'autonomo', titulo: 'Autónomo' },
   { destino: 'regularizacion', titulo: 'Regulariz.' },
-  { destino: 'fijos', titulo: 'Fijos' },
-  { destino: 'variables', titulo: 'Variables' },
+  { destino: 'autonomo', titulo: 'Autónomo ›' },
+  { destino: 'fijos', titulo: 'Fijos ›' },
+  { destino: 'variables', titulo: 'Variables ›' },
 ]
 
 export default function RepartoTab({ cuentas, facturas, compras, fijos, variables, cuotaReal, reales, reload }: {
@@ -139,6 +139,11 @@ export default function RepartoTab({ cuentas, facturas, compras, fijos, variable
     return out
   }, [propuesta, resto, cuentas])
 
+  // Lo que hay que tener el día 1 del mes siguiente en la operativa.
+  const fijosSinCuota = fijos.filter(f => !esCuotaAutonomo(f.nombre)).reduce((t, f) => t + Number(f.limite), 0)
+  const variablesMes = variables.reduce((t, v) => t + Number(v.limite), 0)
+  const objetivoReserva = cuotaReal + fijosSinCuota + variablesMes
+
   const filas = [...cobros].sort((a, b) => b.fecha.localeCompare(a.fecha))
   const meses = Array.from(new Set(filas.map(c => c.fecha.slice(0, 7))))
   const mesActual = hoy.slice(0, 7)
@@ -241,7 +246,7 @@ export default function RepartoTab({ cuentas, facturas, compras, fijos, variable
                 const del = filas.filter(c => c.fecha.startsWith(mes))
                 return (
                   <tbody key={mes}>
-                    <tr className="rp__mes"><th colSpan={4 + COLUMNAS.length + columnasResto.length} className="caps dim">{mesLargo(mes)} · €{fmt(del.reduce((t, c) => t + c.importe, 0))}</th></tr>
+                    <tr className="rp__mes"><th colSpan={4 + COLUMNAS.length + columnasResto.length} className="caps dim">{mesLargo(mes)} · €{fmt(del.reduce((t, c) => t + c.importe, 0))} · reserva de {nombreMes(mesSiguiente(mes))}: €{fmt(Math.min(objetivoReserva, del.flatMap(c => propuesta.get(c) || []).filter(l => l.destino === 'autonomo' || l.destino === 'fijos' || l.destino === 'variables').reduce((t, l) => t + Number(l.importe), 0)))} de €{fmt(objetivoReserva)}</th></tr>
                     {del.map(c => {
                       const ls = propuesta.get(c) || []
                       const todo = ls.length > 0 && ls.every(l => l.hecho)
@@ -269,7 +274,7 @@ export default function RepartoTab({ cuentas, facturas, compras, fijos, variable
           </div>
         )}
         <p className="nota rp__ley">
-          Cascada: impuestos de sus facturas (IRPF al {Math.round(20 * factorIrpf)} % efectivo) → cuota de autónomo → regularización hasta €{fmt(autonomo.diferencia)}/mes → fijos (€{fmt(fijos.filter(f => !esCuotaAutonomo(f.nombre)).reduce((t, f) => t + Number(f.limite), 0))}) → variables (€{fmt(variables.reduce((t, v) => t + Number(v.limite), 0))}) → el resto en %. Lo del mes que ya cubrió un cobro anterior no se vuelve a pedir.
+          Cascada: impuestos de sus facturas (IRPF al {Math.round(20 * factorIrpf)} % efectivo) → regularización hasta €{fmt(autonomo.diferencia)}/mes → reserva del mes siguiente (›): cuota €{fmt(cuotaReal)} + fijos €{fmt(fijosSinCuota)} + variables €{fmt(variablesMes)}, que se quedan en BBVA (el día 1 pasas los variables a Revolut) → el resto en %. Lo que ya cubrió un cobro anterior no se vuelve a pedir.
         </p>
       </section>
 
