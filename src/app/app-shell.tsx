@@ -40,6 +40,7 @@ const I = {
   gear: <svg {...svg}><circle cx="12" cy="12" r="3" /><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4L7 17M17 7l1.4-1.4" /></svg>,
   more: <svg {...svg}><circle cx="5" cy="12" r="1.2" /><circle cx="12" cy="12" r="1.2" /><circle cx="19" cy="12" r="1.2" /></svg>,
   wallet: <svg {...svg}><path d="M4 7h14a2 2 0 0 1 2 2v9H4z" /><path d="M4 7V6a2 2 0 0 1 2-2h10" /><circle cx="16" cy="13" r="1.2" /></svg>,
+  split: <svg {...svg}><path d="M12 4v6" /><path d="M12 10l-6 6v4M12 10l6 6v4M12 10v10" /></svg>,
   refresh: <svg {...svg}><path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6" /></svg>,
 }
 const ICONO_MARCA: Record<string, JSX.Element> = { arkevo: I.cube, cartela: I.cup, pitchlab: I.film, custom: I.code, ab: I.clock }
@@ -47,6 +48,7 @@ const ICONO_MARCA: Record<string, JSX.Element> = { arkevo: I.cube, cartela: I.cu
 // Finanzas: Patrimonio (fase 5) y las pestañas de Facturación, Bancos y Presupuesto.
 const FINANZAS = [
   { tab: 'patrimonio', label: 'Patrimonio', icono: I.chart },
+  { tab: 'reparto', label: 'Reparto', icono: I.split },
   { tab: 'facturas', label: 'Facturas', icono: I.doc },
   { tab: 'compras', label: 'Compras', icono: I.cart },
   { tab: 'impuestos', label: 'Impuestos', icono: I.euro },

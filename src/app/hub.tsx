@@ -7,6 +7,8 @@ import { usePublicarMarco } from './app-shell'
 import { rutaDeTab, tabDeRuta } from './rutas'
 import ImpuestosTab, { proximoPago, claveReal, type Reales } from './impuestos-tab'
 import CuentasCard from './cuentas-card'
+import RepartoTab from './reparto-tab'
+import { asignadoPorHucha, type Hucha } from '@/lib/reparto'
 import MarcaCard from './marca-card'
 import Link from 'next/link'
 import PatrimonioEvolucion from './patrimonio-evolucion'
@@ -54,7 +56,7 @@ const ultimosMeses = (n: number) => {
 }
 
 // Los timesheets son dinámicos: una pestaña "ts:<key>" por grupo de clientes (ver lib/timesheets).
-type Tab = 'dashboard' | 'patrimonio' | 'facturas' | 'compras' | 'impuestos' | 'presupuesto' | 'clientes' | 'bancos' | 'compartidos' | `ts:${string}` | `mk:${string}`
+type Tab = 'dashboard' | 'patrimonio' | 'reparto' | 'facturas' | 'compras' | 'impuestos' | 'presupuesto' | 'clientes' | 'bancos' | 'compartidos' | `ts:${string}` | `mk:${string}`
 type Seccion = { id: string; label: string; icon: () => JSX.Element; tabs: { id: Tab; label: string; badge?: number }[] }
 type NuevoProyecto = { nombre: string; cliente: string; numero_proyecto: string; modo_rate: 'hora' | 'dia' }
 type Modal = { type: string; data?: any } | null
@@ -239,6 +241,8 @@ export default function Hub({ children }: { children?: React.ReactNode }) {
   const [dias, setDias] = useState<DiaTrabajado[]>([])
   const [clientesFiscales, setClientesFiscales] = useState<ClienteFiscal[]>([])
   const [compras, setCompras] = useState<Compra[]>([])
+  const [huchas, setHuchas] = useState<Hucha[]>([])
+  const [huchasAsignado, setHuchasAsignado] = useState<Record<number, number>>({})
   const [cuotaAutonomo, setCuotaAutonomo] = useState(0)
   const [impuestosReales, setImpuestosReales] = useState<Reales>({})
   const [snapshots, setSnapshots] = useState<PatrimonioSnapshot[]>([])
@@ -252,7 +256,7 @@ export default function Hub({ children }: { children?: React.ReactNode }) {
   const [bancosSync, setBancosSync] = useState<number | null>(null)
 
   const loadData = useCallback(async () => {
-    const [c, cr, f, fi, v, cfg, pr, di, sn, cf, co, mv, bk, mk] = await batchQuery([
+    const [c, cr, f, fi, v, cfg, pr, di, sn, cf, co, mv, bk, mk, hu, hm] = await batchQuery([
       supabase.from('cuentas').select('*').order('orden'),
       supabase.from('crypto').select('*'),
       supabase.from('facturas').select('*').order('fecha'),
@@ -267,6 +271,8 @@ export default function Hub({ children }: { children?: React.ReactNode }) {
       supabase.from('movimientos').select('fecha,importe,categoria,clase,trabajo').order('fecha', { ascending: false }).limit(800),
       supabase.from('bancos_cuentas').select('cuenta_id'),
       supabase.from('marcas').select('*').order('created_at'),
+      supabase.from('huchas').select('*').eq('archivada', false).order('orden'),
+      supabase.from('huchas_movimientos').select('hucha_id,importe'),
     ])
     if (c.data) setCuentas(c.data)
     if (cr.data) setCrypto(cr.data)
@@ -280,6 +286,8 @@ export default function Hub({ children }: { children?: React.ReactNode }) {
     if (co.data) setCompras(co.data)
     if (mv.data) setMovsBanco(mv.data)
     if (mk.data) setMarcas(mk.data)
+    if (hu.data) setHuchas(hu.data)
+    if (hm.data) setHuchasAsignado(asignadoPorHucha(hm.data))
     fetch('/api/compartidos').then(r => r.ok ? r.json() : null).then(j => setCompartidos(j?.gastos || null)).catch(() => {})
     if (bk.data) setCuentasBanco(bk.data.map((b: { cuenta_id: number | null }) => b.cuenta_id).filter(Boolean))
     if (cfg.data) {
@@ -719,7 +727,10 @@ export default function Hub({ children }: { children?: React.ReactNode }) {
           const grupos = [
             ...cuentas.filter(c => !c.padre_id).map(c => {
               const hijos = cuentas.filter(h => h.padre_id === c.id)
-              return { clave: `c${c.id}`, nombre: c.nombre, color: c.color, total: aEuros(c) + hijos.reduce((t, h) => t + aEuros(h), 0), detalle: '', hijos: hijos.map(h => ({ nombre: h.nombre, total: aEuros(h) })), usd: c.moneda === 'USD' }
+              const hs = huchas.filter(h => h.cuenta_id === c.id)
+              const enHuchas = hs.reduce((t, h) => t + (huchasAsignado[h.id] || 0), 0)
+              const detalle = hs.length ? [...hs.map(h => `${h.nombre} €${fmt(huchasAsignado[h.id] || 0)}`), `sin asignar €${fmt(Number(c.saldo) - enHuchas)}`].join(' · ') : ''
+              return { clave: `c${c.id}`, nombre: c.nombre, color: c.color, total: aEuros(c) + hijos.reduce((t, h) => t + aEuros(h), 0), detalle, hijos: hijos.map(h => ({ nombre: h.nombre, total: aEuros(h) })), usd: c.moneda === 'USD' }
             }),
             ...(totalCrypto > 0 ? [{ clave: 'crypto', nombre: 'Cripto', color: '#8A8A87', total: totalCrypto, detalle: crypto.map(c => `${c.cantidad} ${c.symbol}`).join(' · '), hijos: [] as { nombre: string; total: number }[], usd: false }] : []),
           ].sort((a, b) => b.total - a.total)
@@ -766,7 +777,7 @@ export default function Hub({ children }: { children?: React.ReactNode }) {
                     <span className="pt__bn"><i style={{ background: g.color || 'var(--muted)' }} />{g.nombre}{g.usd && !/usd/i.test(g.nombre) && <small className="caps dim">USD</small>}</span>
                     <span className="pt__bv">€{fmt(g.total)}</span>
                     <span className="pt__bp">{pct(g.total)}</span>
-                    {(g.hijos.length > 0 || g.detalle) && <small className="pt__det" title={g.hijos.map(h => `${h.nombre} €${fmt(h.total)}`).join(' · ') || g.detalle}>{g.hijos.length ? g.hijos.map(h => `${h.nombre} €${fmt(h.total)}`).join(' · ') : g.detalle}</small>}
+                    {(g.hijos.length > 0 || g.detalle) && <small className="pt__det" title={[g.hijos.map(h => `${h.nombre} €${fmt(h.total)}`).join(' · '), g.detalle].filter(Boolean).join(' · ')}>{[g.hijos.map(h => `${h.nombre} €${fmt(h.total)}`).join(' · '), g.detalle].filter(Boolean).join(' · ')}</small>}
                   </div>
                 ))}
               </div>
@@ -970,6 +981,7 @@ export default function Hub({ children }: { children?: React.ReactNode }) {
           </div>
         )}
 
+        {tab === 'reparto' && <RepartoTab cuentas={cuentas} facturas={facturas} compras={compras} fijos={fijos} variables={variables} cuotaReal={cuotaAutonomo} reales={impuestosReales} reload={loadData} />}
         {tab === 'compartidos' && <CompartidosVista />}
         {tab === 'bancos' && <BancosTab cuentas={cuentas} mensaje={mensajeBanco} reload={loadData} />}
 

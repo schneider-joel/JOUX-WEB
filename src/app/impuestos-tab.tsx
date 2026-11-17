@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import type { Compra, Factura } from '@/lib/supabase'
 import { calcular, proximoPago, type Reales, type Trimestre } from '@/lib/impuestos'
+import { cuotaAutonomo } from '@/lib/autonomo'
+import Link from 'next/link'
 export { calcular, proximoPago, claveReal, type Reales } from '@/lib/impuestos'
 
 const PLAZOS = ['1–20 abr', '1–20 jul', '1–20 oct', '1–30 ene']
@@ -142,6 +144,17 @@ export default function ImpuestosTab({ facturas, compras, cuotaMensual, onSaveCu
           <label className="caps" htmlFor="cuota-autonomo">Cuota mensual · €</label>
           <input id="cuota-autonomo" type="number" value={cuota} onChange={e => setCuota(e.target.value)} onBlur={() => onSaveCuota(Number(cuota) || 0)} />
         </div>
+        {(() => {
+          // Cuota por ingresos reales (src/lib/autonomo.ts): la que corresponde al tramo del año en curso.
+          const hoy = new Date().toISOString().slice(0, 10)
+          const a = cuotaAutonomo(facturas, compras, cuotaMensual, hoy)
+          return (
+            <p className={`nota${a.diferencia >= 1 ? ' aviso' : ''}`} style={{ marginTop: 10 }}>
+              Por lo que llevas facturado en {hoy.slice(0, 4)} (rendimiento neto de €{eur(a.mensual)}/mes) te corresponde el tramo {a.tramo.n}: €{eur(a.tramo.cuota)}/mes.
+              {a.diferencia >= 1 ? <> Pagas €{eur(cuotaMensual)}: la regularización sería de unos €{eur(a.regularizacionAnio)} este año. Se aparta en <Link href="/finanzas/reparto" className="copy">Reparto →</Link></> : ' Coincide con lo que pagas.'}
+            </p>
+          )
+        })()}
       </section>
 
       {/* ZIP del trimestre para el gestor y, al desplegar, sus ventas y compras */}

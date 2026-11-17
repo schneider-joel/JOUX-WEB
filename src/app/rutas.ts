@@ -7,6 +7,7 @@
 export const RUTA_TAB: Record<string, string> = {
   dashboard: '/',
   patrimonio: '/finanzas',
+  reparto: '/finanzas/reparto',
   facturas: '/finanzas/facturas',
   compras: '/finanzas/compras',
   impuestos: '/finanzas/impuestos',

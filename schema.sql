@@ -1967,3 +1967,69 @@ $function$;
 UPDATE facturas SET marca = 'pitchlab' WHERE numero = 'F-2026-69';
 UPDATE facturas SET marca = 'ab'       WHERE numero IN ('F-2026-72','F-2026-73','F-2026-74');
 UPDATE facturas SET marca = 'custom'   WHERE marca IS NULL AND cliente = 'Framer (Dub Technologies Inc.)';
+
+-- MIGRACIÓN (2026-11-17): reparto de cobros y huchas (sub-ahorros).
+-- Finanzas › Reparto (src/app/reparto-tab.tsx, src/lib/reparto.ts): cada cobro
+-- se reparte en cascada (impuestos de sus facturas → cuota de autónomo del
+-- tramo real → fijos → variables → el resto en % de `reparto_resto`). La
+-- propuesta se calcula al vuelo; con el primer ✓ se congela en `repartos` +
+-- `reparto_lineas`. Huchas = destinos ficticios dentro de una cuenta: lo
+-- asignado es la suma de `huchas_movimientos` (a mano, o el `pct_auto` de cada
+-- ✓ que entra en su cuenta); «sin asignar» = saldo − Σ huchas. La hucha del
+-- sistema `regularizacion_autonomo` recibe la diferencia entre la cuota del
+-- tramo y la que se paga (`cuota_autonomo_mensual`).
+CREATE TABLE IF NOT EXISTS huchas (
+  id SERIAL PRIMARY KEY,
+  cuenta_id INT NOT NULL REFERENCES cuentas(id) ON DELETE CASCADE,
+  nombre TEXT NOT NULL,
+  clave TEXT UNIQUE,
+  meta DECIMAL(12,2),
+  fecha_meta DATE,
+  pct_auto DECIMAL(5,2) NOT NULL DEFAULT 0 CHECK (pct_auto BETWEEN 0 AND 100),
+  color TEXT,
+  orden INT NOT NULL DEFAULT 0,
+  archivada BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS repartos (
+  id SERIAL PRIMARY KEY,
+  movimiento_id TEXT UNIQUE REFERENCES movimientos(id) ON DELETE SET NULL,
+  fecha DATE NOT NULL,
+  importe DECIMAL(12,2) NOT NULL,
+  concepto TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS reparto_lineas (
+  id SERIAL PRIMARY KEY,
+  reparto_id INT NOT NULL REFERENCES repartos(id) ON DELETE CASCADE,
+  destino TEXT NOT NULL,
+  etiqueta TEXT,
+  cuenta_id INT REFERENCES cuentas(id) ON DELETE SET NULL,
+  hucha_id INT REFERENCES huchas(id) ON DELETE SET NULL,
+  importe DECIMAL(12,2) NOT NULL,
+  orden INT NOT NULL DEFAULT 0,
+  hecho BOOLEAN NOT NULL DEFAULT FALSE,
+  hecho_en TIMESTAMPTZ
+);
+CREATE TABLE IF NOT EXISTS huchas_movimientos (
+  id SERIAL PRIMARY KEY,
+  hucha_id INT NOT NULL REFERENCES huchas(id) ON DELETE CASCADE,
+  fecha DATE NOT NULL DEFAULT CURRENT_DATE,
+  importe DECIMAL(12,2) NOT NULL,
+  motivo TEXT,
+  reparto_linea_id INT REFERENCES reparto_lineas(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS reparto_lineas_reparto_idx ON reparto_lineas (reparto_id);
+CREATE INDEX IF NOT EXISTS huchas_movimientos_hucha_idx ON huchas_movimientos (hucha_id);
+ALTER TABLE huchas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE repartos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE reparto_lineas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE huchas_movimientos ENABLE ROW LEVEL SECURITY;
+
+INSERT INTO huchas (cuenta_id, nombre, clave) VALUES (10, 'Regularización autónomo', 'regularizacion_autonomo')
+ON CONFLICT (clave) DO NOTHING;
+INSERT INTO configuracion (clave, valor) VALUES
+  ('reparto_resto', '[{"cuenta_id":10,"pct":60},{"cuenta_id":5,"pct":20},{"destino":"crypto","pct":20}]'),
+  ('reparto_desde', '2026-11-01')
+ON CONFLICT (clave) DO NOTHING;

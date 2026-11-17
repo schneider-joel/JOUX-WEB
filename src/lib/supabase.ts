@@ -139,6 +139,7 @@ export type Factura = {
   archivo_nombre?: string
   // false = registro interno (p. ej. timesheet) que no es la factura declarada.
   fiscal?: boolean
+  movimiento_id?: string | null // el cobro del banco que la pagó
 }
 
 export type Compra = {
