@@ -87,14 +87,19 @@ export function repartir(cobros: Cobro[], ctx: Contexto): Map<Cobro, Linea[]> {
   const out = new Map<Cobro, Linea[]>()
   const orden = [...cobros].sort((a, b) => a.fecha.localeCompare(b.fecha) || (a.movimiento_id || '').localeCompare(b.movimiento_id || ''))
 
+  // Lo guardado cuenta primero, sea de la fecha que sea: si no, un cobro
+  // anterior sin guardar volvería a pedir lo que ya cubrió uno guardado.
   for (const c of orden) {
+    if (!c.lineas) continue
+    const acc = (cubierto[c.fecha.slice(0, 7)] ||= { autonomo: 0, regularizacion: 0, fijos: 0, variables: 0 })
+    for (const l of c.lineas) if (l.destino in acc) acc[l.destino as keyof typeof acc] += Number(l.importe)
+    out.set(c, c.lineas)
+  }
+
+  for (const c of orden) {
+    if (c.lineas) continue
     const mes = c.fecha.slice(0, 7)
     const acc = (cubierto[mes] ||= { autonomo: 0, regularizacion: 0, fijos: 0, variables: 0 })
-    if (c.lineas) {
-      for (const l of c.lineas) if (l.destino in acc) acc[l.destino as keyof typeof acc] += Number(l.importe)
-      out.set(c, c.lineas)
-      continue
-    }
     let queda = r2(Number(c.importe))
     const lineas: Linea[] = []
     const poner = (l: Omit<Linea, 'orden' | 'importe'>, quiere: number) => {

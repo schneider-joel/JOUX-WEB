@@ -22,6 +22,9 @@ const fecha = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('es-ES
 const mesLargo = (ym: string) => new Date(ym + '-01T00:00:00').toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })
 const hoyISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
 
+// Por debajo de esto, un ingreso sin factura no entra en el reparto.
+const MIN_INGRESO = 20
+
 type Mov = { id: string; fecha: string; importe: number; contraparte: string | null; concepto: string | null; cuenta_uid: string }
 type Rep = { id: number; movimiento_id: string | null; fecha: string; importe: number; concepto: string | null }
 type FilaLinea = Linea & { id: number; reparto_id: number }
@@ -48,13 +51,16 @@ export default function RepartoTab({ cuentas, facturas, compras, fijos, variable
   const [hmovs, setHmovs] = useState<HuchaMov[]>([])
   const [resto, setResto] = useState<ParteResto[]>([])
   const [desde, setDesde] = useState('2026-11-01')
+  const [excluidos, setExcluidos] = useState<string[]>([])
   const [cargado, setCargado] = useState(false)
   const [ocupado, setOcupado] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const cargar = useCallback(async () => {
-    const [m, bc, r, l, h, hm, cfg] = await batchQuery([
+    // Cobros (enlazados a factura) e ingresos sin factura: todo lo que entra de fuera.
+    const [m, mi, bc, r, l, h, hm, cfg] = await batchQuery([
       supabase.from('movimientos').select('id,fecha,importe,contraparte,concepto,cuenta_uid').eq('clase', 'cobro').order('fecha', { ascending: false }).limit(300),
+      supabase.from('movimientos').select('id,fecha,importe,contraparte,concepto,cuenta_uid').eq('clase', 'ingreso').order('fecha', { ascending: false }).limit(300),
       supabase.from('bancos_cuentas').select('uid,cuenta_id'),
       supabase.from('repartos').select('*').order('fecha', { ascending: false }),
       supabase.from('reparto_lineas').select('*').order('orden'),
@@ -62,9 +68,10 @@ export default function RepartoTab({ cuentas, facturas, compras, fijos, variable
       supabase.from('huchas_movimientos').select('*').order('fecha', { ascending: false }),
       supabase.from('configuracion').select('clave,valor'),
     ])
-    const err = [m, bc, r, l, h, hm, cfg].find(x => x.error)?.error
+    const err = [m, mi, bc, r, l, h, hm, cfg].find(x => x.error)?.error
     if (err) setError(err.message)
-    if (m.data) setMovs(m.data)
+    // Los ingresos pequeños (bonificaciones, comisiones devueltas) no se reparten.
+    if (m.data || mi.data) setMovs([...(m.data || []), ...(mi.data || []).filter((x: Mov) => Number(x.importe) >= MIN_INGRESO)])
     if (bc.data) setUidCuenta(Object.fromEntries(bc.data.map((x: { uid: string; cuenta_id: number | null }) => [x.uid, x.cuenta_id])))
     if (r.data) setReps(r.data)
     if (l.data) setLineas(l.data)
@@ -74,6 +81,7 @@ export default function RepartoTab({ cuentas, facturas, compras, fijos, variable
       const v = (k: string) => (cfg.data as { clave: string; valor: string }[]).find(x => x.clave === k)?.valor
       setResto(parseResto(v('reparto_resto')))
       if (v('reparto_desde')) setDesde(v('reparto_desde')!)
+      try { const x = JSON.parse(v('reparto_excluidos') || '[]'); setExcluidos(Array.isArray(x) ? x : []) } catch { setExcluidos([]) }
     }
     setCargado(true)
   }, [])
@@ -100,7 +108,7 @@ export default function RepartoTab({ cuentas, facturas, compras, fijos, variable
     const porMov = new Map(reps.filter(r => r.movimiento_id).map(r => [r.movimiento_id!, r]))
     const deRep = (r: Rep) => lineas.filter(l => l.reparto_id === r.id).sort((a, b) => a.orden - b.orden)
     const lista: Cobro[] = movs
-      .filter(m => m.fecha >= desde && Number(m.importe) > 0 && uidCuenta[m.cuenta_uid])
+      .filter(m => m.fecha >= desde && Number(m.importe) > 0 && uidCuenta[m.cuenta_uid] && !excluidos.includes(m.id))
       .map(m => {
         const r = porMov.get(m.id)
         return {
@@ -114,7 +122,7 @@ export default function RepartoTab({ cuentas, facturas, compras, fijos, variable
     for (const r of reps) if (!r.movimiento_id || !ids.has(r.movimiento_id))
       if (r.fecha >= desde) lista.push({ movimiento_id: r.movimiento_id, fecha: r.fecha, importe: Number(r.importe), concepto: r.concepto || 'Cobro', facturas: [], reparto_id: r.id, lineas: deRep(r) })
     return lista
-  }, [movs, reps, lineas, facturas, uidCuenta, desde])
+  }, [movs, reps, lineas, facturas, uidCuenta, desde, excluidos])
 
   const propuesta = useMemo(() => repartir(cobros, {
     cuentas,
@@ -166,6 +174,18 @@ export default function RepartoTab({ cuentas, facturas, compras, fijos, variable
       }
       await cargar(); reload()
     } catch (e) { setError((e as Error).message) }
+    setOcupado(false)
+  }
+
+  // «Quitar»: un ingreso que no es dinero que repartir (devolución de una compra,
+  // dinero de un amigo…) sale del reparto. Lista en `configuracion.reparto_excluidos`.
+  async function excluir(c: Cobro) {
+    if (!c.movimiento_id || c.reparto_id) return
+    if (!confirm(`¿Quitar «${c.concepto}» (€${fmt2(c.importe)}) del reparto? No es un cobro que repartir.`)) return
+    setOcupado(true)
+    const lista = Array.from(new Set([...excluidos, c.movimiento_id]))
+    const { error: e } = await supabase.from('configuracion').upsert({ clave: 'reparto_excluidos', valor: JSON.stringify(lista) })
+    if (e) setError(e.message); else setExcluidos(lista)
     setOcupado(false)
   }
 
@@ -237,6 +257,7 @@ export default function RepartoTab({ cuentas, facturas, compras, fijos, variable
                           <td className="rp__acc">
                             {!todo && <button type="button" className="copy caps" disabled={ocupado} onClick={() => marcar(c, 'todo', true)}>✓ todo</button>}
                             {c.reparto_id && <button type="button" className="copy caps" disabled={ocupado} onClick={() => recalcular(c)}>Recalcular</button>}
+                            {!c.reparto_id && c.movimiento_id && <button type="button" className="copy caps" disabled={ocupado} onClick={() => excluir(c)} title="No es un cobro: sacarlo del reparto">Quitar</button>}
                           </td>
                         </tr>
                       )
