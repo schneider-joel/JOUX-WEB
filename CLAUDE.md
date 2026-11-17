@@ -104,7 +104,7 @@ Panel financiero personal de Joel, autónomo en España: facturación, timesheet
 
 ## Estado actual
 
-- **Reparto y huchas** (2026-11-17): migración `reparto_y_huchas` aplicada en producción con OK de Joel (tablas `huchas`, `repartos`, `reparto_lineas`, `huchas_movimientos`; hucha `regularizacion_autonomo` en BBVA Ahorros; `reparto_resto` 60 % BBVA Ahorros / 20 % Wise / 20 % crypto; `reparto_desde` 2026-11-01). Código sin push. Datos a revisar: la partida fija «Cuota autónomo» es de 410 € y `cuota_autonomo_mensual` de 300 €; el presupuesto solo tiene filas de 2026-09 (se usan como mes tipo). Con lo facturado en 2026, tramo 12 (≈ 479 €/mes): Joel paga 300 €.
+- **Reparto y huchas** (2026-11-17): migración `reparto_y_huchas` aplicada en producción con OK de Joel (tablas `huchas`, `repartos`, `reparto_lineas`, `huchas_movimientos`; hucha `regularizacion_autonomo` en BBVA Ahorros; `reparto_resto` 60 % BBVA Ahorros / 20 % Wise / 20 % crypto; `reparto_desde` 2026-11-01). **En producción desde el 2026-11-17** (push con OK de Joel, a19e005). Datos a revisar: la partida fija «Cuota autónomo» es de 410 € y `cuota_autonomo_mensual` de 300 €; el presupuesto solo tiene filas de 2026-09 (se usan como mes tipo). Con lo facturado en 2026, tramo 12 (≈ 479 €/mes): Joel paga 300 €.
 
 - **Conciliación por referencia** (2026-11-10): el cobro de Ambushed del 10-11 (1.903 €) se enlazó a 261 + 274 + 277 en vez de 274–277 (836 = 660 + 176). Corregido a mano en producción con OK de Joel (274–277 → pago del 10-11; 261 y 262 → pago del 9-9) y `combinacion()` ahora puntúa por la referencia. El nº de referencia sale en las filas de Finanzas › Facturas y en «Por cobrar» de Hoy (el timesheet ya lo enseñaba). **En producción desde el 2026-11-10** (push con OK de Joel, e94b0a4).
 
