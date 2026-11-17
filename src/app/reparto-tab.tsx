@@ -367,11 +367,13 @@ function Huchas({ cuentas, huchas, asignado, hmovs, recargar }: {
     setMover(null); await recargar()
   }
 
-  async function archivar(h: Hucha) {
+  // Borra la hucha y su historial; lo que tenía vuelve a «sin asignar». La de
+  // regularización no se borra (la usa el reparto): se mueve con Editar.
+  async function eliminar(h: Hucha) {
     const a = asignado[h.id] || 0
-    if (!confirm(a ? `«${h.nombre}» tiene €${fmt(a)} asignados. Al archivarla vuelven a «sin asignar». ¿Seguir?` : `¿Archivar «${h.nombre}»?`)) return
-    const { error: e } = await supabase.from('huchas').update({ archivada: true }).eq('id', h.id)
-    if (e) setError(e.message); else await recargar()
+    if (!confirm(`¿Eliminar «${h.nombre}»?${a ? ` Sus €${fmt(a)} vuelven a «sin asignar».` : ''} Se borra también su historial.`)) return
+    const { error: e } = await supabase.from('huchas').delete().eq('id', h.id)
+    if (e) setError(e.message); else { if (form?.id === h.id) setForm(null); await recargar() }
   }
 
   return (
@@ -385,9 +387,10 @@ function Huchas({ cuentas, huchas, asignado, hmovs, recargar }: {
       {form && (
         <div className="rp__form">
           <label><span className="caps dim">Cuenta</span>
-            <select value={form.cuenta_id} onChange={e => setForm({ ...form, cuenta_id: Number(e.target.value) })} disabled={!!form.id}>
+            <select value={form.cuenta_id} onChange={e => setForm({ ...form, cuenta_id: Number(e.target.value) })}>
               {raiz.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
             </select>
+            {form.id && form.cuenta_id !== huchas.find(h => h.id === form.id)?.cuenta_id && <small className="dim">Se mueve con lo que tiene: €{fmt(asignado[form.id] || 0)}</small>}
           </label>
           <label><span className="caps dim">Nombre</span><input value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder="iPhone, viaje…" autoFocus /></label>
           <label><span className="caps dim">Meta · €</span><input type="number" inputMode="decimal" value={form.meta} onChange={e => setForm({ ...form, meta: e.target.value })} placeholder="opcional" /></label>
@@ -428,7 +431,7 @@ function Huchas({ cuentas, huchas, asignado, hmovs, recargar }: {
                         <button type="button" className="copy caps" onClick={() => setMover({ hucha: h, signo: -1, importe: '' })}>− Sacar</button>
                         <button type="button" className="copy caps" onClick={() => setVerMovs(verMovs === h.id ? null : h.id)}>Historial</button>
                         <button type="button" className="copy caps" onClick={() => setForm({ id: h.id, cuenta_id: h.cuenta_id, nombre: h.nombre, meta: h.meta != null ? String(h.meta) : '', fecha_meta: h.fecha_meta || '', pct_auto: String(h.pct_auto) })}>Editar</button>
-                        {!h.clave && <button type="button" className="copy caps" onClick={() => archivar(h)}>Archivar</button>}
+                        {!h.clave && <button type="button" className="copy caps" onClick={() => eliminar(h)}>Eliminar</button>}
                       </span>
                     </div>
                     {mover?.hucha.id === h.id && (
