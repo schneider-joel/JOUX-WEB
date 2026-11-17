@@ -1,5 +1,6 @@
 // Reparto de cada cobro (Finanzas › Reparto). Regla de Joel (2026-11-17), en
-// cascada: 1) impuestos de sus facturas (IVA + IRPF) a la hucha de impuestos;
+// cascada (cada destino va a su hucha de BBVA si existe, ver CLAVE_DESTINO):
+// 1) impuestos de sus facturas (IVA + IRPF) a la hucha de impuestos;
 // 2) la diferencia entre la cuota del tramo real y la que se paga, a la hucha
 // «Regularización autónomo» (se acumula por mes trabajado); 3) la reserva del
 // MES SIGUIENTE: cuota de autónomo, fijos y variables, que se quedan en la
@@ -51,7 +52,18 @@ export type Contexto = {
   cuotaTramo: number           // la del tramo real (src/lib/autonomo.ts)
   factorIrpf: number           // rendimiento / ingresos del año: el 130 va sobre el neto
   resto: ParteResto[]
-  huchaRegularizacion: Hucha | null
+  huchas: Hucha[]              // las activas: cada destino busca la suya por clave
+}
+
+// Las huchas de BBVA (dentro del apartado, la subcuenta tipo irpf) que recibe
+// cada destino. La cuota de autónomo va con los fijos: se paga con ellos.
+export const CLAVE_DESTINO: Partial<Record<Destino, string>> = {
+  impuestos: 'irpf', regularizacion: 'regularizacion_autonomo',
+  autonomo: 'fijos_mes', fijos: 'fijos_mes', variables: 'variables_mes',
+}
+export const huchaDeDestino = (destino: Destino, huchas: Hucha[]) => {
+  const k = CLAVE_DESTINO[destino]
+  return (k && huchas.find(h => h.clave === k && !h.archivada)) || null
 }
 
 const r2 = (n: number) => Math.round(n * 100) / 100
@@ -96,6 +108,12 @@ const claveDe = (destino: Destino, fecha: string) =>
 // cual y cuentan primero para lo ya cubierto.
 export function repartir(cobros: Cobro[], ctx: Contexto): Map<Cobro, Linea[]> {
   const { op, hucha, variables } = cuentasDelReparto(ctx.cuentas)
+  // Adónde va cada destino: su hucha si existe; si no, la cuenta de siempre.
+  const a = (d: Destino, cuenta: Cuenta | null) => {
+    const h = huchaDeDestino(d, ctx.huchas)
+    return { cuenta_id: h?.cuenta_id ?? cuenta?.id ?? null, hucha_id: h?.id ?? null, donde: h ? `hucha ${h.nombre}` : cuenta?.nombre || 'la operativa', h }
+  }
+  const dImp = a('impuestos', hucha), dReg = a('regularizacion', null), dAut = a('autonomo', op), dFij = a('fijos', op), dVar = a('variables', op)
   const regDif = Math.max(0, ctx.cuotaTramo - ctx.cuotaReal)
   const cubierto: Record<string, number> = {}
   const sumar = (destino: Destino, fecha: string, n: number) => { const k = claveDe(destino, fecha); cubierto[k] = (cubierto[k] || 0) + n; return n }
@@ -125,13 +143,13 @@ export function repartir(cobros: Cobro[], ctx: Contexto): Map<Cobro, Linea[]> {
     }
 
     const imp = impuestosDe(c, ctx.factorIrpf)
-    poner({ destino: 'impuestos', etiqueta: 'Impuestos', cuenta_id: hucha?.id ?? null, hucha_id: null,
+    poner({ destino: 'impuestos', etiqueta: 'Impuestos', cuenta_id: dImp.cuenta_id, hucha_id: dImp.hucha_id,
       detalle: [imp.iva ? `IVA ${eur(imp.iva)}` : '', `IRPF ${eur(imp.irpf)}`, c.facturas.length ? '' : 'sin factura'].filter(Boolean).join(' · ') }, imp.iva + imp.irpf)
-    if (ctx.huchaRegularizacion && regDif > 0)
-      sumar('regularizacion', c.fecha, poner({ destino: 'regularizacion', etiqueta: 'Regularización', cuenta_id: ctx.huchaRegularizacion.cuenta_id, hucha_id: ctx.huchaRegularizacion.id, detalle: `tramo ${eur(ctx.cuotaTramo)} − pagas ${eur(ctx.cuotaReal)}` }, regDif - ya('regularizacion', c.fecha)))
-    sumar('autonomo', c.fecha, poner({ destino: 'autonomo', etiqueta: 'Autónomo', cuenta_id: op?.id ?? null, hucha_id: null, detalle: `cuota de ${sig} ${eur(ctx.cuotaReal)}, se queda en ${op?.nombre || 'la operativa'}` }, ctx.cuotaReal - ya('autonomo', c.fecha)))
-    sumar('fijos', c.fecha, poner({ destino: 'fijos', etiqueta: 'Fijos', cuenta_id: op?.id ?? null, hucha_id: null, detalle: `fijos de ${sig} ${eur(ctx.fijosMes)}, se quedan en ${op?.nombre || 'la operativa'}` }, ctx.fijosMes - ya('fijos', c.fecha)))
-    sumar('variables', c.fecha, poner({ destino: 'variables', etiqueta: 'Variables', cuenta_id: op?.id ?? null, hucha_id: null, detalle: `variables de ${sig} ${eur(ctx.variablesMes)}: déjalos en ${op?.nombre || 'la operativa'} y pásalos a ${variables?.nombre || 'variables'} el día 1` }, ctx.variablesMes - ya('variables', c.fecha)))
+    if (dReg.h && regDif > 0)
+      sumar('regularizacion', c.fecha, poner({ destino: 'regularizacion', etiqueta: 'Regularización', cuenta_id: dReg.cuenta_id, hucha_id: dReg.hucha_id, detalle: `tramo ${eur(ctx.cuotaTramo)} − pagas ${eur(ctx.cuotaReal)}, a la ${dReg.donde}` }, regDif - ya('regularizacion', c.fecha)))
+    sumar('autonomo', c.fecha, poner({ destino: 'autonomo', etiqueta: 'Autónomo', cuenta_id: dAut.cuenta_id, hucha_id: dAut.hucha_id, detalle: `cuota de ${sig} ${eur(ctx.cuotaReal)}, a la ${dAut.h ? dAut.donde : `cuenta ${dAut.donde}`}` }, ctx.cuotaReal - ya('autonomo', c.fecha)))
+    sumar('fijos', c.fecha, poner({ destino: 'fijos', etiqueta: 'Fijos', cuenta_id: dFij.cuenta_id, hucha_id: dFij.hucha_id, detalle: `fijos de ${sig} ${eur(ctx.fijosMes)}, a la ${dFij.h ? dFij.donde : `cuenta ${dFij.donde}`}` }, ctx.fijosMes - ya('fijos', c.fecha)))
+    sumar('variables', c.fecha, poner({ destino: 'variables', etiqueta: 'Variables', cuenta_id: dVar.cuenta_id, hucha_id: dVar.hucha_id, detalle: `variables de ${sig} ${eur(ctx.variablesMes)}, a la ${dVar.h ? dVar.donde : `cuenta ${dVar.donde}`}; el día 1 pásalos a ${variables?.nombre || 'variables'}` }, ctx.variablesMes - ya('variables', c.fecha)))
 
     // El resto, en %: si no suman 100 se reparte en proporción; el último se lleva el redondeo.
     const partes = ctx.resto.filter(p => p.pct > 0)
@@ -158,8 +176,11 @@ export function asignadoPorHucha(movs: HuchaMov[]) {
 }
 
 // Lo que se lleva cada hucha de un ✓ que entra en su cuenta (su % automático).
-export function aportesAuto(l: Pick<Linea, 'cuenta_id' | 'hucha_id' | 'importe'>, huchas: Hucha[]) {
-  if (l.hucha_id) return [{ hucha_id: l.hucha_id, importe: r2(Number(l.importe)) }]
+// Las líneas guardadas antes de que existiera la hucha de su destino van a
+// ella igualmente.
+export function aportesAuto(l: Pick<Linea, 'cuenta_id' | 'hucha_id' | 'importe'> & { destino?: Destino }, huchas: Hucha[]) {
+  const hid = l.hucha_id || (l.destino && huchaDeDestino(l.destino, huchas)?.id)
+  if (hid) return [{ hucha_id: hid, importe: r2(Number(l.importe)) }]
   if (!l.cuenta_id) return []
   return huchas.filter(h => h.cuenta_id === l.cuenta_id && !h.archivada && Number(h.pct_auto) > 0)
     .map(h => ({ hucha_id: h.id, importe: r2(Number(l.importe) * Number(h.pct_auto) / 100) }))

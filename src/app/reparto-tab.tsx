@@ -11,7 +11,7 @@ import { supabase, batchQuery, type Compra, type Cuenta, type Factura, type Pres
 import { calcular, type Reales } from '@/lib/impuestos'
 import { cuotaAutonomo } from '@/lib/autonomo'
 import {
-  repartir, aportesAuto, asignadoPorHucha, parseResto, esCuotaAutonomo, mesSiguiente, nombreMes,
+  repartir, aportesAuto, asignadoPorHucha, huchaDeDestino, parseResto, esCuotaAutonomo, mesSiguiente, nombreMes,
   type Cobro, type Hucha, type HuchaMov, type Linea, type ParteResto,
 } from '@/lib/reparto'
 
@@ -129,8 +129,8 @@ export default function RepartoTab({ cuentas, facturas, compras, fijos, variable
     cuentas,
     fijosMes: fijos.filter(f => !esCuotaAutonomo(f.nombre)).reduce((t, f) => t + Number(f.limite), 0),
     variablesMes: variables.reduce((t, v) => t + Number(v.limite), 0),
-    cuotaReal, cuotaTramo: autonomo.tramo.cuota, factorIrpf, resto, huchaRegularizacion: huchaReg,
-  }), [cobros, cuentas, fijos, variables, cuotaReal, autonomo.tramo.cuota, factorIrpf, resto, huchaReg])
+    cuotaReal, cuotaTramo: autonomo.tramo.cuota, factorIrpf, resto, huchas,
+  }), [cobros, cuentas, fijos, variables, cuotaReal, autonomo.tramo.cuota, factorIrpf, resto, huchas])
 
 
   // Lo que hay que tener el día 1 del mes siguiente en la operativa.
@@ -213,7 +213,11 @@ export default function RepartoTab({ cuentas, facturas, compras, fijos, variable
     const mes = nombreMes(mesSiguiente(c.fecha)).slice(0, 3)
     return l.destino === 'autonomo' ? `Cuota ${mes}` : l.destino === 'fijos' ? `Fijos ${mes}` : l.destino === 'variables' ? `Variables ${mes}` : l.etiqueta
   }
-  const ayuda = (l: Linea) => `${l.etiqueta}${l.detalle ? ` · ${l.detalle}` : ''}${l.cuenta_id ? ` → ${cuentas.find(x => x.id === l.cuenta_id)?.nombre}` : ''}`
+  const destinoDe = (l: Linea) => {
+    const h = huchas.find(x => x.id === l.hucha_id) || huchaDeDestino(l.destino, huchas)
+    return h ? `hucha ${h.nombre}` : cuentas.find(x => x.id === l.cuenta_id)?.nombre
+  }
+  const ayuda = (l: Linea) => `${l.etiqueta}${l.detalle ? ` · ${l.detalle}` : ''}${destinoDe(l) ? ` → ${destinoDe(l)}` : ''}`
 
   return (
     <div className="col rp">
@@ -331,6 +335,15 @@ export default function RepartoTab({ cuentas, facturas, compras, fijos, variable
 
 // ——— Huchas ———————————————————————————————————————————————————————————————
 
+// Huchas que usa el reparto (por clave): no se borran y llevan su explicación.
+const DESCRIPCION: Record<string, string> = {
+  irpf: 'IVA e IRPF de cada cobro, hasta el trimestre',
+  regularizacion_autonomo: 'diferencia de la cuota, se llena sola',
+  fijos_mes: 'cuota y fijos del mes que viene; se vacía el día 1',
+  variables_mes: 'variables del mes que viene; el día 1 pasan a Revolut',
+}
+const MENSUAL = ['fijos_mes', 'variables_mes']
+
 type FormHucha = { id?: number; cuenta_id: number; nombre: string; meta: string; fecha_meta: string; pct_auto: string }
 
 function Huchas({ cuentas, huchas, asignado, hmovs, recargar }: {
@@ -342,8 +355,12 @@ function Huchas({ cuentas, huchas, asignado, hmovs, recargar }: {
   const [error, setError] = useState<string | null>(null)
   const raiz = cuentas.filter(c => !c.padre_id || c.tipo === 'irpf')
   const activas = huchas.filter(h => !h.archivada)
-  // Cuentas que se enseñan: las de ahorro e inversión y cualquiera con huchas.
-  const visibles = raiz.filter(c => ['ahorro', 'inversion'].includes(c.tipo) || activas.some(h => h.cuenta_id === c.id))
+  const nombreCuenta = (c: Cuenta) => c.padre_id ? `${cuentas.find(p => p.id === c.padre_id)?.nombre} · ${c.nombre}` : c.nombre
+  // Una tarjeta por cuenta principal con sus apartados dentro (BBVA = disponible
+  // + huchas del apartado, que el banco solo da en total). Se enseñan las de
+  // ahorro e inversión y cualquiera con huchas, propias o de sus apartados.
+  const hijasDe = (c: Cuenta) => cuentas.filter(h => h.padre_id === c.id)
+  const visibles = cuentas.filter(c => !c.padre_id).filter(c => ['ahorro', 'inversion'].includes(c.tipo) || [c, ...hijasDe(c)].some(x => activas.some(h => h.cuenta_id === x.id)))
 
   async function guardar() {
     if (!form || !form.nombre.trim()) return
@@ -367,6 +384,14 @@ function Huchas({ cuentas, huchas, asignado, hmovs, recargar }: {
     setMover(null); await recargar()
   }
 
+  // Día 1: la cuota, los fijos y los variables salen de su hucha.
+  async function vaciar(h: Hucha) {
+    const a = asignado[h.id] || 0
+    if (!(a > 0) || !confirm(`¿Vaciar «${h.nombre}» (€${fmt2(a)})? Hazlo cuando lo hayas sacado en el banco.`)) return
+    const { error: e } = await supabase.from('huchas_movimientos').insert({ hucha_id: h.id, importe: -a, motivo: 'Vaciada (día 1)' })
+    if (e) setError(e.message); else await recargar()
+  }
+
   // Borra la hucha y su historial; lo que tenía vuelve a «sin asignar». La de
   // regularización no se borra (la usa el reparto): se mueve con Editar.
   async function eliminar(h: Hucha) {
@@ -388,7 +413,7 @@ function Huchas({ cuentas, huchas, asignado, hmovs, recargar }: {
         <div className="rp__form">
           <label><span className="caps dim">Cuenta</span>
             <select value={form.cuenta_id} onChange={e => setForm({ ...form, cuenta_id: Number(e.target.value) })}>
-              {raiz.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+              {raiz.map(c => <option key={c.id} value={c.id}>{nombreCuenta(c)}</option>)}
             </select>
             {form.id && form.cuenta_id !== huchas.find(h => h.id === form.id)?.cuenta_id && <small className="dim">Se mueve con lo que tiene: €{fmt(asignado[form.id] || 0)}</small>}
           </label>
@@ -402,19 +427,21 @@ function Huchas({ cuentas, huchas, asignado, hmovs, recargar }: {
 
       <div className="rp__cuentas">
         {visibles.map(c => {
-          const hs = activas.filter(h => h.cuenta_id === c.id)
-          const saldo = Number(c.saldo)
-          const total = hs.reduce((t, h) => t + (asignado[h.id] || 0), 0)
-          const libre = saldo - total
+          const hijas = hijasDe(c)
+          const partes = [c, ...hijas]
+          const hs = partes.flatMap(x => activas.filter(h => h.cuenta_id === x.id))
+          const total = partes.reduce((t, x) => t + Number(x.saldo), 0)
+          const libreDe = (x: Cuenta) => Number(x.saldo) - activas.filter(h => h.cuenta_id === x.id).reduce((t, h) => t + (asignado[h.id] || 0), 0)
           return (
             <div key={c.id} className="rp__cuenta">
-              <div className="rp__ch"><span><i style={{ background: c.color || 'var(--muted)' }} />{c.nombre}</span><b className="num">{c.moneda === 'USD' ? '$' : '€'}{fmt(saldo)}</b></div>
+              <div className="rp__ch"><span><i style={{ background: c.color || 'var(--muted)' }} />{c.nombre}</span><b className="num">{c.moneda === 'USD' ? '$' : '€'}{fmt(total)}</b></div>
               {hs.length === 0 && <p className="nota">Sin huchas.</p>}
               {hs.map(h => {
                 const a = asignado[h.id] || 0
                 const pct = h.meta ? Math.min(100, Math.max(0, a / Number(h.meta) * 100)) : null
                 const falta = h.meta ? Math.max(0, Number(h.meta) - a) : 0
                 const meses = h.fecha_meta ? Math.max(1, Math.ceil((new Date(h.fecha_meta + 'T00:00:00').getTime() - Date.now()) / (30.44 * 864e5))) : null
+                const libre = libreDe(cuentas.find(x => x.id === h.cuenta_id) || c)
                 return (
                   <div key={h.id} className="rp__h">
                     <div className="rp__hl">
@@ -424,13 +451,14 @@ function Huchas({ cuentas, huchas, asignado, hmovs, recargar }: {
                     {pct !== null && <span className="fx__meter"><i style={{ width: `${pct}%` }} /></span>}
                     <div className="rp__hs">
                       <small className="dim">
-                        {h.meta ? (falta > 0 ? `faltan €${fmt(falta)}${meses ? ` · €${fmt(falta / meses)}/mes hasta el ${fecha(h.fecha_meta!)}` : ''}` : 'meta cumplida') : h.clave ? 'diferencia de la cuota, se llena sola' : 'sin meta'}
+                        {h.meta ? (falta > 0 ? `faltan €${fmt(falta)}${meses ? ` · €${fmt(falta / meses)}/mes hasta el ${fecha(h.fecha_meta!)}` : ''}` : 'meta cumplida') : (h.clave && DESCRIPCION[h.clave]) || 'sin meta'}
                       </small>
                       <span className="rp__ha">
                         <button type="button" className="copy caps" onClick={() => setMover({ hucha: h, signo: 1, importe: '' })}>+ Asignar</button>
                         <button type="button" className="copy caps" onClick={() => setMover({ hucha: h, signo: -1, importe: '' })}>− Sacar</button>
                         <button type="button" className="copy caps" onClick={() => setVerMovs(verMovs === h.id ? null : h.id)}>Historial</button>
                         <button type="button" className="copy caps" onClick={() => setForm({ id: h.id, cuenta_id: h.cuenta_id, nombre: h.nombre, meta: h.meta != null ? String(h.meta) : '', fecha_meta: h.fecha_meta || '', pct_auto: String(h.pct_auto) })}>Editar</button>
+                        {MENSUAL.includes(h.clave || '') && a > 0 && <button type="button" className="copy caps" onClick={() => vaciar(h)}>Vaciar</button>}
                         {!h.clave && <button type="button" className="copy caps" onClick={() => eliminar(h)}>Eliminar</button>}
                       </span>
                     </div>
@@ -439,7 +467,7 @@ function Huchas({ cuentas, huchas, asignado, hmovs, recargar }: {
                         <input type="number" inputMode="decimal" autoFocus value={mover.importe} placeholder="€" onChange={e => setMover({ ...mover, importe: e.target.value })} onKeyDown={e => { if (e.key === 'Enter') moverDinero() }} />
                         <button type="button" className="pill pill--sm" onClick={moverDinero}>{mover.signo > 0 ? 'Asignar' : 'Sacar'}</button>
                         <button type="button" className="ghost" onClick={() => setMover(null)}>Cancelar</button>
-                        {mover.signo > 0 && <small className="dim">libre en {c.nombre}: €{fmt(libre)}</small>}
+                        {mover.signo > 0 && <small className="dim">sin asignar en {nombreCuenta(cuentas.find(x => x.id === h.cuenta_id) || c)}: €{fmt(libre)}</small>}
                       </div>
                     )}
                     {verMovs === h.id && (
@@ -453,10 +481,18 @@ function Huchas({ cuentas, huchas, asignado, hmovs, recargar }: {
                   </div>
                 )
               })}
-              <div className={`rp__libre${libre < 0 ? ' aviso' : ''}`}>
-                <span>Sin asignar</span><b className="num">€{fmt(libre)}</b>
-              </div>
-              {libre < 0 && <p className="nota aviso">Las huchas suman más que el saldo de {c.nombre}: faltan €{fmt(-libre)}.</p>}
+              {partes.map(x => {
+                const l = libreDe(x)
+                const conHuchas = activas.some(h => h.cuenta_id === x.id)
+                if (x !== c && !conHuchas) return null
+                const etiqueta = x === c ? (hijas.length ? 'Disponible' : 'Sin asignar') : `Sin asignar en ${x.nombre}`
+                return (
+                  <div key={x.id}>
+                    <div className={`rp__libre${l < -0.5 ? ' aviso' : ''}`}><span>{etiqueta}</span><b className="num">€{fmt(l)}</b></div>
+                    {l < -0.5 && <p className="nota aviso">Las huchas suman más que {nombreCuenta(x)}: faltan €{fmt(-l)}.</p>}
+                  </div>
+                )
+              })}
             </div>
           )
         })}

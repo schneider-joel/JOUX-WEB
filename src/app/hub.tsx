@@ -338,6 +338,10 @@ export default function Hub({ children }: { children?: React.ReactNode }) {
   }, [])
 
   const aEuros = (c: Cuenta) => c.moneda === 'USD' ? c.saldo * usdToEur : c.saldo
+  // Lo apartado para impuestos: la hucha IRPF si el apartado de BBVA tiene
+  // varias huchas (fijos, variables…); si no, todo el apartado.
+  const huchaIrpf = huchas.find(h => h.clave === 'irpf')
+  const saldoImpuestos = huchaIrpf ? huchasAsignado[huchaIrpf.id] || 0 : undefined
   const totalLiquidez = cuentas.reduce((s, c) => s + aEuros(c), 0)
   const totalCrypto = crypto.reduce((s, c) => c.symbol === 'ETH' ? s + c.cantidad * ethPrice : s, 0)
   const totalPatrimonio = totalLiquidez + totalCrypto
@@ -597,7 +601,7 @@ export default function Hub({ children }: { children?: React.ReactNode }) {
           const gastadoMes = gastadoPorPartida(movsBanco, new Set(variables.map(v => v.nombre)), undefined, compartidos)
           const quedan = (items: PresupuestoItem[]) => items.reduce((t, i) => t + Math.max(0, Number(i.limite) - (gastadoMes[i.nombre] || 0)), 0)
           const traspasos = movsBanco.length ? queMover({
-            cuentas, fijosPendientes: quedan(fijos), variablesPendientes: quedan(variables),
+            cuentas, fijosPendientes: quedan(fijos), variablesPendientes: quedan(variables), saldoImpuestos,
             impuestos: impuestosPorApartar(facturasFiscales, compras, cuotaAutonomo, impuestosReales, movsBanco, hoyISO),
           }) : null
           return (
@@ -730,7 +734,14 @@ export default function Hub({ children }: { children?: React.ReactNode }) {
               const hs = huchas.filter(h => h.cuenta_id === c.id)
               const enHuchas = hs.reduce((t, h) => t + (huchasAsignado[h.id] || 0), 0)
               const detalle = hs.length ? [...hs.map(h => `${h.nombre} €${fmt(huchasAsignado[h.id] || 0)}`), `sin asignar €${fmt(Number(c.saldo) - enHuchas)}`].join(' · ') : ''
-              return { clave: `c${c.id}`, nombre: c.nombre, color: c.color, total: aEuros(c) + hijos.reduce((t, h) => t + aEuros(h), 0), detalle, hijos: hijos.map(h => ({ nombre: h.nombre, total: aEuros(h) })), usd: c.moneda === 'USD' }
+              // Un apartado con huchas se enseña por huchas (el banco solo da su total).
+              const deHijo = (h: Cuenta) => {
+                const hh = huchas.filter(x => x.cuenta_id === h.id)
+                if (!hh.length) return [{ nombre: h.nombre, total: aEuros(h) }]
+                const resto = aEuros(h) - hh.reduce((t, x) => t + (huchasAsignado[x.id] || 0), 0)
+                return [...hh.map(x => ({ nombre: x.nombre, total: huchasAsignado[x.id] || 0 })), ...(Math.abs(resto) >= 1 ? [{ nombre: `${h.nombre} sin asignar`, total: resto }] : [])]
+              }
+              return { clave: `c${c.id}`, nombre: c.nombre, color: c.color, total: aEuros(c) + hijos.reduce((t, h) => t + aEuros(h), 0), detalle, hijos: [...(hijos.length && !hs.length ? [{ nombre: 'Disponible', total: aEuros(c) }] : []), ...hijos.flatMap(deHijo)], usd: c.moneda === 'USD' }
             }),
             ...(totalCrypto > 0 ? [{ clave: 'crypto', nombre: 'Cripto', color: '#8A8A87', total: totalCrypto, detalle: crypto.map(c => `${c.cantidad} ${c.symbol}`).join(' · '), hijos: [] as { nombre: string; total: number }[], usd: false }] : []),
           ].sort((a, b) => b.total - a.total)
@@ -818,7 +829,7 @@ export default function Hub({ children }: { children?: React.ReactNode }) {
               <Link href="/finanzas/impuestos" className="pt__imp">
                 <span className="caps dim">Impuestos · T{pago.q}</span>
                 <span><b>€{fmt2(pago.total)}</b> {pago.declarado ? 'del gestor' : pago.cerrado ? 'a pagar' : 'estimado'} · hasta el {fmtDate(pago.plazo)}</span>
-                {irpf && <span className={Number(irpf.saldo) >= pago.total ? 'ok' : 'aviso'}>Apartado IRPF €{fmt(aEuros(irpf))}{Number(irpf.saldo) >= pago.total ? ' · cubierto' : ` · faltan €${fmt(pago.total - aEuros(irpf))}`}</span>}
+                {irpf && (() => { const imp = saldoImpuestos ?? aEuros(irpf); return <span className={imp >= pago.total ? 'ok' : 'aviso'}>Apartado IRPF €{fmt(imp)}{imp >= pago.total ? ' · cubierto' : ` · faltan €${fmt(pago.total - imp)}`}</span> })()}
                 <span className="caps dim">Impuestos →</span>
               </Link>
             )}
@@ -832,7 +843,7 @@ export default function Hub({ children }: { children?: React.ReactNode }) {
             <div className="duo">
               <CuentasCard cuentas={cuentas} aEuros={aEuros} fijosMes={fijos.reduce((t, i) => t + Number(i.limite), 0)}
                 variablesMes={variables.reduce((t, i) => t + Number(i.limite), 0)} pago={pago}
-                porCobrar={totalPendiente} onEdit={() => setModal({ type: 'editCuentas' })}
+                porCobrar={totalPendiente} onEdit={() => setModal({ type: 'editCuentas' })} saldoImpuestos={saldoImpuestos}
                 fijosPendientes={movsBanco.length ? (() => { const g = gastadoPorPartida(movsBanco, undefined, undefined, compartidos); return fijos.reduce((t, i) => t + Math.max(0, Number(i.limite) - (g[i.nombre] || 0)), 0) })() : null}
                 extra={crypto.map(c => ({ key: `crypto-${c.id}`, titulo: `${c.cantidad} ${c.symbol}`, linea: `€${fmt2(ethPrice)} / ${c.symbol} · precio en vivo`, monto: `€${fmt(c.symbol === 'ETH' ? c.cantidad * ethPrice : 0)}` }))} />
               {marcasLista.length > 0 && <MarcaCard facturas={demoMarcas ? DEMO_FACTURAS : facturas} proyectos={demoMarcas ? [] : proyectos} marcas={marcasLista} demo={demoMarcas} />}

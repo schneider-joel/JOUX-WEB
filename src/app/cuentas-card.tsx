@@ -10,7 +10,7 @@ const fechaCorta = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('
 
 export type PagoImpuestos = { anio: number; q: number; plazo: string; cerrado: boolean; declarado?: boolean; total: number }
 
-type Ctx = { fijosMes: number; fijosPendientes: number | null; variablesMes: number; pago: PagoImpuestos | null; porCobrar: number }
+type Ctx = { fijosMes: number; fijosPendientes: number | null; variablesMes: number; pago: PagoImpuestos | null; porCobrar: number; saldoImpuestos?: number }
 type Estado = 'ok' | 'aviso' | 'neutro'
 type Tile = { key: string; grupo: string; titulo: string; color: string; monto: string; linea: string; chip?: { texto: string; estado: Estado }; progreso?: number; extra?: { nombre: string; monto: string }[] }
 
@@ -30,11 +30,12 @@ function describir(c: Cuenta, ctx: Ctx): Pick<Tile, 'linea' | 'chip' | 'progreso
     case 'irpf': {
       if (!ctx.pago) return { linea: 'Sin pago trimestral pendiente', chip: { texto: 'Al día', estado: 'ok' } }
       const { q, plazo, cerrado, declarado, total } = ctx.pago
-      const falta = total - saldo
+      const imp = ctx.saldoImpuestos ?? saldo // el apartado puede tener más huchas que la de impuestos
+      const falta = total - imp
       return {
         linea: `T${q}${declarado ? ' (gestor)' : cerrado ? '' : ' estimado'}: €${fmt2(total)} · hasta el ${fechaCorta(plazo)}`,
         chip: falta <= 0 ? { texto: declarado && falta < -1 ? `Cubierto · sobran €${fmt2(-falta)}` : 'Cubierto', estado: 'ok' } : { texto: `Faltan €${fmt2(falta)}`, estado: 'aviso' },
-        progreso: total > 0 ? saldo / total : undefined,
+        progreso: total > 0 ? imp / total : undefined,
       }
     }
     case 'ahorro': {
@@ -72,7 +73,8 @@ const COLOR_ESTADO: Record<Estado, string> = { ok: 'var(--green)', aviso: 'var(-
 // Filas que no son cuentas pero van en la misma lista (crypto): ya vienen calculadas.
 export type FilaExtra = { key: string; titulo: string; linea: string; monto: string }
 
-export default function CuentasCard({ cuentas, aEuros, fijosMes, fijosPendientes = null, variablesMes, pago, porCobrar, onEdit, extra = [] }: {
+export default function CuentasCard({ cuentas, aEuros, fijosMes, fijosPendientes = null, variablesMes, pago, porCobrar, onEdit, extra = [], saldoImpuestos }: {
+  saldoImpuestos?: number
   cuentas: Cuenta[]
   aEuros: (c: Cuenta) => number
   fijosMes: number
@@ -83,7 +85,7 @@ export default function CuentasCard({ cuentas, aEuros, fijosMes, fijosPendientes
   onEdit: () => void
   extra?: FilaExtra[]
 }) {
-  const ctx: Ctx = { fijosMes, fijosPendientes, variablesMes, pago, porCobrar }
+  const ctx: Ctx = { fijosMes, fijosPendientes, variablesMes, pago, porCobrar, saldoImpuestos }
   const moneda = (c: Cuenta) => (c.moneda === 'USD' ? `$${fmt(c.saldo)}` : `€${fmt2(c.saldo)}`)
   const tiles: Tile[] = []
   const otros: Cuenta[] = []

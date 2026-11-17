@@ -30,8 +30,9 @@ export function impuestosPorApartar(facturas: Factura[], compras: Compra[], cuot
 
 const eur = (n: number) => '€' + new Intl.NumberFormat('es-ES', { maximumFractionDigits: 0, useGrouping: 'always' } as unknown as Intl.NumberFormatOptions).format(Math.round(n))
 
-export function queMover({ cuentas, fijosPendientes, variablesPendientes, impuestos }: {
+export function queMover({ cuentas, fijosPendientes, variablesPendientes, impuestos, saldoImpuestos }: {
   cuentas: Cuenta[]
+  saldoImpuestos?: number      // lo de la hucha IRPF si el apartado tiene varias huchas
   fijosPendientes: number
   variablesPendientes: number
   impuestos: { objetivo: number; q: number; anterior: number | null }
@@ -46,7 +47,7 @@ export function queMover({ cuentas, fijosPendientes, variablesPendientes, impues
 
   // Hucha de impuestos: lo que falta sale de la operativa; lo que sobra va a ahorro.
   const trimestre = impuestos.anterior ? `T${impuestos.anterior} y T${impuestos.q}` : `T${impuestos.q}`
-  const faltaImp = hucha ? impuestos.objetivo - Number(hucha.saldo) : 0
+  const faltaImp = hucha ? impuestos.objetivo - (saldoImpuestos ?? Number(hucha.saldo)) : 0
   if (hucha && faltaImp >= 1) out.push({ clave: 'imp', texto: `Pasa ${eur(Math.ceil(faltaImp))} a la hucha de impuestos`, sub: `${banco} → ${hucha.nombre} · IRPF e IVA del ${trimestre}: ${eur(impuestos.objetivo)}`, importe: Math.ceil(faltaImp) })
   if (hucha && ahorro && faltaImp <= -1) out.push({ clave: 'imp', texto: `Pasa ${eur(Math.floor(-faltaImp))} de la hucha a ahorros`, sub: `${hucha.nombre} → ${ahorro.nombre} · sobra: el ${trimestre} pide ${eur(impuestos.objetivo)}`, importe: Math.floor(-faltaImp) })
 
