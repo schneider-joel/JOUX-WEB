@@ -104,6 +104,13 @@ export function combinacion<T extends Candidata>(candidatas: T[], objetivo: numb
   return mejor.map(i => candidatas[i])
 }
 
+// Quién paga las facturas de otro cliente: el banco trae el nombre del que
+// paga, no el de la factura. Tays paga los treatments facturados a Hans
+// Emanuel (2026-11-17: F-2026-53, 55, 63 y 66 llegaron como «Tays Perez»).
+export const PAGADORES: Record<string, string[]> = {
+  'Hans Emanuel': ['Tays'], // solo el nombre: «perez» casaría con cualquier Pérez
+}
+
 // 2. Cada ingreso de un cliente marca como cobradas las facturas que paga
 // (Ambushed suele pagar varias juntas). También enlaza cobros antiguos con
 // facturas ya marcadas como cobradas a mano, corrigiendo su fecha de cobro.
@@ -125,7 +132,7 @@ export async function conciliarCobros() {
   for (const f of disponibles) {
     if (!claves.has(f.cliente)) {
       const ident = (clientes || []).find(c => c.cliente === f.cliente)?.identificador?.split('·')[0]
-      claves.set(f.cliente, palabrasClave([f.cliente, ident]))
+      claves.set(f.cliente, palabrasClave([f.cliente, ident, ...(PAGADORES[f.cliente] || [])]))
     }
   }
   const usadas = new Set<number>()
