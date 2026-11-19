@@ -2033,3 +2033,29 @@ INSERT INTO configuracion (clave, valor) VALUES
   ('reparto_resto', '[{"cuenta_id":10,"pct":60},{"cuenta_id":5,"pct":20},{"destino":"crypto","pct":20}]'),
   ('reparto_desde', '2026-11-01')
 ON CONFLICT (clave) DO NOTHING;
+
+-- MIGRACIÓN (2026-11-19): la factura de un proyecto lleva la fecha del día en que
+-- se marca «facturado» (hora de Madrid), no el último día trabajado. El número es
+-- el siguiente libre, así que con la fecha antigua la serie dejaba de ser
+-- correlativa (F-2026-76 salió con fecha 30-10 detrás de la 75 del 17-11).
+CREATE OR REPLACE FUNCTION crear_factura_desde_proyecto()
+RETURNS TRIGGER AS $$
+DECLARE
+  monto DECIMAL(10,2);
+  fecha_emision DATE;
+  tipo TEXT;
+BEGIN
+  IF NEW.status = 'facturado' AND (OLD.status IS DISTINCT FROM 'facturado') THEN
+    SELECT COALESCE(SUM(total_day), 0) INTO monto FROM dias_trabajados WHERE proyecto_id = NEW.id;
+    fecha_emision := (now() AT TIME ZONE 'Europe/Madrid')::date;
+    SELECT CASE WHEN pais = 'ES' THEN 'dentro_ue' ELSE 'fuera_ue' END INTO tipo FROM clientes_fiscales WHERE cliente = NEW.cliente;
+    IF NOT EXISTS (SELECT 1 FROM facturas WHERE proyecto_id = NEW.id) THEN
+      INSERT INTO facturas (cliente, descripcion, importe, fecha, fecha_vencimiento, estado, origen, proyecto_id, numero_referencia, numero, tipo_factura, marca)
+      VALUES (NEW.cliente, NEW.nombre, monto, fecha_emision, fecha_emision + 30, 'pendiente', 'timesheet', NEW.id, NEW.numero_proyecto, siguiente_numero_factura(), COALESCE(tipo, 'fuera_ue'), NEW.marca);
+    END IF;
+  ELSIF OLD.status = 'facturado' AND NEW.status IS DISTINCT FROM 'facturado' THEN
+    DELETE FROM facturas WHERE proyecto_id = NEW.id AND estado = 'pendiente';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
