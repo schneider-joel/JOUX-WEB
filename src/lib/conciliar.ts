@@ -109,6 +109,7 @@ export function combinacion<T extends Candidata>(candidatas: T[], objetivo: numb
 // Emanuel (2026-11-17: F-2026-53, 55, 63 y 66 llegaron como «Tays Perez»).
 export const PAGADORES: Record<string, string[]> = {
   'Hans Emanuel': ['Tays'], // solo el nombre: «perez» casaría con cualquier Pérez
+  'BBQ Films LLC': ['Tays'], // factura los treatments de Hans desde el 2026-11-19
 }
 
 // 2. Cada ingreso de un cliente marca como cobradas las facturas que paga
