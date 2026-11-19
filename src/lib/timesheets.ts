@@ -6,7 +6,7 @@ export type GrupoFijo = GrupoTimesheet & { ruta: string; tokenKey: string }
 
 export const GRUPOS_FIJOS: GrupoFijo[] = [
   { key: 'ab', label: 'Ambushed / BoldMove', clientes: ['Ambushed', 'BoldMove'], ruta: 'ab', tokenKey: 'timesheet_public_token' },
-  { key: 'th', label: 'Tays / Hans', clientes: ['Hans Emanuel', 'Tays Perez'], ruta: 'th', tokenKey: 'timesheet_th_public_token' },
+  { key: 'th', label: 'Tays / Hans', clientes: ['Hans Emanuel', 'BBQ Films LLC', 'Tays Perez'], ruta: 'th', tokenKey: 'timesheet_th_public_token' },
 ]
 
 export const TOKEN_CLIENTE = 'timesheet_token:'
