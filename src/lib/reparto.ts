@@ -7,7 +7,10 @@
 // operativa (Joel carga BBVA y Revolut el día 1, así que lo que cobra durante
 // el mes paga el mes que viene; el día 1 los variables pasan a Revolut);
 // 4) el resto en % (`configuracion.reparto_resto`). Cada objetivo cuenta lo
-// que ya cubrieron los cobros anteriores. Sin dependencias de servidor.
+// que ya cubrieron los cobros anteriores. La reserva del mes en curso se mide
+// con el saldo real de las huchas de fijos y variables (2026-11-19): lo ya
+// traspasado está dentro, y lo que se apartó antes de que existieran (y se
+// gastó) no cuenta. Sin dependencias de servidor.
 import type { Cuenta, Factura } from './supabase'
 
 export const IVA = 0.21
@@ -53,6 +56,8 @@ export type Contexto = {
   factorIrpf: number           // rendimiento / ingresos del año: el 130 va sobre el neto
   resto: ParteResto[]
   huchas: Hucha[]              // las activas: cada destino busca la suya por clave
+  mesActual?: string           // AAAA-MM: su reserva se mide con el saldo de las huchas
+  saldoHuchas?: Record<number, number>  // asignado a cada hucha (asignadoPorHucha)
 }
 
 // Las huchas de BBVA (dentro del apartado, la subcuenta tipo irpf) que recibe
@@ -104,6 +109,24 @@ export const nombreMes = (ym: string) => MESES[Number(ym.slice(5, 7)) - 1]
 const claveDe = (destino: Destino, fecha: string) =>
   destino === 'regularizacion' ? `${destino}:${fecha.slice(0, 7)}` : `${destino}:${mesSiguiente(fecha)}`
 
+const RESERVA: Destino[] = ['autonomo', 'fijos', 'variables']
+
+// Lo que ya hay para la reserva del mes siguiente al actual, según el saldo de
+// sus huchas: la de fijos lleva primero la cuota y luego los fijos. null si no
+// se mide así (sin mes actual o sin huchas).
+export function reservaEnHuchas(ctx: Contexto) {
+  if (!ctx.mesActual || !ctx.saldoHuchas) return null
+  const hf = huchaDeDestino('fijos', ctx.huchas), hv = huchaDeDestino('variables', ctx.huchas)
+  if (!hf && !hv) return null
+  const bf = hf ? Math.max(0, ctx.saldoHuchas[hf.id] || 0) : 0
+  const autonomo = hf ? Math.min(bf, ctx.cuotaReal) : 0
+  return {
+    autonomo: hf ? r2(autonomo) : null,
+    fijos: hf ? r2(bf - autonomo) : null,
+    variables: hv ? r2(Math.max(0, ctx.saldoHuchas[hv.id] || 0)) : null,
+  } as Partial<Record<Destino, number | null>>
+}
+
 // Propuesta de cada cobro, en orden de fecha. Los congelados se respetan tal
 // cual y cuentan primero para lo ya cubierto.
 export function repartir(cobros: Cobro[], ctx: Contexto): Map<Cobro, Linea[]> {
@@ -118,6 +141,15 @@ export function repartir(cobros: Cobro[], ctx: Contexto): Map<Cobro, Linea[]> {
   const cubierto: Record<string, number> = {}
   const sumar = (destino: Destino, fecha: string, n: number) => { const k = claveDe(destino, fecha); cubierto[k] = (cubierto[k] || 0) + n; return n }
   const ya = (destino: Destino, fecha: string) => cubierto[claveDe(destino, fecha)] || 0
+  // Reserva del mes en curso: parte del saldo real de su hucha; de lo guardado
+  // solo suma lo que falta por traspasar (lo hecho ya está en el saldo).
+  const real = reservaEnHuchas(ctx)
+  const medidoEnHucha = (destino: Destino, fecha: string) =>
+    !!real && fecha.slice(0, 7) === ctx.mesActual && RESERVA.includes(destino) && real[destino] != null
+  if (real && ctx.mesActual) {
+    const sig = mesSiguiente(ctx.mesActual)
+    for (const d of RESERVA) if (real[d] != null) cubierto[`${d}:${sig}`] = real[d]!
+  }
   const out = new Map<Cobro, Linea[]>()
   const orden = [...cobros].sort((a, b) => a.fecha.localeCompare(b.fecha) || (a.movimiento_id || '').localeCompare(b.movimiento_id || ''))
 
@@ -125,7 +157,11 @@ export function repartir(cobros: Cobro[], ctx: Contexto): Map<Cobro, Linea[]> {
   // anterior sin guardar volvería a pedir lo que ya cubrió uno guardado.
   for (const c of orden) {
     if (!c.lineas) continue
-    for (const l of c.lineas) if (l.destino !== 'impuestos' && l.destino !== 'resto') sumar(l.destino, c.fecha, Number(l.importe))
+    for (const l of c.lineas) {
+      if (l.destino === 'impuestos' || l.destino === 'resto') continue
+      if (l.hecho && medidoEnHucha(l.destino, c.fecha)) continue
+      sumar(l.destino, c.fecha, Number(l.importe))
+    }
     out.set(c, c.lineas)
   }
 

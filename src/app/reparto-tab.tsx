@@ -13,6 +13,7 @@ import { cuotaAutonomo } from '@/lib/autonomo'
 import {
   repartir, aportesAuto, asignadoPorHucha, huchaDeDestino, parseResto, esCuotaAutonomo, mesSiguiente, nombreMes,
   type Cobro, type Hucha, type HuchaMov, type Linea, type ParteResto,
+  reservaEnHuchas,
 } from '@/lib/reparto'
 
 const agrupar = { useGrouping: 'always' } as unknown as Intl.NumberFormatOptions
@@ -125,12 +126,15 @@ export default function RepartoTab({ cuentas, facturas, compras, fijos, variable
     return lista
   }, [movs, reps, lineas, facturas, uidCuenta, desde, excluidos])
 
-  const propuesta = useMemo(() => repartir(cobros, {
+  const ctx = useMemo(() => ({
     cuentas,
     fijosMes: fijos.filter(f => !esCuotaAutonomo(f.nombre)).reduce((t, f) => t + Number(f.limite), 0),
     variablesMes: variables.reduce((t, v) => t + Number(v.limite), 0),
     cuotaReal, cuotaTramo: autonomo.tramo.cuota, factorIrpf, resto, huchas,
-  }), [cobros, cuentas, fijos, variables, cuotaReal, autonomo.tramo.cuota, factorIrpf, resto, huchas])
+    mesActual: hoy.slice(0, 7), saldoHuchas: asignado,
+  }), [cuentas, fijos, variables, cuotaReal, autonomo.tramo.cuota, factorIrpf, resto, huchas, hoy, asignado])
+  const propuesta = useMemo(() => repartir(cobros, ctx), [cobros, ctx])
+  const enHuchas = useMemo(() => reservaEnHuchas(ctx), [ctx])
 
 
   // Lo que hay que tener el día 1 del mes siguiente en la operativa.
@@ -234,7 +238,13 @@ export default function RepartoTab({ cuentas, facturas, compras, fijos, variable
         <header><h2 id="rp-cobros">Cobros</h2><span className="caps dim">toca un destino cuando hayas hecho el traspaso</span></header>
         {!cargado ? <p className="nota">Cargando…</p> : filas.length === 0 ? <p className="nota">Sin cobros desde el {fecha(desde)}.</p> : meses.map(mes => {
           const del = filas.filter(c => c.fecha.startsWith(mes))
-          const reservado = Math.min(objetivoReserva, del.flatMap(c => propuesta.get(c) || []).filter(l => l.destino === 'autonomo' || l.destino === 'fijos' || l.destino === 'variables').reduce((t, l) => t + Number(l.importe), 0))
+          // El mes en curso se mide con lo que hay en las huchas más lo pendiente
+          // de traspasar; los anteriores, con lo que se repartió.
+          const deReserva = (l: Linea) => l.destino === 'autonomo' || l.destino === 'fijos' || l.destino === 'variables'
+          const real = mes === mesActual && enHuchas
+          const base = real ? (['autonomo', 'fijos', 'variables'] as const).reduce((t, d) => t + (enHuchas[d] ?? 0), 0) : 0
+          const lineasRes = del.flatMap(c => propuesta.get(c) || []).filter(l => deReserva(l) && !(real && l.hecho && enHuchas[l.destino] != null))
+          const reservado = Math.min(objetivoReserva, base + lineasRes.reduce((t, l) => t + Number(l.importe), 0))
           const pctReserva = objetivoReserva > 0 ? reservado / objetivoReserva * 100 : 100
           const sig = nombreMes(mesSiguiente(mes))
           return (
@@ -321,7 +331,7 @@ export default function RepartoTab({ cuentas, facturas, compras, fijos, variable
             <li><i style={{ background: COLOR.fijos }} /><b>Reserva del mes siguiente</b><span>cuota €{fmt(cuotaReal)} + fijos €{fmt(fijosSinCuota)} + variables €{fmt(variablesMes)}: se queda en BBVA; el día 1 pasas los variables a Revolut</span></li>
             <li><i style={{ background: 'var(--green)' }} /><b>El resto</b><span>{resto.filter(p => p.pct > 0).map(p => `${Math.round(p.pct)} % ${p.destino === 'crypto' ? 'crypto' : cuentas.find(c => c.id === p.cuenta_id)?.nombre || ''}`).join(' · ')}</span></li>
           </ol>
-          <p className="dim">Cada paso solo pide lo que falta: si un cobro anterior ya cubrió la reserva, el siguiente va directo al resto. Al marcar el primer destino, el reparto de ese cobro queda guardado.</p>
+          <p className="dim">Cada paso solo pide lo que falta: si un cobro anterior ya cubrió la reserva, el siguiente va directo al resto. La reserva del mes en curso se mide con lo que hay de verdad en las huchas de fijos y variables: si sacas dinero de ellas, el siguiente cobro lo repone. Al marcar el primer destino, el reparto de ese cobro queda guardado.</p>
         </details>
       </section>
 
