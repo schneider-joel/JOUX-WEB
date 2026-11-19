@@ -242,8 +242,8 @@ export default function RepartoTab({ cuentas, facturas, compras, fijos, variable
           // de traspasar; los anteriores, con lo que se repartió.
           const deReserva = (l: Linea) => l.destino === 'autonomo' || l.destino === 'fijos' || l.destino === 'variables'
           const real = mes === mesActual && enHuchas
-          const base = real ? (['autonomo', 'fijos', 'variables'] as const).reduce((t, d) => t + (enHuchas[d] ?? 0), 0) : 0
-          const lineasRes = del.flatMap(c => propuesta.get(c) || []).filter(l => deReserva(l) && !(real && l.hecho && enHuchas[l.destino] != null))
+          const base = real ? (enHuchas.fijos ?? 0) + (enHuchas.variables ?? 0) : 0
+          const lineasRes = del.flatMap(c => propuesta.get(c) || []).filter(l => deReserva(l) && !(real && l.hecho && enHuchas[l.destino === 'autonomo' ? 'fijos' : l.destino] != null))
           const reservado = Math.min(objetivoReserva, base + lineasRes.reduce((t, l) => t + Number(l.importe), 0))
           const pctReserva = objetivoReserva > 0 ? reservado / objetivoReserva * 100 : 100
           const sig = nombreMes(mesSiguiente(mes))
@@ -251,7 +251,7 @@ export default function RepartoTab({ cuentas, facturas, compras, fijos, variable
             <div key={mes} className="rp__mes">
               <div className="rp__mesh">
                 <h3>{mesLargo(mes).replace(/ de \d{4}$/, '')}<span className="dim"> · €{fmt(del.reduce((t, c) => t + c.importe, 0))}</span></h3>
-                <div className="rp__res" title={`Cuota €${fmt(cuotaReal)} + fijos €${fmt(fijosSinCuota)} + variables €${fmt(variablesMes)}`}>
+                <div className="rp__res" title={`Fijos €${fmt(cuotaReal + fijosSinCuota)} (cuota €${fmt(cuotaReal)} incluida) + variables €${fmt(variablesMes)}`}>
                   <span className="dim">Reserva de {sig}</span>
                   <span className="rp__meter"><i style={{ width: `${pctReserva}%` }} /></span>
                   <b className={pctReserva >= 100 ? 'ok' : ''}>{pctReserva >= 100 ? 'Cubierta ✓' : `€${fmt(reservado)} / €${fmt(objetivoReserva)}`}</b>
@@ -328,7 +328,7 @@ export default function RepartoTab({ cuentas, facturas, compras, fijos, variable
           <ol>
             <li><i style={{ background: COLOR.impuestos }} /><b>Impuestos</b><span>IRPF ({Math.round(20 * factorIrpf)} % efectivo) y el IVA si el cliente es de España → hucha de impuestos</span></li>
             <li><i style={{ background: COLOR.regularizacion }} /><b>Regularización</b><span>hasta €{fmt(autonomo.diferencia)} al mes: tu tramo (€{fmt(autonomo.tramo.cuota)}) menos lo que pagas (€{fmt(cuotaReal)}) → BBVA Ahorros</span></li>
-            <li><i style={{ background: COLOR.fijos }} /><b>Reserva del mes siguiente</b><span>cuota €{fmt(cuotaReal)} + fijos €{fmt(fijosSinCuota)} + variables €{fmt(variablesMes)}: se queda en BBVA; el día 1 pasas los variables a Revolut</span></li>
+            <li><i style={{ background: COLOR.fijos }} /><b>Reserva del mes siguiente</b><span>fijos €{fmt(cuotaReal + fijosSinCuota)} (cuota de autónomo €{fmt(cuotaReal)} incluida) + variables €{fmt(variablesMes)} → huchas de fijos y variables; el día 1 pasas los variables a Revolut</span></li>
             <li><i style={{ background: 'var(--green)' }} /><b>El resto</b><span>{resto.filter(p => p.pct > 0).map(p => `${Math.round(p.pct)} % ${p.destino === 'crypto' ? 'crypto' : cuentas.find(c => c.id === p.cuenta_id)?.nombre || ''}`).join(' · ')}</span></li>
           </ol>
           <p className="dim">Cada paso solo pide lo que falta: si un cobro anterior ya cubrió la reserva, el siguiente va directo al resto. La reserva del mes en curso se mide con lo que hay de verdad en las huchas de fijos y variables: si sacas dinero de ellas, el siguiente cobro lo repone. Al marcar el primer destino, el reparto de ese cobro queda guardado.</p>

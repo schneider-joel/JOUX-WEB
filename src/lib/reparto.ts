@@ -104,27 +104,26 @@ export const mesSiguiente = (fecha: string) => {
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
 export const nombreMes = (ym: string) => MESES[Number(ym.slice(5, 7)) - 1]
 
-// A qué mes cuenta cada destino: la regularización, al mes del cobro; la
-// reserva (autónomo, fijos, variables), al mes siguiente.
-const claveDe = (destino: Destino, fecha: string) =>
-  destino === 'regularizacion' ? `${destino}:${fecha.slice(0, 7)}` : `${destino}:${mesSiguiente(fecha)}`
+// La cuota de autónomo es un fijo más (2026-11-19): va en la línea de fijos.
+// Las líneas «autonomo» guardadas antes cuentan como fijos.
+const deReserva = (destino: Destino): Destino => destino === 'autonomo' ? 'fijos' : destino
 
-const RESERVA: Destino[] = ['autonomo', 'fijos', 'variables']
+// A qué mes cuenta cada destino: la regularización, al mes del cobro; la
+// reserva (fijos con la cuota, variables), al mes siguiente.
+const claveDe = (destino: Destino, fecha: string) =>
+  destino === 'regularizacion' ? `${destino}:${fecha.slice(0, 7)}` : `${deReserva(destino)}:${mesSiguiente(fecha)}`
+
+const RESERVA: Destino[] = ['fijos', 'variables']
 
 // Lo que ya hay para la reserva del mes siguiente al actual, según el saldo de
-// sus huchas: la de fijos lleva primero la cuota y luego los fijos. null si no
-// se mide así (sin mes actual o sin huchas).
+// sus huchas (la de fijos incluye la cuota). null si no se mide así (sin mes
+// actual o sin huchas).
 export function reservaEnHuchas(ctx: Contexto) {
   if (!ctx.mesActual || !ctx.saldoHuchas) return null
   const hf = huchaDeDestino('fijos', ctx.huchas), hv = huchaDeDestino('variables', ctx.huchas)
   if (!hf && !hv) return null
-  const bf = hf ? Math.max(0, ctx.saldoHuchas[hf.id] || 0) : 0
-  const autonomo = hf ? Math.min(bf, ctx.cuotaReal) : 0
-  return {
-    autonomo: hf ? r2(autonomo) : null,
-    fijos: hf ? r2(bf - autonomo) : null,
-    variables: hv ? r2(Math.max(0, ctx.saldoHuchas[hv.id] || 0)) : null,
-  } as Partial<Record<Destino, number | null>>
+  const saldo = (h: Hucha | null) => h ? r2(Math.max(0, ctx.saldoHuchas![h.id] || 0)) : null
+  return { fijos: saldo(hf), variables: saldo(hv) } as Partial<Record<Destino, number | null>>
 }
 
 // Propuesta de cada cobro, en orden de fecha. Los congelados se respetan tal
@@ -136,7 +135,7 @@ export function repartir(cobros: Cobro[], ctx: Contexto): Map<Cobro, Linea[]> {
     const h = huchaDeDestino(d, ctx.huchas)
     return { cuenta_id: h?.cuenta_id ?? cuenta?.id ?? null, hucha_id: h?.id ?? null, donde: h ? `hucha ${h.nombre}` : cuenta?.nombre || 'la operativa', h }
   }
-  const dImp = a('impuestos', hucha), dReg = a('regularizacion', null), dAut = a('autonomo', op), dFij = a('fijos', op), dVar = a('variables', op)
+  const dImp = a('impuestos', hucha), dReg = a('regularizacion', null), dFij = a('fijos', op), dVar = a('variables', op)
   const regDif = Math.max(0, ctx.cuotaTramo - ctx.cuotaReal)
   const cubierto: Record<string, number> = {}
   const sumar = (destino: Destino, fecha: string, n: number) => { const k = claveDe(destino, fecha); cubierto[k] = (cubierto[k] || 0) + n; return n }
@@ -145,7 +144,7 @@ export function repartir(cobros: Cobro[], ctx: Contexto): Map<Cobro, Linea[]> {
   // solo suma lo que falta por traspasar (lo hecho ya está en el saldo).
   const real = reservaEnHuchas(ctx)
   const medidoEnHucha = (destino: Destino, fecha: string) =>
-    !!real && fecha.slice(0, 7) === ctx.mesActual && RESERVA.includes(destino) && real[destino] != null
+    !!real && fecha.slice(0, 7) === ctx.mesActual && RESERVA.includes(deReserva(destino)) && real[deReserva(destino)] != null
   if (real && ctx.mesActual) {
     const sig = mesSiguiente(ctx.mesActual)
     for (const d of RESERVA) if (real[d] != null) cubierto[`${d}:${sig}`] = real[d]!
@@ -183,8 +182,8 @@ export function repartir(cobros: Cobro[], ctx: Contexto): Map<Cobro, Linea[]> {
       detalle: [imp.iva ? `IVA ${eur(imp.iva)}` : '', `IRPF ${eur(imp.irpf)}`, c.facturas.length ? '' : 'sin factura'].filter(Boolean).join(' · ') }, imp.iva + imp.irpf)
     if (dReg.h && regDif > 0)
       sumar('regularizacion', c.fecha, poner({ destino: 'regularizacion', etiqueta: 'Regularización', cuenta_id: dReg.cuenta_id, hucha_id: dReg.hucha_id, detalle: `tramo ${eur(ctx.cuotaTramo)} − pagas ${eur(ctx.cuotaReal)}, a la ${dReg.donde}` }, regDif - ya('regularizacion', c.fecha)))
-    sumar('autonomo', c.fecha, poner({ destino: 'autonomo', etiqueta: 'Autónomo', cuenta_id: dAut.cuenta_id, hucha_id: dAut.hucha_id, detalle: `cuota de ${sig} ${eur(ctx.cuotaReal)}, a la ${dAut.h ? dAut.donde : `cuenta ${dAut.donde}`}` }, ctx.cuotaReal - ya('autonomo', c.fecha)))
-    sumar('fijos', c.fecha, poner({ destino: 'fijos', etiqueta: 'Fijos', cuenta_id: dFij.cuenta_id, hucha_id: dFij.hucha_id, detalle: `fijos de ${sig} ${eur(ctx.fijosMes)}, a la ${dFij.h ? dFij.donde : `cuenta ${dFij.donde}`}` }, ctx.fijosMes - ya('fijos', c.fecha)))
+    const fijosConCuota = ctx.cuotaReal + ctx.fijosMes
+    sumar('fijos', c.fecha, poner({ destino: 'fijos', etiqueta: 'Fijos', cuenta_id: dFij.cuenta_id, hucha_id: dFij.hucha_id, detalle: `fijos de ${sig} ${eur(fijosConCuota)} (cuota de autónomo ${eur(ctx.cuotaReal)} incluida), a la ${dFij.h ? dFij.donde : `cuenta ${dFij.donde}`}` }, fijosConCuota - ya('fijos', c.fecha)))
     sumar('variables', c.fecha, poner({ destino: 'variables', etiqueta: 'Variables', cuenta_id: dVar.cuenta_id, hucha_id: dVar.hucha_id, detalle: `variables de ${sig} ${eur(ctx.variablesMes)}, a la ${dVar.h ? dVar.donde : `cuenta ${dVar.donde}`}; el día 1 pásalos a ${variables?.nombre || 'variables'}` }, ctx.variablesMes - ya('variables', c.fecha)))
 
     // El resto, en %: si no suman 100 se reparte en proporción; el último se lleva el redondeo.
