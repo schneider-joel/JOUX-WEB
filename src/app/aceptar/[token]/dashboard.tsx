@@ -22,9 +22,11 @@ const T = {
       cerrado: ['All done', 'Your site is live and fully paid. Thank you.'],
     } as Record<string, [string, string]>,
     verFactura: 'View invoice', abrirRevision: 'Open review mode', verWeb: 'Visit your site',
-    comoPagar: 'How to pay', ref: (n: string) => `Reference: ${n}`,
+    comoPagar: 'How to pay', ref: (n: string) => `Please use ${n} as the reference.`,
     conectado: 'connected', pendienteDominio: 'connecting',
-    tuyo: 'Your to-do', pagos: 'Payments', pago1: 'To start', pago2: 'At launch', pagada: 'Paid', porPagar: 'Due', proximamente: 'Not yet',
+    tuyo: 'Your to-do', pagos: 'Payments and invoices', pago1: 'First payment · 50%', pago2: 'Final payment · 50%', pagada: 'Paid', porPagar: 'Due', proximamente: 'Not yet',
+    enCamino: 'Invoice on its way', alPublicar: 'Invoiced at launch', vence: 'due', descargar: 'Download PDF',
+    datos: 'Billing details', sinDatos: 'They will show here once I have them.', datosMal: 'Anything to change? Write to',
     presupuesto: 'Quote and terms', dudas: 'Questions?',
   },
   es: {
@@ -42,9 +44,11 @@ const T = {
       cerrado: ['Terminado', 'Tu web está publicada y pagada. Gracias.'],
     } as Record<string, [string, string]>,
     verFactura: 'Ver la factura', abrirRevision: 'Abrir el modo revisión', verWeb: 'Ver tu web',
-    comoPagar: 'Cómo pagar', ref: (n: string) => `Referencia: ${n}`,
+    comoPagar: 'Cómo pagar', ref: (n: string) => `Pon ${n} como referencia.`,
     conectado: 'conectado', pendienteDominio: 'conectando',
-    tuyo: 'Te toca', pagos: 'Pagos', pago1: 'Para empezar', pago2: 'Al publicar', pagada: 'Pagado', porPagar: 'Por pagar', proximamente: 'Aún no',
+    tuyo: 'Te toca', pagos: 'Pagos y facturas', pago1: 'Primer pago · 50 %', pago2: 'Pago final · 50 %', pagada: 'Pagado', porPagar: 'Por pagar', proximamente: 'Aún no',
+    enCamino: 'Factura en camino', alPublicar: 'Se factura al publicar', vence: 'vence el', descargar: 'Descargar PDF',
+    datos: 'Datos de facturación', sinDatos: 'Aparecerán aquí cuando los tenga.', datosMal: '¿Algo que cambiar? Escribe a',
     presupuesto: 'Presupuesto y condiciones', dudas: '¿Dudas?',
   },
 }
@@ -67,6 +71,7 @@ export default function Dashboard({ d, contacto, enlacePresupuesto }: { d: Porta
   const boton = debe ? { href: debe.url, texto: t.verFactura } : revision ? { href: revision, texto: t.abrirRevision } : web ? { href: web, texto: t.verWeb } : null
   const secundario = web && boton?.href !== web ? { href: web, texto: t.verWeb } : null
   const abiertos = (pr?.pendientes || []).filter(x => !x.hecho)
+  const fecha = (iso: string) => new Date(`${iso}T12:00:00`).toLocaleDateString(p.idioma === 'en' ? (p.moneda === 'USD' ? 'en-US' : 'en-GB') : 'es-ES', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Europe/Madrid' })
   const mitad = p.modo === 'cerrado' && Number(p.precio) > 0 ? Number(p.precio) / 2 : null
 
   return (
@@ -97,43 +102,54 @@ export default function Dashboard({ d, contacto, enlacePresupuesto }: { d: Porta
           <div className="dz__acciones">
             {boton && <a className="pz__btn pz__btn--link" href={boton.href} target="_blank" rel="noopener">{boton.texto} ↗</a>}
             {secundario && <a href={secundario.href} target="_blank" rel="noopener">{secundario.texto} ↗</a>}
+            {debe && d.pago && <a href="#pagos">{t.comoPagar} ↓</a>}
           </div>
-        )}
-        {debe && d.pago && (
-          <details className="dz__pago">
-            <summary>{t.comoPagar}</summary>
-            <pre>{d.pago}</pre>
-            <p className="pz__nota">{t.ref(debe.numero)}</p>
-          </details>
         )}
       </section>
 
-      <div className="dz__fila">
-        {abiertos.length > 0 && etapa !== 'lanzamiento' && (
-          <section className="dz__card">
-            <h3 className="pz__label">{t.tuyo}</h3>
-            <ul className="pz__check">{abiertos.map((x, i) => <li key={i}><span className="pz__o" aria-hidden="true" /><span>{x.texto}</span></li>)}</ul>
-          </section>
-        )}
+      {abiertos.length > 0 && etapa !== 'lanzamiento' && (
         <section className="dz__card">
-          <h3 className="pz__label">{t.pagos}</h3>
-          <ul className="dz__pagos">
-            {([1, 2] as const).map(n => {
-              const f = facturas.find(x => x.pago === n)
-              const importe = f ? dinero(f.total, f.moneda, p.idioma, f.total % 1 !== 0) : mitad ? din(mitad) : ''
-              return (
-                <li key={n}>
-                  <span>{n === 1 ? t.pago1 : t.pago2}</span>
-                  <span className="dz__cifra">
-                    {f ? <a href={f.url} target="_blank" rel="noopener">{importe}</a> : <span className="dz__apagado">{importe}</span>}
-                    <span className={`pz__tag${f?.cobrada ? ' ok' : f ? ' aviso' : ''}`}>{f?.cobrada ? t.pagada : f ? t.porPagar : t.proximamente}</span>
-                  </span>
-                </li>
-              )
-            })}
-          </ul>
+          <h3 className="pz__label">{t.tuyo}</h3>
+          <ul className="pz__check">{abiertos.map((x, i) => <li key={i}><span className="pz__o" aria-hidden="true" /><span>{x.texto}</span></li>)}</ul>
         </section>
-      </div>
+      )}
+
+      <section className="dz__card" id="pagos" aria-labelledby="dz-pagos">
+        <h3 className="pz__label" id="dz-pagos">{t.pagos}</h3>
+        <ul className="dz__pagos">
+          {([1, 2] as const).map(n => {
+            const f = facturas.find(x => x.pago === n)
+            const importe = f ? dinero(f.total, f.moneda, p.idioma, f.total % 1 !== 0) : mitad ? din(mitad) : ''
+            const nota = f ? `${f.numero} · ${f.cobrada ? fecha(f.fecha) : f.vence ? `${t.vence} ${fecha(f.vence)}` : fecha(f.fecha)}` : n === 1 ? t.enCamino : t.alPublicar
+            return (
+              <li key={n}>
+                <span className="dz__concepto"><b>{n === 1 ? t.pago1 : t.pago2}</b><small>{nota}</small></span>
+                <span className="dz__cifra">
+                  <span className={f ? undefined : 'dz__apagado'}>{importe}</span>
+                  <span className={`pz__tag${f?.cobrada ? ' ok' : f ? ' aviso' : ''}`}>{f?.cobrada ? t.pagada : f ? t.porPagar : t.proximamente}</span>
+                </span>
+                {f && <a className="dz__pdf" href={p.token === 'demo' ? f.url : `/api/aceptar/${p.token}/factura/${f.id}`} download>{t.descargar}</a>}
+              </li>
+            )
+          })}
+        </ul>
+        <div className="dz__cols">
+          {d.pago && (
+            <div>
+              <h4 className="pz__label">{t.comoPagar}</h4>
+              <pre className="dz__texto">{d.pago}</pre>
+              {debe && <p className="pz__nota">{t.ref(debe.numero)}</p>}
+            </div>
+          )}
+          <div>
+            <h4 className="pz__label">{t.datos}</h4>
+            {d.cliente ? (
+              <address className="dz__texto">{[d.cliente.nombre, d.cliente.identificador, d.cliente.direccion].filter(Boolean).join('\n')}</address>
+            ) : <p className="pz__nota">{t.sinDatos}</p>}
+            <p className="pz__nota dz__peq">{t.datosMal} <a href={`mailto:${contacto}`}>{contacto}</a></p>
+          </div>
+        </div>
+      </section>
 
       <p className="pz__pie dz__pie"><a href={enlacePresupuesto}>{t.presupuesto}</a><span>{t.dudas} <a href={`mailto:${contacto}`}>{contacto}</a></span></p>
     </div>

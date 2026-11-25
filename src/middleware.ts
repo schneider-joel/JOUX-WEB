@@ -14,9 +14,9 @@ import { WEB_MARCA, marcaDeHost } from '@/lib/dominios-presupuesto'
 // /api/carta/* lo llama el Worker de cada carta de Cartela (cambios desde la propia carta) y valida CARTELA_CARTAS_KEY.
 // /fonts/ y /marcas/ son las fuentes y los logos de esas páginas públicas.
 // /datos/<token> es el formulario de datos fiscales de un cliente; su API valida el mismo token.
-// /aceptar/<token> es el presupuesto que acepta el cliente (su API valida el mismo token) y /condiciones/<marca>, sus condiciones.
+// /aceptar/<token> es el presupuesto que acepta el cliente (su API y la descarga de sus facturas validan el mismo token) y /condiciones/<marca>, sus condiciones.
 // /api/resend/webhook lo llama Resend (rebotes, spam) y valida su firma con RESEND_WEBHOOK_SECRET.
-const PUBLIC_PATHS = [/^\/(ab|th|t|c|datos|cambios|aceptar|condiciones|marcas)\//, /^\/api\/(datos|aceptar)\/[\w-]+$/, /^\/api\/cambios\/[0-9a-f]+(\/qr)?$/, /^\/api\/carta\/(acceso|cambios(\/\d+)?)$/, /^\/api\/bancos\/cron$/, /^\/api\/intake\/(lead|evento)$/, /^\/api\/resend\/webhook$/, /^\/api\/cron\/tick$/, /^\/api\/agente\/(pruebas-pendientes|prueba-lista|prueba-error|webs-pendientes|encargos-pendientes|web-empezada|web-lista|web-error|cambios-pendientes|cambio-empezado|cambio-hecho|cambio-escalado|piezas)$/, /^\/api\/compartidos$/, /^\/invoice\//, /^\/login$/, /^\/api\/login$/, /^\/icon/, /^\/apple-icon/, /^\/sw\.js$/, /^\/fonts\//, /^\/manifest\.webmanifest$/]
+const PUBLIC_PATHS = [/^\/(ab|th|t|c|datos|cambios|aceptar|condiciones|marcas)\//, /^\/api\/(datos|aceptar)\/[\w-]+$/, /^\/api\/aceptar\/[\w-]+\/factura\/\d+$/, /^\/api\/cambios\/[0-9a-f]+(\/qr)?$/, /^\/api\/carta\/(acceso|cambios(\/\d+)?)$/, /^\/api\/bancos\/cron$/, /^\/api\/intake\/(lead|evento)$/, /^\/api\/resend\/webhook$/, /^\/api\/cron\/tick$/, /^\/api\/agente\/(pruebas-pendientes|prueba-lista|prueba-error|webs-pendientes|encargos-pendientes|web-empezada|web-lista|web-error|cambios-pendientes|cambio-empezado|cambio-hecho|cambio-escalado|piezas)$/, /^\/api\/compartidos$/, /^\/invoice\//, /^\/login$/, /^\/api\/login$/, /^\/icon/, /^\/apple-icon/, /^\/sw\.js$/, /^\/fonts\//, /^\/manifest\.webmanifest$/]
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
@@ -26,7 +26,7 @@ export function middleware(req: NextRequest) {
   // para pintarse. Nunca el panel ni el login: cualquier otra ruta va a la web de la marca.
   const marca = marcaDeHost(req.headers.get('host'))
   if (marca) {
-    if (/^\/(_next|marcas|fonts)\//.test(pathname) || /^\/api\/aceptar\/[\w-]+$/.test(pathname) || /^\/invoice\/\d+$/.test(pathname) || /^\/(icon|apple-icon)/.test(pathname)) return NextResponse.next()
+    if (/^\/(_next|marcas|fonts)\//.test(pathname) || /^\/api\/aceptar\/[\w-]+(\/factura\/\d+)?$/.test(pathname) || /^\/invoice\/\d+$/.test(pathname) || /^\/(icon|apple-icon)/.test(pathname)) return NextResponse.next()
     const token = pathname.match(/^\/([\w-]{20,40})$/)?.[1]
     const version = pathname.match(/^\/condiciones(?:\/(\d{1,4}))?$/)
     const destino = token ? `/aceptar/${token}` : version ? `/condiciones/${marca}${version[1] ? `/${version[1]}` : ''}` : null

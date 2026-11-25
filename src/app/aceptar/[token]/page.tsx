@@ -199,7 +199,7 @@ async function demo(q: { estado?: string; modo?: string; marca?: string; etapa?:
     estado, aceptado_at: estado === 'aceptado' ? new Date().toISOString() : null, aceptado_nombre: estado === 'aceptado' ? 'Marta Ruiz' : null,
   }
   const cond = { id: 0, marca, version: 1, idioma: p.idioma, titulo: dia ? 'Terms of service' : 'Condiciones del servicio', texto, created_at: new Date().toISOString() }
-  return { p, marca: ej.nombre, cond, lead: { nombre: 'Marta Ruiz', empresa: ej.empresa, email: '' }, caducado: q.estado === 'caducado', etapa: 'propuesta', proyecto: null, facturas: [], pago: null }
+  return { p, marca: ej.nombre, cond, lead: { nombre: 'Marta Ruiz', empresa: ej.empresa, email: '' }, caducado: q.estado === 'caducado', etapa: 'propuesta', proyecto: null, facturas: [], pago: null, cliente: null }
 }
 const vacio: Presupuesto = {
   id: 0, lead_id: 0, marca: 'custom', token: 'demo', idioma: 'es', modo: 'cerrado', concepto: '', plan: null, precio: null, tarifa_dia: null, dias: null,
@@ -234,11 +234,12 @@ async function demoPortal(e: string): Promise<Portal> {
     dominio: 'alexrivera.com', dominio_estado: etapa === 'lanzamiento' ? 'conectado' : 'pendiente',
     pendientes: [{ texto: 'The list of spots, with their Vimeo links', hecho: true }, { texto: 'Your thumbnails', hecho: etapa !== 'pago' }, { texto: 'About and Contact text', hecho: false }],
   } : null
-  const f = (pago: number, cobrada: boolean): FacturaPortal => ({ id: pago, numero: `F-2026-${90 + pago}`, pago, fecha: '2026-11-25', vence: '2026-12-25', total: 1750, moneda: 'USD', cobrada, url: '#', prueba: false })
+  const f = (pago: number, cobrada: boolean): FacturaPortal => ({ id: pago, numero: `F-2026-${90 + pago}`, pago, fecha: '2026-11-25', vence: '2026-12-25', total: 1750, moneda: 'USD', cobrada, url: '/invoice/demo', prueba: false })
   const facturas = etapa === 'pago' ? [f(1, false)] : etapa === 'proyecto' ? [f(1, true)] : etapa === 'lanzamiento' ? [f(1, true), f(2, false)] : []
   return {
     p, marca: 'Custom Websites', cond: { id: 0, marca: 'custom', version: 2, idioma: 'en', titulo: 'Terms of service', texto, created_at: new Date().toISOString() },
     lead: { nombre: 'Alex Rivera', empresa: null, email: '' }, caducado: false, etapa, proyecto, facturas,
-    pago: facturas.some(x => !x.cobrada) ? '[Wise / PayPal details from configuracion.pago_instrucciones_USD]' : null,
+    pago: aceptado ? 'Bank transfer in USD (ACH or wire)\n[Wise account details]\n\nPayPal\n[PayPal email]' : null,
+    cliente: aceptado ? { nombre: 'Alex Rivera', identificador: null, direccion: '123 Ocean Ave, Apt 4\nSanta Monica, CA 90401\nUnited States' } : null,
   }
 }

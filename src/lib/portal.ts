@@ -9,6 +9,7 @@
 //   factura    → aceptado; Joel aún no ha emitido la factura del pago 1
 //   pago       → la factura del pago 1 emitida y sin cobrar, con cómo pagarla
 //   proyecto   → pago 1 cobrado: fases, pendientes, review mode y facturas
+// Siempre, tras aceptar: las formas de pago, los datos de facturación y las facturas con su PDF.
 //   lanzamiento→ entregado o cerrado: web en vivo, dominio y la factura final
 import { supabaseServer as sb } from '@/lib/supabase-server'
 import { enlaceFactura } from '@/lib/factura-enlace'
@@ -19,6 +20,7 @@ import type { Moneda } from '@/lib/moneda'
 
 export type EtapaPortal = 'propuesta' | 'factura' | 'pago' | 'proyecto' | 'lanzamiento'
 export type Pendiente = { texto: string; hecho: boolean }
+export type ClientePortal = { nombre: string; identificador: string | null; direccion: string | null }
 export type FacturaPortal = { id: number; numero: string; pago: number | null; fecha: string; vence: string | null; total: number; moneda: Moneda; cobrada: boolean; url: string; prueba: boolean }
 export type ProyectoPortal = {
   fase: FaseProyecto | null; url_revision: string | null; url_live: string | null
@@ -52,15 +54,17 @@ export async function instruccionesPago(moneda: Moneda): Promise<string | null> 
 export async function portalDeToken(token: string) {
   const d = await presupuestoDeToken(token)
   if (!d) return null
-  const base = { ...d, etapa: 'propuesta' as EtapaPortal, proyecto: null as ProyectoPortal | null, facturas: [] as FacturaPortal[], pago: null as string | null }
+  const base = { ...d, etapa: 'propuesta' as EtapaPortal, proyecto: null as ProyectoPortal | null, facturas: [] as FacturaPortal[], pago: null as string | null, cliente: null as ClientePortal | null }
   if (d.p.estado !== 'aceptado' || !PORTAL_MARCAS.includes(d.p.marca) || !d.p.proyecto_id) {
-    return { ...base, etapa: (d.p.estado === 'aceptado' && PORTAL_MARCAS.includes(d.p.marca) ? 'factura' : 'propuesta') as EtapaPortal }
+    const aceptado = d.p.estado === 'aceptado' && PORTAL_MARCAS.includes(d.p.marca)
+    return { ...base, etapa: (aceptado ? 'factura' : 'propuesta') as EtapaPortal, pago: aceptado ? await instruccionesPago(d.p.moneda || 'EUR') : null }
   }
-  const [{ data: pr }, { data: fs }] = await Promise.all([
+  const [{ data: pr }, { data: fs }, pago] = await Promise.all([
     sb.from('proyectos').select('*').eq('id', d.p.proyecto_id).maybeSingle(),
     sb.from('facturas').select('*').eq('proyecto_id', d.p.proyecto_id).order('fecha'),
+    instruccionesPago(d.p.moneda || 'EUR'),
   ])
-  if (!pr) return { ...base, etapa: 'factura' as EtapaPortal }
+  if (!pr) return { ...base, etapa: 'factura' as EtapaPortal, pago }
   const proyecto: ProyectoPortal = {
     fase: esFaseProyecto(pr.fase) ? pr.fase : null, url_revision: url(pr.url_revision), url_live: url(pr.url_live),
     dominio: pr.dominio || null, dominio_estado: pr.dominio_estado === 'conectado' || pr.dominio_estado === 'pendiente' ? pr.dominio_estado : null,
@@ -78,7 +82,9 @@ export async function portalDeToken(token: string) {
   const pago1 = facturas.find(f => f.pago === 1)
   const etapa: EtapaPortal = !pago1 ? 'factura' : !pago1.cobrada ? 'pago'
     : proyecto.fase === 'entregado' || proyecto.fase === 'cerrado' ? 'lanzamiento' : 'proyecto'
-  const debe = facturas.some(f => !f.cobrada)
-  return { ...base, etapa, proyecto, facturas, pago: debe ? await instruccionesPago((pr.moneda as Moneda) || 'EUR') : null }
+  // Los datos de facturación, tal como salen en sus facturas (el cliente los ve; si están mal, escribe a Joel).
+  const { data: cf } = await sb.from('clientes_fiscales').select('cliente, identificador, direccion').eq('cliente', pr.cliente).maybeSingle()
+  const cliente: ClientePortal | null = cf ? { nombre: cf.cliente, identificador: cf.identificador || null, direccion: cf.direccion || null } : null
+  return { ...base, etapa, proyecto, facturas, pago, cliente }
 }
 export type Portal = NonNullable<Awaited<ReturnType<typeof portalDeToken>>>
