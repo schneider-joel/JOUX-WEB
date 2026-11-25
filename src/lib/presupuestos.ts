@@ -125,6 +125,12 @@ export async function aceptarPresupuesto(token: string, a: Aceptacion): Promise<
   if (d.p.estado === 'aceptado') return { ok: true, ya: true }
   if (d.p.estado === 'anulado') return { error: 'anulado', status: 410 }
   if (d.caducado) return { error: 'caducado', status: 410 }
+  // En local la base es la de producción: aceptar el presupuesto de un cliente real gana su lead, crea su proyecto y
+  // le manda la confirmación (pasó con Duncan Heger el 2026-11-25). Fuera de producción solo se aceptan leads de prueba.
+  if (process.env.NODE_ENV !== 'production') {
+    const { data: lead } = await sb.from('leads').select('prueba').eq('id', d.p.lead_id).maybeSingle()
+    if (!lead?.prueba) return { error: 'local', status: 403 }
+  }
 
   // Update condicional: dos clics a la vez no aceptan dos veces.
   const { data: hecho, error } = await sb.from('presupuestos').update({

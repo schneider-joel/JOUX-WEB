@@ -9,14 +9,14 @@ const T = {
     casillaCorta: (url: string, v: number) => <>Acepto el presupuesto y las <a href={url} target="_blank" rel="noopener noreferrer">condiciones del servicio</a> (v{v}).</>,
     particular: 'Si contratas como particular, pides que empecemos antes de que acaben los 14 días de desistimiento.',
     aceptar: 'Aceptar el presupuesto', enviando: 'Enviando…',
-    errores: { nombre: 'Escribe tu nombre.', casilla: 'Marca la casilla para aceptar.', anulado: 'Este presupuesto ya no está vigente.', caducado: 'Este presupuesto ha caducado.', enlace: 'Este enlace no es válido.', otro: 'No se pudo enviar. Inténtalo otra vez en un momento.' },
+    errores: { nombre: 'Escribe tu nombre.', casilla: 'Marca la casilla para aceptar.', anulado: 'Este presupuesto ya no está vigente.', caducado: 'Este presupuesto ha caducado.', enlace: 'Este enlace no es válido.', local: 'En local solo se aceptan presupuestos de leads de prueba (la base es la de producción).', otro: 'No se pudo enviar. Inténtalo otra vez en un momento.' },
   },
   en: {
     nombre: 'Your full name', casilla: (v: number) => `I have read and accept the quote and the terms of service (v${v}).`,
     casillaCorta: (url: string, v: number) => <>I accept the quote and the <a href={url} target="_blank" rel="noopener noreferrer">terms of service</a> (v{v}).</>,
     particular: 'If you are hiring as an individual, you ask me to start before the 14-day withdrawal period ends.',
     aceptar: 'Accept the quote', enviando: 'Sending…',
-    errores: { nombre: 'Please write your name.', casilla: 'Tick the box to accept.', anulado: 'This quote is no longer valid.', caducado: 'This quote has expired.', enlace: 'This link is not valid.', otro: "Couldn't send. Please try again in a moment." },
+    errores: { nombre: 'Please write your name.', casilla: 'Tick the box to accept.', anulado: 'This quote is no longer valid.', caducado: 'This quote has expired.', enlace: 'This link is not valid.', local: 'Locally, only quotes of test leads can be accepted (the database is production).', otro: "Couldn't send. Please try again in a moment." },
   },
 }
 
