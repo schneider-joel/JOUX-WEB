@@ -112,73 +112,55 @@ html:has(.pz[data-marca="custom"]), body:has(.pz[data-marca="custom"]) { backgro
 .pz__btn--link { display: inline-flex; align-items: center; margin-top: 18px; text-decoration: none; color: var(--on-accent) !important; }
 .pz__volver { display: inline-block; margin: -24px 0 28px; font-size: 14.5px; }
 
-/* Dashboard del cliente (dashboard.tsx): cabecera, progreso y rejilla de tarjetas fijas */
-.pz__app--ancho { max-width: 1040px; }
-.pz:has(.pz__app--ancho) .pz__top { margin-bottom: 32px; }
-.dz { display: flex; flex-direction: column; gap: 16px; }
-.dz__cab { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; flex-wrap: wrap; margin-bottom: 8px; }
-.dz__cab h1 { margin: 0; font-size: clamp(28px, 4.4vw, 40px); }
-.dz__cab-der { display: flex; align-items: center; gap: 18px; font-size: 14.5px; }
-.dz__pill { display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; border: 1px solid var(--line); border-radius: 99px; font-size: 14px; }
-.dz__card { min-width: 0; padding: 22px; border: 1px solid var(--line); border-radius: 14px; background: color-mix(in srgb, var(--ink) 2.5%, transparent); transition: opacity .3s var(--ease); }
-.dz__card .pz__label { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
-.dz__card h2 { margin: 0 0 8px; font-family: var(--disp); font-weight: var(--disp-w); font-stretch: var(--disp-st); letter-spacing: var(--disp-ls); font-size: 26px; line-height: 1.1; }
-.dz__card.is-bloq { opacity: .55; }
-.dz__cuenta { font-variant-numeric: tabular-nums; color: var(--ink); }
+/* Dashboard del cliente (dashboard.tsx): una columna, solo lo esencial */
+.pz__app--ancho { max-width: 720px; }
+.pz:has(.pz__app--ancho) .pz__top { margin-bottom: 40px; }
+.pz__punto.is-espera { background: var(--muted); }
+.dz { display: flex; flex-direction: column; gap: 14px; }
+.pz h1.dz__titulo { margin: 0 0 18px; font-size: clamp(28px, 5vw, 40px); }
 
-/* Progreso: barra con los cinco pasos; en el móvil, la barra y «Paso 3 de 5 · Construcción» */
-.dz__progreso { position: relative; padding: 26px 22px 20px; }
-.dz__barra { position: absolute; left: calc(22px + 10px); right: calc(22px + 10px); top: 36px; height: 2px; background: var(--line); }
-.dz__barra span { display: block; height: 100%; background: var(--ok); transition: width .6s var(--ease); }
-.dz__progreso ol { position: relative; list-style: none; margin: 0; padding: 0; display: flex; justify-content: space-between; }
-.dz__progreso li { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 20px; color: var(--muted); }
-.dz__progreso li:first-child { align-items: flex-start; }
-.dz__progreso li:last-child { align-items: flex-end; }
-.dz__progreso li.is-hecho, .dz__progreso li.is-ahora { color: var(--ink); }
-.dz__paso { font-size: 14px; white-space: nowrap; }
+/* Progreso: cinco segmentos con su nombre debajo; en el móvil, solo «Paso 3 de 5 · Construcción» */
+.dz__progreso { margin-bottom: 14px; }
+.dz__progreso ol { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.dz__progreso li { display: flex; flex-direction: column; gap: 10px; color: var(--muted); }
+.dz__seg { height: 4px; border-radius: 99px; background: var(--line); transition: background-color .5s var(--ease); }
+.dz__progreso li.is-hecho .dz__seg { background: var(--ok); }
+.dz__progreso li.is-ahora .dz__seg { background: linear-gradient(90deg, var(--ok) 50%, var(--line) 50%); }
+.dz__progreso li.is-ahora { color: var(--ink); }
+.dz__paso { font-size: 13px; }
 .dz__progreso li.is-ahora .dz__paso { font-weight: 600; }
-.dz__movil { display: none; margin: 14px 0 0; font-size: 14.5px; }
+.dz__movil { display: none; margin: 12px 0 0; font-size: 14px; color: var(--muted); }
 
-.dz__grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
-.dz__ahora { grid-column: span 2; display: flex; flex-direction: column; align-items: flex-start; }
-.dz__ahora h2 { font-size: clamp(26px, 3.4vw, 34px); }
+/* Lo que toca ahora: grande, con un solo botón */
+.dz__ahora { padding: 32px; border: 1px solid var(--line); border-radius: 18px; background: color-mix(in srgb, var(--ink) 3%, transparent); }
+.dz__ahora h2 { margin: 0 0 8px; font-family: var(--disp); font-weight: var(--disp-w); font-stretch: var(--disp-st); letter-spacing: var(--disp-ls); font-size: clamp(26px, 4.4vw, 34px); line-height: 1.08; text-wrap: balance; }
+.dz__ahora .pz__nota { font-size: 15.5px; }
+.dz__importe { margin: 22px 0 0; font-family: var(--disp); font-weight: var(--disp-w); letter-spacing: var(--disp-ls); font-size: 40px; line-height: 1; font-variant-numeric: tabular-nums; }
+.dz__dominio { display: flex; align-items: center; gap: 8px; margin: 18px 0 0; font-size: 15px; }
+.dz__acciones { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 22px; margin-top: 26px; }
+.dz__acciones .pz__btn--link { margin: 0; }
+.dz__acciones > a:not(.pz__btn) { font-size: 15px; }
+.dz__pago { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line); }
+.dz__pago summary { font-size: 15px; }
+.dz__pago pre { margin: 14px 0 8px; font: 400 14.5px/1.6 var(--body); white-space: pre-wrap; overflow-wrap: anywhere; }
 
-.dz__datos { display: flex; flex-wrap: wrap; gap: 14px 36px; width: 100%; margin: auto 0 0; padding-top: 22px; border-top: 1px solid var(--line); }
-.dz__ahora .pz__btn--link { margin-bottom: 26px; }
-.dz__ahora .pz__nota { margin-bottom: 0; }
-.dz__ahora h2 + .pz__nota:last-of-type { margin-bottom: 26px; }
-.dz__datos dt { font: var(--label); letter-spacing: var(--label-ls); text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
-.dz__datos dd { margin: 0; font-size: 15px; font-variant-numeric: tabular-nums; }
-.dz__facturas { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
-.dz__facturas li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; padding: 12px 0; }
-.dz__facturas li:first-child { padding-top: 0; }
-.dz__facturas li + li { border-top: 1px solid var(--line); }
-.dz__facturas b { display: block; font-weight: 500; font-size: 15px; }
-.dz__facturas small { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
-.dz__facturas a { grid-column: 1 / -1; font-size: 14px; margin-top: 4px; }
-.dz__cifra { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; font-variant-numeric: tabular-nums; font-size: 15px; }
-.dz__pago { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
-.dz__pago summary { font-size: 14.5px; }
-.dz__pago pre { margin: 12px 0 8px; font: 400 14px/1.6 var(--body); white-space: pre-wrap; overflow-wrap: anywhere; }
+/* Debajo: lo que le toca al cliente y sus dos pagos */
+.dz__fila { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+.dz__card { min-width: 0; padding: 22px; border: 1px solid var(--line); border-radius: 14px; }
+.dz__card h3.pz__label { margin: 0 0 14px; font-weight: inherit; }
+.dz__pagos { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.dz__pagos li { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 15px; }
+.dz__cifra { display: flex; align-items: center; gap: 10px; font-variant-numeric: tabular-nums; }
+.dz__apagado { color: var(--muted); }
+.dz__pie { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 20px; margin-top: 26px; }
 
-.dz__enlace { display: inline-block; margin-top: 12px; font-size: 14.5px; }
-.dz__enlace--grande { margin: 0 0 4px; font-family: var(--disp); font-weight: var(--disp-w); letter-spacing: var(--disp-ls); font-size: 22px; overflow-wrap: anywhere; }
-.dz__kv { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 14px; align-items: center; margin: 8px 0 10px; font-size: 14.5px; }
-.dz__kv dt { color: var(--muted); }
-.dz__kv dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
-
-@media (max-width: 860px) {
-  .dz__grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-  .dz__ahora { grid-column: 1 / -1; }
-}
 @media (max-width: 600px) {
-  .dz__grid { grid-template-columns: minmax(0, 1fr); }
-  .dz__cab { align-items: flex-start; }
   .dz__paso { display: none; }
   .dz__movil { display: block; }
-  .dz__card { padding: 18px; }
-  .dz__progreso { padding: 22px 18px 16px; }
-  .dz__barra { left: calc(18px + 10px); right: calc(18px + 10px); top: 32px; }
+  .dz__progreso ol { gap: 4px; }
+  .dz__ahora { padding: 24px 20px; }
+  .dz__importe { font-size: 34px; }
+  .dz__acciones .pz__btn--link { align-self: stretch; justify-content: center; width: 100%; }
 }
 
 .pz__pie { margin: 40px 0 0; color: var(--muted); font-size: 13px; }
