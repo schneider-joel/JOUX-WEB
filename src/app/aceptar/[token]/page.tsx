@@ -3,11 +3,12 @@ import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { DOMINIO_PRESUPUESTO, marcaDeHost } from '@/lib/dominios-presupuesto'
 import { enlaceCondiciones, enlacePresupuesto, type Presupuesto } from '@/lib/presupuestos'
-import { portalDeToken, pasoDeFase, PASOS_PORTAL, type EtapaPortal, type Portal, type FacturaPortal, type ProyectoPortal } from '@/lib/portal'
+import { portalDeToken, type EtapaPortal, type Portal, type FacturaPortal, type ProyectoPortal } from '@/lib/portal'
 import { dinero } from '@/lib/moneda'
 import TextoCondiciones from '../../condiciones/texto'
 import { Marco } from '../marca'
 import FormAceptar from './form'
+import Dashboard from './dashboard'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -27,7 +28,7 @@ const T = {
     aceptadoPortal: (n: string, f: string) => `Aceptado por ${n} el ${f}.`,
     anulado: 'Este presupuesto ya no está vigente. Responde al email y te mandamos uno nuevo.',
     caducado: 'Este presupuesto ha caducado. Responde al email y te mandamos uno actualizado.',
-    tuPresupuesto: 'Tu presupuesto', verPresupuesto: 'Ver el presupuesto y las condiciones',
+    volver: 'Volver a tu proyecto', tuPresupuesto: 'Tu presupuesto', verPresupuesto: 'Ver el presupuesto y las condiciones',
     estado: {
       factura: ['Presupuesto aceptado', 'Estoy preparando tu primera factura. Aparecerá aquí, con cómo pagarla.'],
       pago: ['Tu primera factura está lista', 'El proyecto empieza oficialmente en cuanto llega el primer pago.'],
@@ -55,7 +56,7 @@ const T = {
     aceptadoPortal: (n: string, f: string) => `Accepted by ${n} on ${f}.`,
     anulado: 'This quote is no longer valid. Reply to the email and we will send you a new one.',
     caducado: 'This quote has expired. Reply to the email and we will send you an updated one.',
-    tuPresupuesto: 'Your quote', verPresupuesto: 'See the quote and the terms',
+    volver: 'Back to your project', tuPresupuesto: 'Your quote', verPresupuesto: 'See the quote and the terms',
     estado: {
       factura: ['Quote accepted', "I'm preparing your first invoice. It will show up right here, with how to pay it."],
       pago: ['Your first invoice is ready', 'The project officially starts as soon as the first payment comes in.'],
@@ -77,9 +78,9 @@ const T = {
 const CONTACTO: Record<string, string> = { arkevo: 'hola@arkevostudio.com', cartela: 'hola@cartela.live', custom: 'joel@joelschneider.io', pitchlab: 'hello@thepitchlab.xyz' }
 const lineas = (s: string | null) => (s || '').split('\n').map(l => l.replace(/^[-•]\s*/, '').trim()).filter(Boolean)
 
-// Presupuesto y, en las marcas con portal (PORTAL_MARCAS), la página del proyecto para el cliente tras aceptar:
-// mismo enlace del presupuesto a la web publicada (src/lib/portal.ts). El token (presupuestos.token) es la única llave.
-export default async function AceptarPage({ params, searchParams }: { params: { token: string }; searchParams: { estado?: string; modo?: string; marca?: string; etapa?: string } }) {
+// Dos pantallas en el mismo enlace (decisión de Joel, 2026-11-25): el presupuesto con «Aceptar» y, en las marcas
+// con portal (PORTAL_MARCAS), el dashboard del proyecto tras aceptar (dashboard.tsx, datos de src/lib/portal.ts). El token (presupuestos.token) es la única llave.
+export default async function AceptarPage({ params, searchParams }: { params: { token: string }; searchParams: { estado?: string; modo?: string; marca?: string; etapa?: string; ver?: string } }) {
   const d = params.token === 'demo' ? await demo(searchParams) : await portalDeToken(params.token)
   // En el subdominio de una marca solo se abren sus presupuestos; el enlace de Joux Hub de una marca con
   // subdominio (los primeros que se enviaron) lleva al suyo.
@@ -108,62 +109,22 @@ export default async function AceptarPage({ params, searchParams }: { params: { 
     </Marco>
   )
 
-  // Portal: lo que pasa ahora arriba; el presupuesto aceptado, plegado al final.
-  const [titulo, sub] = t.estado[etapa]
-  const pr = d.proyecto
-  const paso = pasoDeFase(pr?.fase ?? null, etapa)
+  // Aceptado en una marca con portal: el dashboard (siempre las mismas tarjetas, que se van completando).
+  // ?ver=presupuesto enseña lo aceptado, con la vuelta al dashboard.
+  const contacto = CONTACTO[p.marca] || CONTACTO.custom
+  const aqui = params.token === 'demo' ? `?etapa=${etapa}` : '?'
+  if (searchParams.ver !== 'presupuesto') return (
+    <Marco marca={p.marca} nombre={d.marca} ancho>
+      <Dashboard d={d} contacto={contacto} enlacePresupuesto={`${aqui}${aqui.length > 1 ? '&' : ''}ver=presupuesto`} />
+    </Marco>
+  )
   return (
     <Marco marca={p.marca} nombre={d.marca}>
-      <span className="pz__label">{t.proyecto}{quien ? ` · ${quien}` : ''}</span>
+      <a className="pz__volver" href={aqui === '?' ? '?' : aqui}>← {t.volver}</a>
+      <span className="pz__label">{t.titulo}{quien ? ` · ${quien}` : ''}</span>
       <h1>{p.concepto}</h1>
-
-      <section className="pz__sec" aria-live="polite">
-        <p className="pz__estado"><span className="pz__punto" aria-hidden="true" />{etapa === 'proyecto' ? `${titulo} · ${t.pasos[PASOS_PORTAL[Math.min(paso, 4)]][0]}` : titulo}</p>
-        {sub && <p className="pz__nota">{sub}</p>}
-      </section>
-
-      {etapa === 'lanzamiento' && pr && <Lanzamiento pr={pr} t={t} />}
-
-      {(etapa === 'pago' || etapa === 'proyecto' || etapa === 'lanzamiento') && (
-        <section className="pz__sec" aria-label={t.proyecto}>
-          <ol className="pz__pasos">
-            {PASOS_PORTAL.map((k, i) => (
-              <li key={k} className={i < paso ? 'is-hecho' : i === paso ? 'is-ahora' : undefined} aria-current={i === paso ? 'step' : undefined}>
-                <span className="pz__o" aria-hidden="true">{i < paso ? '✓' : ''}</span>
-                <span><b>{t.pasos[k][0]}</b>{i === paso && <small>{t.pasos[k][1]}</small>}</span>
-                <span className="pz__label">{i < paso ? t.hecho : i === paso ? t.ahora : ''}</span>
-              </li>
-            ))}
-          </ol>
-        </section>
-      )}
-
-      {etapa === 'proyecto' && pr?.url_revision && (
-        <section className="pz__sec">
-          <span className="pz__label">{t.revision}</span>
-          <p className="pz__nota">{t.revisionTxt}</p>
-          <a className="pz__btn pz__btn--link" href={pr.url_revision} target="_blank" rel="noopener">{t.abrirRevision} ↗</a>
-        </section>
-      )}
-
-      {etapa !== 'lanzamiento' && pr && pr.pendientes.length > 0 && (
-        <section className="pz__sec">
-          <span className="pz__label">{t.tuyo}</span>
-          <ul className="pz__check">{pr.pendientes.map((x, i) => <li key={i} className={x.hecho ? 'is-hecho' : undefined}><span className="pz__o" aria-hidden="true">{x.hecho ? '✓' : ''}</span><span>{x.texto}</span></li>)}</ul>
-          {pr.pendientes.every(x => x.hecho) && <p className="pz__nota" style={{ marginTop: 12 }}>{t.todoListo}</p>}
-        </section>
-      )}
-
-      {d.facturas.length > 0 && <Facturas fs={d.facturas} pago={d.pago} t={t} fecha={fecha} idioma={p.idioma} />}
-
-      <section className="pz__sec">
-        <span className="pz__label">{t.tuPresupuesto}</span>
-        <p className="pz__nota">{t.aceptadoPortal(p.aceptado_nombre || '', fecha(p.aceptado_at!, true))}</p>
-        <details style={{ marginTop: 14 }}>
-          <summary>{t.verPresupuesto}</summary>
-          <div className="pz__dentro"><Propuesta d={d} t={t} fecha={fecha} /></div>
-        </details>
-      </section>
+      <Propuesta d={d} t={t} fecha={fecha} />
+      <section className="pz__sec"><p className="pz__hecho"><strong>{t.aceptadoTit}</strong>{t.aceptadoPortal(p.aceptado_nombre || '', fecha(p.aceptado_at!, true))}</p></section>
       <Pie marca={p.marca} t={t} />
     </Marco>
   )
@@ -212,47 +173,6 @@ function Propuesta({ d, t, fecha }: { d: Portal; t: Textos; fecha: Fecha }) {
       <a className="pz__abrir" href={enlaceCondiciones(p.marca, cond.version, cond.idioma)} target="_blank" rel="noopener noreferrer">{t.abrir} ↗</a>
     </section>
   </>
-}
-
-function Facturas({ fs, pago, t, fecha, idioma }: { fs: FacturaPortal[]; pago: string | null; t: Textos; fecha: Fecha; idioma: string }) {
-  const pendiente = fs.find(f => !f.cobrada)
-  return (
-    <section className="pz__sec">
-      <span className="pz__label">{t.facturas}</span>
-      <ul className="pz__facturas">
-        {fs.map(f => (
-          <li key={f.id}>
-            <span><b>{f.pago === 1 ? t.pago1 : f.pago === 2 ? t.pago2 : t.factura}</b><small>{f.numero} · {fecha(f.fecha)}{!f.cobrada && f.vence ? ` · ${t.vence} ${fecha(f.vence)}` : ''}</small></span>
-            <span className="pz__cifra">{dinero(f.total, f.moneda, idioma, true)}<span className={`pz__tag${f.cobrada ? ' ok' : ''}`}>{f.cobrada ? t.cobrada : t.porPagar}</span></span>
-            <a href={f.url} target="_blank" rel="noopener">{t.descargar} ↗</a>
-          </li>
-        ))}
-      </ul>
-      {pendiente && pago && (
-        <div className="pz__pago">
-          <span className="pz__label">{t.comoPagar}</span>
-          <pre>{pago}</pre>
-          <p className="pz__nota">{t.ref(pendiente.numero)}</p>
-        </div>
-      )}
-    </section>
-  )
-}
-
-function Lanzamiento({ pr, t }: { pr: ProyectoPortal; t: Textos }) {
-  if (!pr.url_live && !pr.dominio) return null
-  return (
-    <section className="pz__sec">
-      <span className="pz__label">{t.enVivo}</span>
-      {pr.url_live && <a className="pz__btn pz__btn--link" href={pr.url_live} target="_blank" rel="noopener">{t.abrirWeb} ↗</a>}
-      {pr.dominio && (
-        <dl className="pz__kv" style={{ marginTop: 20 }}>
-          <dt>{t.dominio}</dt>
-          <dd>{pr.dominio} <span className={`pz__tag${pr.dominio_estado === 'conectado' ? ' ok' : ''}`}>{pr.dominio_estado === 'conectado' ? t.conectado : t.pendiente}</span></dd>
-        </dl>
-      )}
-    </section>
-  )
 }
 
 function Pie({ marca, t }: { marca: string; t: Textos }) {

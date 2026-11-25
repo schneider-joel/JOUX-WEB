@@ -9,11 +9,12 @@ const archivo = Archivo({ subsets: ['latin'], axes: ['wdth'], variable: '--archi
 // colores, tipografías y logo de arkevostudio.com, cartela.live y joelschneider.io (temas en presupuesto.css).
 const MARCAS_CON_TEMA = ['arkevo', 'cartela', 'custom']
 
-export function Marco({ marca, nombre, children }: { marca: string; nombre: string; children: React.ReactNode }) {
+// `ancho`: el dashboard del cliente, en rejilla, más ancho que el presupuesto (columna de lectura).
+export function Marco({ marca, nombre, ancho, children }: { marca: string; nombre: string; ancho?: boolean; children: React.ReactNode }) {
   const tema = MARCAS_CON_TEMA.includes(marca) ? marca : 'otra'
   return (
     <div className={`pz ${archivo.variable}`} data-marca={tema}>
-      <main className="pz__app">
+      <main className={`pz__app${ancho ? ' pz__app--ancho' : ''}`}>
         <header className="pz__top"><Logo marca={tema} nombre={nombre} /></header>
         {children}
       </main>

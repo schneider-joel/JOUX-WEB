@@ -98,34 +98,88 @@ html:has(.pz[data-marca="custom"]), body:has(.pz[data-marca="custom"]) { backgro
 .pz__hecho { margin: 0; padding: 18px 20px; border: 1px solid var(--line); border-radius: 14px; }
 .pz__hecho strong { display: block; margin-bottom: 4px; color: var(--ok); font-weight: 600; }
 
-/* Portal del cliente (src/lib/portal.ts): estado, pasos, pendientes, facturas y cómo pagar */
-.pz__estado { display: flex; align-items: center; gap: 10px; margin: 0 0 6px; font-family: var(--disp); font-weight: var(--disp-w); font-stretch: var(--disp-st); letter-spacing: var(--disp-ls); font-size: 22px; line-height: 1.2; }
+/* Piezas comunes del portal: marcas de lista, etiquetas y botón-enlace */
 .pz__punto { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
-.pz__pasos, .pz__check, .pz__facturas { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
-.pz__pasos li, .pz__check li { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 14px; align-items: start; padding: 12px 0; color: var(--muted); }
-.pz__check li { grid-template-columns: 22px minmax(0, 1fr); padding: 8px 0; color: var(--ink); }
-.pz__pasos li + li { border-top: 1px solid var(--line); }
-.pz__pasos b { display: block; font-weight: 500; }
-.pz__pasos small { display: block; margin-top: 2px; font-size: 14px; color: var(--muted); }
-.pz__pasos li.is-ahora, .pz__pasos li.is-hecho { color: var(--ink); }
-.pz__pasos .pz__label { margin: 3px 0 0; }
-.pz__o { display: inline-grid; place-items: center; width: 22px; height: 22px; margin-top: 1px; border: 1px solid var(--line); border-radius: 99px; font-size: 12px; line-height: 1; color: var(--on-accent); }
+.pz__o { flex: none; display: inline-grid; place-items: center; width: 20px; height: 20px; border: 1px solid var(--line); border-radius: 99px; font-size: 11px; line-height: 1; color: var(--on-accent); background: var(--bg); }
 .is-hecho > .pz__o { background: var(--ok); border-color: var(--ok); }
 .is-ahora > .pz__o { border: 2px solid var(--ok); }
+.pz__check { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.pz__check li { display: flex; gap: 12px; align-items: flex-start; font-size: 15px; }
 .pz__check li.is-hecho > span:last-child { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--line); }
-.pz__facturas li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 16px; padding: 14px 0; }
-.pz__facturas li + li { border-top: 1px solid var(--line); }
-.pz__facturas b { display: block; font-weight: 500; }
-.pz__facturas small { color: var(--muted); font-size: 13.5px; font-variant-numeric: tabular-nums; }
-.pz__facturas a { grid-column: 1 / -1; font-size: 14.5px; }
-.pz__cifra { display: flex; align-items: center; gap: 10px; font-variant-numeric: tabular-nums; }
 .pz__tag { display: inline-block; padding: 3px 8px; border: 1px solid var(--line); border-radius: 99px; font: var(--label); letter-spacing: var(--label-ls); text-transform: uppercase; color: var(--muted); white-space: nowrap; }
 .pz__tag.ok { color: var(--ok); border-color: currentColor; }
-.pz__pago { margin-top: 20px; padding: 18px 20px; border: 1px solid var(--line); border-radius: 14px; }
-.pz__pago pre { margin: 0 0 12px; font: 400 14.5px/1.6 var(--body); white-space: pre-wrap; overflow-wrap: anywhere; }
-.pz__btn--link { display: inline-flex; align-items: center; margin-top: 16px; text-decoration: none; color: var(--on-accent) !important; }
-.pz__dentro { margin-top: 8px; }
-.pz__dentro > .pz__sec:first-child { border-top: 0; }
+.pz__tag.aviso { color: var(--ink); border-color: var(--ink); }
+.pz__btn--link { display: inline-flex; align-items: center; margin-top: 18px; text-decoration: none; color: var(--on-accent) !important; }
+.pz__volver { display: inline-block; margin: -24px 0 28px; font-size: 14.5px; }
+
+/* Dashboard del cliente (dashboard.tsx): cabecera, progreso y rejilla de tarjetas fijas */
+.pz__app--ancho { max-width: 1040px; }
+.pz:has(.pz__app--ancho) .pz__top { margin-bottom: 32px; }
+.dz { display: flex; flex-direction: column; gap: 16px; }
+.dz__cab { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; flex-wrap: wrap; margin-bottom: 8px; }
+.dz__cab h1 { margin: 0; font-size: clamp(28px, 4.4vw, 40px); }
+.dz__cab-der { display: flex; align-items: center; gap: 18px; font-size: 14.5px; }
+.dz__pill { display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; border: 1px solid var(--line); border-radius: 99px; font-size: 14px; }
+.dz__card { min-width: 0; padding: 22px; border: 1px solid var(--line); border-radius: 14px; background: color-mix(in srgb, var(--ink) 2.5%, transparent); transition: opacity .3s var(--ease); }
+.dz__card .pz__label { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
+.dz__card h2 { margin: 0 0 8px; font-family: var(--disp); font-weight: var(--disp-w); font-stretch: var(--disp-st); letter-spacing: var(--disp-ls); font-size: 26px; line-height: 1.1; }
+.dz__card.is-bloq { opacity: .55; }
+.dz__cuenta { font-variant-numeric: tabular-nums; color: var(--ink); }
+
+/* Progreso: barra con los cinco pasos; en el móvil, la barra y «Paso 3 de 5 · Construcción» */
+.dz__progreso { position: relative; padding: 26px 22px 20px; }
+.dz__barra { position: absolute; left: calc(22px + 10px); right: calc(22px + 10px); top: 36px; height: 2px; background: var(--line); }
+.dz__barra span { display: block; height: 100%; background: var(--ok); transition: width .6s var(--ease); }
+.dz__progreso ol { position: relative; list-style: none; margin: 0; padding: 0; display: flex; justify-content: space-between; }
+.dz__progreso li { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 20px; color: var(--muted); }
+.dz__progreso li:first-child { align-items: flex-start; }
+.dz__progreso li:last-child { align-items: flex-end; }
+.dz__progreso li.is-hecho, .dz__progreso li.is-ahora { color: var(--ink); }
+.dz__paso { font-size: 14px; white-space: nowrap; }
+.dz__progreso li.is-ahora .dz__paso { font-weight: 600; }
+.dz__movil { display: none; margin: 14px 0 0; font-size: 14.5px; }
+
+.dz__grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.dz__ahora { grid-column: span 2; display: flex; flex-direction: column; align-items: flex-start; }
+.dz__ahora h2 { font-size: clamp(26px, 3.4vw, 34px); }
+
+.dz__datos { display: flex; flex-wrap: wrap; gap: 14px 36px; width: 100%; margin: auto 0 0; padding-top: 22px; border-top: 1px solid var(--line); }
+.dz__ahora .pz__btn--link { margin-bottom: 26px; }
+.dz__ahora .pz__nota { margin-bottom: 0; }
+.dz__ahora h2 + .pz__nota:last-of-type { margin-bottom: 26px; }
+.dz__datos dt { font: var(--label); letter-spacing: var(--label-ls); text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+.dz__datos dd { margin: 0; font-size: 15px; font-variant-numeric: tabular-nums; }
+.dz__facturas { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.dz__facturas li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; padding: 12px 0; }
+.dz__facturas li:first-child { padding-top: 0; }
+.dz__facturas li + li { border-top: 1px solid var(--line); }
+.dz__facturas b { display: block; font-weight: 500; font-size: 15px; }
+.dz__facturas small { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.dz__facturas a { grid-column: 1 / -1; font-size: 14px; margin-top: 4px; }
+.dz__cifra { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; font-variant-numeric: tabular-nums; font-size: 15px; }
+.dz__pago { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.dz__pago summary { font-size: 14.5px; }
+.dz__pago pre { margin: 12px 0 8px; font: 400 14px/1.6 var(--body); white-space: pre-wrap; overflow-wrap: anywhere; }
+
+.dz__enlace { display: inline-block; margin-top: 12px; font-size: 14.5px; }
+.dz__enlace--grande { margin: 0 0 4px; font-family: var(--disp); font-weight: var(--disp-w); letter-spacing: var(--disp-ls); font-size: 22px; overflow-wrap: anywhere; }
+.dz__kv { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 14px; align-items: center; margin: 8px 0 10px; font-size: 14.5px; }
+.dz__kv dt { color: var(--muted); }
+.dz__kv dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
+
+@media (max-width: 860px) {
+  .dz__grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .dz__ahora { grid-column: 1 / -1; }
+}
+@media (max-width: 600px) {
+  .dz__grid { grid-template-columns: minmax(0, 1fr); }
+  .dz__cab { align-items: flex-start; }
+  .dz__paso { display: none; }
+  .dz__movil { display: block; }
+  .dz__card { padding: 18px; }
+  .dz__progreso { padding: 22px 18px 16px; }
+  .dz__barra { left: calc(18px + 10px); right: calc(18px + 10px); top: 32px; }
+}
 
 .pz__pie { margin: 40px 0 0; color: var(--muted); font-size: 13px; }
 @media (prefers-reduced-motion: reduce) { .pz * { transition: none !important; } }
