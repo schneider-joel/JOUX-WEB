@@ -32,8 +32,8 @@ export async function GET(req: Request, { params }: { params: { token: string } 
   const q = new URL(req.url).searchParams
   const d: DatosEmailPortal = {
     idioma: q.get('lang') === 'es' ? 'es' : 'en', nombre: 'Alex', concepto: 'Alex Rivera · director website', moneda: 'USD', precio: 3500, sinIva: true,
-    plazo: '3–4 weeks from the list of spots', portal: 'https://presupuesto.joelschneider.io/demo', condiciones: 'https://presupuesto.joelschneider.io/condiciones/2?lang=en', version: 2,
-    factura: q.get('sin') === 'factura' ? null : { numero: 'F-2026-91', total: 1750, url: 'https://presupuesto.joelschneider.io/invoice/91' },
+    plazo: '3–4 weeks from the list of spots', portal: 'https://project.joelschneider.io/demo', condiciones: 'https://project.joelschneider.io/condiciones/2?lang=en', version: 2,
+    factura: q.get('sin') === 'factura' ? null : { numero: 'F-2026-91', total: 1750, url: 'https://project.joelschneider.io/invoice/91' },
   }
   const html = htmlConfirmacionPortal(d)
   // ?enviar=1: la manda de verdad, con el alias de Custom, pero solo al correo de pruebas (para verla en Gmail).

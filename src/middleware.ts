@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { WEB_MARCA, marcaDeHost } from '@/lib/dominios-presupuesto'
+import { DOMINIO_ANTIGUO, WEB_MARCA, marcaDeHost } from '@/lib/dominios-presupuesto'
 
 // /ab, /th y /t son los links públicos de los timesheets (protegidos por token).
 // /api/bancos/cron lo llama el cron de Vercel y valida su propio CRON_SECRET.
@@ -24,7 +24,9 @@ export function middleware(req: NextRequest) {
   // presupuesto.<dominio de la marca>: solo el presupuesto (/<token>, que en las marcas con portal es la página del
   // proyecto), las condiciones de esa marca, sus facturas (/invoice/<id>, que exige la firma ?k=) y lo que necesitan
   // para pintarse. Nunca el panel ni el login: cualquier otra ruta va a la web de la marca.
-  const marca = marcaDeHost(req.headers.get('host'))
+  const host = (req.headers.get('host') || '').split(':')[0].toLowerCase()
+  if (DOMINIO_ANTIGUO[host]) return NextResponse.redirect(`https://${DOMINIO_ANTIGUO[host]}${pathname}${req.nextUrl.search}`, 308)
+  const marca = marcaDeHost(host)
   if (marca) {
     if (/^\/(_next|marcas|fonts)\//.test(pathname) || /^\/api\/aceptar\/[\w-]+(\/factura\/\d+)?$/.test(pathname) || /^\/invoice\/\d+$/.test(pathname) || /^\/(icon|apple-icon)/.test(pathname)) return NextResponse.next()
     const token = pathname.match(/^\/([\w-]{20,40})$/)?.[1]
