@@ -1,13 +1,14 @@
 import Link from 'next/link'
 import { supabaseServer as sb } from '@/lib/supabase-server'
 import { Fragment } from 'react'
-import { ETAPAS_LEAD_VISTA, ETIQUETA_ESTADO, PARA_EMPEZAR, esEstadoLead, estadoLead, etapaLead, fechaHora, hace, type Evento, type Lead, type Mensaje } from '@/lib/leads'
+import { ETAPAS_LEAD_VISTA, ETIQUETA_ESTADO, PARA_EMPEZAR, esEstadoLead, estadoLead, etapaLead, presupuestoCaducado, presupuestoEsperando, fechaHora, hace, type Evento, type Lead, type Mensaje } from '@/lib/leads'
 import { remitenteLead } from '@/lib/remitentes'
 import { nombreProyecto, precioPropuesto, type ClienteFiscal } from '@/lib/ganado'
 import { MARCAS_TREATMENT } from '@/lib/seguimiento'
 import { textoEvento } from '@/lib/eventos-texto'
 import CambiarEstado from './cambiar-estado'
 import AccionesLead from './ganado'
+import CopiarEnlace from './copiar-enlace'
 import Bienvenida from './bienvenida'
 import Respuesta, { type Borrador } from './respuesta'
 import PedirAjustes from './pedir-ajustes'
@@ -93,13 +94,21 @@ export default async function LeadPage({ params }: { params: { id: string } }) {
 
   // Una sola caja con lo que toca ahora (rediseño comercial, fase 3), con su herramienta dentro: la respuesta,
   // «Marcar ganado», la bienvenida o la factura. Si no toca nada, a qué se espera (la misma línea que en Work).
-  const vista = estadoLead(lead)
+  const vista = estadoLead(lead, presupuestoActual)
   const caja: { k: 'tu' | 'espera' | 'parado' | 'ok'; titulo: string; sub?: string; dentro?: React.ReactNode; enCaja?: 'acciones' | 'respuesta' } =
     conBienvenida && !bienvenidaEnviada ? { k: 'tu', titulo: 'Envía la bienvenida', sub: marca?.modo === 'cerrado' ? 'Con la factura del pago 1.' : 'Con la carpeta de Drive.', dentro: <Bienvenida proyectoId={proyecto!.id} /> }
     : marca?.modo === 'cerrado' && facturaPendiente ? { k: 'tu', titulo: 'Envía la factura del pago 1', sub: 'Ya ha rellenado sus datos fiscales.', dentro: <Bienvenida proyectoId={proyecto!.id} clave="factura.pago" /> }
     : proyecto ? { k: 'ok', titulo: 'Ganado: sigue en el proyecto', dentro: <Link className="pill pill--sm" href={`/proyectos/${proyecto.id}`} style={{ alignSelf: 'flex-start' }}>Abrir el proyecto</Link> }
     : !abierto ? { k: 'ok', titulo: ETIQUETA_ESTADO[lead.estado as 'perdido' | 'spam'] || lead.estado }
     : borrador ? { k: 'tu', titulo: borrador.estado === 'error' ? 'La respuesta no salió: revísala y reintenta' : 'Revisa la respuesta y envíala', dentro: respuesta, enCaja: 'respuesta' }
+    // Presupuesto online enviado: lo gana su aceptación. «Marcar ganado» queda plegado, por si hiciera falta a mano.
+    : presupuestoCaducado(presupuestoActual) ? { k: 'tu', titulo: 'El presupuesto ha caducado', sub: 'Haz otro desde la tarjeta «Presupuesto» o márcalo perdido.' }
+    : presupuestoEsperando(presupuestoActual) && lead.estado !== 'conversacion' ? { k: vista.k, titulo: `Esperando a que ${nombre} acepte el presupuesto`,
+        sub: 'Cuando lo acepte se gana solo: proyecto, carpeta, factura del pago 1 y confirmación por email. No hace falta «Marcar ganado».',
+        dentro: <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'flex-start' }}>
+          <CopiarEnlace enlace={enlacePresupuesto(presupuestoActual!.token, lead.marca)} />
+          {acciones && <details><summary className="caps dim" style={{ cursor: 'pointer' }}>Marcar ganado a mano</summary><div style={{ marginTop: 12 }}>{acciones}</div></details>}
+        </div>, enCaja: 'acciones' }
     : vista.texto.startsWith('Tiene todo') ? { k: 'tu', titulo: 'Tiene todo: marca ganado', sub: 'Se crea el proyecto y lo siguiente es la bienvenida con la factura.', dentro: acciones, enCaja: 'acciones' }
     : lead.estado === 'nuevo' || lead.estado === 'conversacion' ? { k: 'tu', titulo: lead.estado === 'nuevo' ? `Responde a ${nombre}` : `${nombre} ha respondido: contéstale`, dentro: respuesta, enCaja: 'respuesta' }
     : { k: vista.k, titulo: vista.texto }

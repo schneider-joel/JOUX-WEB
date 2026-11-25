@@ -98,14 +98,22 @@ type LeadVista = Pick<Lead, 'marca' | 'estado' | 'recibido_en' | 'ultimo_contact
 export const etapaLead = (l: Pick<LeadVista, 'marca' | 'estado' | 'para_empezar'>) =>
   infoCompleta(l.marca, l.para_empezar) && !['nuevo', 'borrador'].includes(l.estado) ? 2 : ['respondido', 'conversacion', 'propuesta'].includes(l.estado) ? 1 : 0
 const DIAS_LEAD_PARADO = 7
-export function estadoLead(l: LeadVista): { k: 'tu' | 'espera' | 'parado' | 'ok'; texto: string } {
+// El presupuesto online vivo del lead (enviado o aceptado; los anulados no cuentan).
+export type PresupuestoVivo = { estado: string; caduca: string | null } | null | undefined
+export const presupuestoEsperando = (p: PresupuestoVivo) => p?.estado === 'enviado' && !(p.caduca && p.caduca < new Date().toISOString().slice(0, 10))
+export const presupuestoCaducado = (p: PresupuestoVivo) => p?.estado === 'enviado' && !!p.caduca && p.caduca < new Date().toISOString().slice(0, 10)
+export function estadoLead(l: LeadVista, presupuesto?: PresupuestoVivo): { k: 'tu' | 'espera' | 'parado' | 'ok'; texto: string } {
   const desde = l.ultimo_contacto || l.recibido_en
   const d = Math.max(0, Math.floor((Date.now() - new Date(desde).getTime()) / 86400000))
   if (l.estado === 'ganado') return { k: 'ok', texto: 'Ganado' }
   if (l.estado === 'perdido' || l.estado === 'spam') return { k: 'ok', texto: ETIQUETA_ESTADO[l.estado] }
   if (l.estado === 'nuevo') return { k: 'tu', texto: 'Sin responder' }
   if (l.estado === 'borrador') return { k: 'tu', texto: 'Respuesta lista: revísala' }
-  if (infoCompleta(l.marca, l.para_empezar)) return { k: 'tu', texto: 'Tiene todo: marca ganado' }
+  // Con un presupuesto online enviado, ganar lo hace su aceptación (proyecto, factura y confirmación solos): no se
+  // pide «Marcar ganado» aunque «Para empezar» esté completo (decisión de Joel, 2026-11-25, caso Duncan).
+  if (presupuestoCaducado(presupuesto)) return { k: 'tu', texto: 'El presupuesto ha caducado: haz otro o márcalo perdido' }
+  if (presupuestoEsperando(presupuesto) && l.estado !== 'conversacion') return { k: d >= DIAS_LEAD_PARADO ? 'parado' : 'espera', texto: `Presupuesto enviado: falta que lo acepte${d > 0 ? ` · ${d} d` : ''}` }
+  if (infoCompleta(l.marca, l.para_empezar) && !presupuestoEsperando(presupuesto)) return { k: 'tu', texto: 'Tiene todo: marca ganado' }
   if (l.estado === 'conversacion') return { k: 'tu', texto: 'Ha respondido: contéstale' }
   const faltan = faltanParaEmpezar(l.marca, l.para_empezar).map(i => i.corto)
   const texto = `${faltan.length ? `Falta ${faltan.join(', ')}` : l.estado === 'propuesta' ? 'Propuesta enviada' : 'Esperando al cliente'}${d > 0 ? ` · ${d} d` : ''}`
