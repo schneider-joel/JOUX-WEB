@@ -15,7 +15,7 @@ const T = {
       propuesta: ['Your quote', 'Take a look and accept it to get started.'],
       anulado: ['This quote is no longer valid', 'Reply to my email and I will send you a new one.'],
       caducado: ['This quote has expired', 'Reply to my email and I will send you an updated one.'],
-      factura: ['Quote accepted', 'Your first invoice is on its way. It will appear here.'],
+      factura: ['Quote accepted', 'Preparing your first invoice. It will appear here in a moment.'],
       pago: ['Pay the first invoice to start', 'The project starts as soon as the payment comes in.'],
       confirmado: ['Payment received, thank you', "I'm getting the project ready."],
       material: ['Send me what is missing', 'I start building with whatever is there.'],
@@ -41,7 +41,7 @@ const T = {
       propuesta: ['Tu presupuesto', 'Échale un vistazo y acéptalo para empezar.'],
       anulado: ['Este presupuesto ya no está vigente', 'Responde a mi email y te mando uno nuevo.'],
       caducado: ['Este presupuesto ha caducado', 'Responde a mi email y te mando uno actualizado.'],
-      factura: ['Presupuesto aceptado', 'Tu primera factura está en camino. Aparecerá aquí.'],
+      factura: ['Presupuesto aceptado', 'Preparando tu primera factura. Aparecerá aquí en un momento.'],
       pago: ['Paga la primera factura para empezar', 'El proyecto empieza en cuanto llega el pago.'],
       confirmado: ['Pago recibido, gracias', 'Estoy preparando el proyecto.'],
       material: ['Mándame lo que falta', 'Empiezo a montar con lo que haya.'],
@@ -88,7 +88,7 @@ export default function Dashboard({ d, contacto, enlacePresupuesto, presupuesto 
 
   return (
     <div className="dz">
-      <Refrescar />
+      <Refrescar rapido={etapa === 'factura' && !!p.aceptado_at && Date.now() - new Date(p.aceptado_at).getTime() < 3 * 60_000} />
       <h1 className="dz__titulo">{p.concepto}</h1>
 
       <section className="dz__progreso" aria-label={paso > 5 ? t.terminado : t.paso(paso + 1)}>

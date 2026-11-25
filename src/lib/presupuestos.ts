@@ -13,6 +13,7 @@ import { remitenteLead } from '@/lib/remitentes'
 import type { Lead } from '@/lib/leads'
 import { DOMINIO_PRESUPUESTO } from '@/lib/dominios-presupuesto'
 import { dinero, esMoneda, type Moneda } from '@/lib/moneda'
+import { crearFacturaPago } from '@/lib/factura-pago'
 
 // Marcas cuyo enlace de presupuesto sigue vivo como portal del cliente tras aceptar (src/lib/portal.ts). Custom
 // primero (Duncan Heger, 2026-11-25); Arkevo y Cartela, más adelante.
@@ -142,25 +143,29 @@ export async function aceptarPresupuesto(token: string, a: Aceptacion): Promise<
 
   await sb.from('eventos').insert({ tipo: 'presupuesto.aceptado', fuente: 'aceptacion', lead_id: d.p.lead_id, datos: { presupuesto: d.p.id, nombre, condiciones: `v${d.cond.version}`, ip: a.ip || null } })
   const despues = async () => {
-    await ganarPorAceptacion(d.p, nombre).catch(e => console.error('aceptar/ganar', e?.message))
-    await enviarConfirmacion(d.p, d.cond, nombre).catch(e => console.error('aceptar/confirmacion', e?.message))
+    const factura = await ganarPorAceptacion(d.p, nombre).catch(e => { console.error('aceptar/ganar', e?.message); return null })
+    await enviarConfirmacion(d.p, d.cond, nombre, !!factura).catch(e => console.error('aceptar/confirmacion', e?.message))
   }
   return { ok: true, despues }
 }
 
-// Gana el lead con el mismo formulario que vería Joel en la ficha y el precio del presupuesto. Sin bienvenida
-// ni factura (decisión de Joel, 2026-11-03). Si no se puede ganar solo, queda aceptado y se avisa.
-async function ganarPorAceptacion(p: Presupuesto, nombre: string) {
+// Gana el lead con el mismo formulario que vería Joel en la ficha y el precio del presupuesto. Sin bienvenida.
+// Factura: en las marcas sin portal, nunca (decisión de Joel, 2026-11-03); en las marcas con portal (PORTAL_MARCAS),
+// la del pago 1 se emite sola al aceptar y aparece en el dashboard del cliente con su PDF y cómo pagar (decisión de
+// Joel, 2026-11-25). Si no se puede ganar o facturar solo, queda aceptado y se avisa. Devuelve el número de la
+// factura emitida, o null.
+async function ganarPorAceptacion(p: Presupuesto, nombre: string): Promise<string | null> {
   const { data: lead } = await sb.from('leads').select('*').eq('id', p.lead_id).maybeSingle()
   const quien = lead?.empresa || lead?.nombre || nombre
   const aviso = (titulo: string, cuerpo: string, url: string) => notificar({ titulo, cuerpo, url, etiqueta: `lead-${p.lead_id}` }).catch(() => {})
-  if (!lead) return
+  if (!lead) return null
   if (lead.proyecto_id) {
     await sb.from('presupuestos').update({ proyecto_id: lead.proyecto_id }).eq('id', p.id)
-    return aviso(`${quien} ha aceptado el presupuesto`, 'El lead ya estaba ganado.', `/proyectos/${lead.proyecto_id}`)
+    await aviso(`${quien} ha aceptado el presupuesto`, 'El lead ya estaba ganado.', `/proyectos/${lead.proyecto_id}`)
+    return null
   }
   const { data: marca } = await sb.from('marcas').select('key, nombre, modo').eq('key', lead.marca).maybeSingle()
-  if (!marca) return
+  if (!marca) return null
   const nif = (lead.para_empezar as Lead['para_empezar'])?.fiscales?.datos?.nif?.trim()
   // Sin NIF (un particular de fuera de la UE no tiene): el cliente fiscal que Joel dio de alta con su nombre exacto.
   const { data: existente } = nif
@@ -171,16 +176,32 @@ async function ganarPorAceptacion(p: Presupuesto, nombre: string) {
   if (p.plan) form.plan = p.plan
   if (p.modo === 'dia') form.tarifa_dia = Number(p.tarifa_dia)
   const r = await ganarLead(lead.id, form, 'aceptacion', { bienvenida: false })
-  if ('error' in r) return aviso(`${quien} ha aceptado el presupuesto`, `No se pudo marcar ganado solo: ${r.error}. Hazlo tú desde su ficha.`, `/leads/${lead.id}`)
+  if ('error' in r) {
+    await aviso(`${quien} ha aceptado el presupuesto`, `No se pudo marcar ganado solo: ${r.error}. Hazlo tú desde su ficha.`, `/leads/${lead.id}`)
+    return null
+  }
   await sb.from('presupuestos').update({ proyecto_id: r.proyecto_id }).eq('id', p.id)
   // La moneda del presupuesto pasa al proyecto: sus facturas salen en esa moneda (crearFacturaPago()).
   if (p.moneda && p.moneda !== 'EUR') await sb.from('proyectos').update({ moneda: p.moneda }).eq('id', r.proyecto_id)
-  return aviso(`${quien} ha aceptado el presupuesto`, p.modo === 'cerrado' ? 'Ganado. Te toca la bienvenida con la factura del pago 1.' : 'Ganado. Te toca la bienvenida.', `/leads/${lead.id}`)
+
+  // Portal: la factura del pago 1, ya. La misma que «Facturar pago 1» (número correlativo, USD con el cambio del BCE).
+  if (PORTAL_MARCAS.includes(p.marca) && p.modo === 'cerrado') {
+    const f = await crearFacturaPago(r.proyecto_id, 1)
+    if (f.error) {
+      await aviso(`${quien} ha aceptado el presupuesto`, `Ganado, pero la factura del pago 1 no salió sola: ${f.error.message}. Emítela desde la ficha.`, `/proyectos/${r.proyecto_id}`)
+      return null
+    }
+    await sb.from('eventos').insert({ proyecto_id: r.proyecto_id, lead_id: lead.id, tipo: 'factura.emitida', fuente: 'aceptacion', datos: { factura_id: f.data.id, numero: f.data.numero, pago: 1, base: Number(f.data.importe), prueba: !!lead.prueba } })
+    await aviso(`${quien} ha aceptado el presupuesto`, `Ganado y factura ${f.data.numero} emitida: ya la ve en su página, con cómo pagarla.`, `/proyectos/${r.proyecto_id}`)
+    return f.data.numero
+  }
+  await aviso(`${quien} ha aceptado el presupuesto`, p.modo === 'cerrado' ? 'Ganado. Te toca la bienvenida con la factura del pago 1.' : 'Ganado. Te toca la bienvenida.', `/leads/${lead.id}`)
+  return null
 }
 
 
 // Texto de la confirmación: qué ha aceptado, cómo se paga, con qué condiciones y dónde volver a verlo.
-export function textoConfirmacion(p: Pick<Presupuesto, 'marca' | 'idioma' | 'modo' | 'concepto' | 'precio' | 'tarifa_dia' | 'dias' | 'token'> & Partial<Pick<Presupuesto, 'moneda' | 'sin_iva' | 'nota_pago'>>, cond: Pick<Condiciones, 'marca' | 'version' | 'idioma'>, nombre: string, firma: string) {
+export function textoConfirmacion(p: Pick<Presupuesto, 'marca' | 'idioma' | 'modo' | 'concepto' | 'precio' | 'tarifa_dia' | 'dias' | 'token'> & Partial<Pick<Presupuesto, 'moneda' | 'sin_iva' | 'nota_pago'>>, cond: Pick<Condiciones, 'marca' | 'version' | 'idioma'>, nombre: string, firma: string, facturada = false) {
   const en = p.idioma === 'en'
   const pila = nombre.split(' ')[0]
   const precio = Number(p.precio), tarifa = Number(p.tarifa_dia)
@@ -192,20 +213,20 @@ export function textoConfirmacion(p: Pick<Presupuesto, 'marca' | 'idioma' | 'mod
     ? (en ? `${eur(precio, 'en')}${vat}, in two payments: 50% to start and 50% ${p.marca === 'cartela' ? 'on delivery' : 'before launch'}.` : `${eur(precio, 'es')}${vat}, en dos pagos: 50 % para empezar y 50 % ${p.marca === 'cartela' ? 'al entregar la carta' : 'antes de publicar'}.`)
     : (en ? `${eur(tarifa, 'en')}/day${vat}${Number(p.dias) > 0 ? `, about ${p.dias} days` : ''}, invoiced on delivery.` : `${eur(tarifa, 'es')}/día${vat}${Number(p.dias) > 0 ? `, unos ${p.dias} días` : ''}, a la entrega.`)
   const cuerpo = en
-    ? `Hi ${pila},\n\nThis confirms you have accepted the quote "${p.concepto}":\n\n${importe}\n\nTerms of service (v${cond.version}): ${enlaceCondiciones(cond.marca, cond.version, cond.idioma)}\n${portal ? `Your project page: ${enlacePresupuesto(p.token, p.marca)}\nYour first invoice and how to pay it will appear there shortly, and you can follow the whole project from the same link.\n\nKeep this email as your copy.` : `Your quote: ${enlacePresupuesto(p.token, p.marca)}\n\nKeep this email as your copy. We will be in touch shortly with the next steps.`}\n\n${firma}`
-    : `Hola, ${pila}:\n\nTe confirmamos que has aceptado el presupuesto «${p.concepto}»:\n\n${importe}\n\nCondiciones del servicio (v${cond.version}): ${enlaceCondiciones(cond.marca, cond.version, cond.idioma)}\n${portal ? `Tu proyecto: ${enlacePresupuesto(p.token, p.marca)}\nAhí verás en breve la primera factura y cómo pagarla, y podrás seguir el proyecto desde el mismo enlace.\n\nGuarda este correo como copia.` : `Tu presupuesto: ${enlacePresupuesto(p.token, p.marca)}\n\nGuarda este correo como copia. En breve te escribimos con los siguientes pasos.`}\n\n${firma}`
+    ? `Hi ${pila},\n\nThis confirms you have accepted the quote "${p.concepto}":\n\n${importe}\n\nTerms of service (v${cond.version}): ${enlaceCondiciones(cond.marca, cond.version, cond.idioma)}\n${portal ? `Your project page: ${enlacePresupuesto(p.token, p.marca)}\n${facturada ? 'Your first invoice is already there, with how to pay it.' : 'Your first invoice and how to pay it will appear there shortly.'} You can follow the whole project from the same link.\n\nKeep this email as your copy.` : `Your quote: ${enlacePresupuesto(p.token, p.marca)}\n\nKeep this email as your copy. We will be in touch shortly with the next steps.`}\n\n${firma}`
+    : `Hola, ${pila}:\n\nTe confirmamos que has aceptado el presupuesto «${p.concepto}»:\n\n${importe}\n\nCondiciones del servicio (v${cond.version}): ${enlaceCondiciones(cond.marca, cond.version, cond.idioma)}\n${portal ? `Tu proyecto: ${enlacePresupuesto(p.token, p.marca)}\n${facturada ? 'Ahí tienes ya la primera factura y cómo pagarla.' : 'Ahí verás en breve la primera factura y cómo pagarla.'} Puedes seguir el proyecto desde el mismo enlace.\n\nGuarda este correo como copia.` : `Tu presupuesto: ${enlacePresupuesto(p.token, p.marca)}\n\nGuarda este correo como copia. En breve te escribimos con los siguientes pasos.`}\n\n${firma}`
   return { asunto: en ? `Quote accepted · ${p.concepto}` : `Presupuesto aceptado · ${p.concepto}`, cuerpo }
 }
 
 // La confirmación sale sola por Gmail, en el hilo del lead y con el alias de la marca (mismo envío que la ficha).
 // Si falla, la aceptación ya está guardada: queda el mensaje en «error» en la ficha y se avisa a Joel.
-async function enviarConfirmacion(p: Presupuesto, cond: Condiciones, nombre: string) {
+async function enviarConfirmacion(p: Presupuesto, cond: Condiciones, nombre: string, facturada: boolean) {
   const { data: lead } = await sb.from('leads').select('id, email, marca, idioma, proyecto_id').eq('id', p.lead_id).maybeSingle()
   if (!lead?.email) return
   const remitente = remitenteLead(lead.marca, lead.idioma)
   if (!remitente) return
   const { data: marca } = await sb.from('marcas').select('nombre').eq('key', p.marca).maybeSingle()
-  const { asunto, cuerpo } = textoConfirmacion(p, cond, nombre, marca?.nombre || 'Joel Schneider')
+  const { asunto, cuerpo } = textoConfirmacion(p, cond, nombre, marca?.nombre || 'Joel Schneider', facturada)
   const { data: m, error } = await sb.from('mensajes').insert({
     lead_id: lead.id, proyecto_id: lead.proyecto_id, direccion: 'saliente', estado: 'borrador', generado_por: 'plantilla', plantilla: 'presupuesto.aceptado',
     auto: true, canal: 'gmail', remitente, para: lead.email, asunto, cuerpo,
