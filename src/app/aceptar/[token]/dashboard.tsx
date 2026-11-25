@@ -12,7 +12,7 @@ const T = {
     pasos: { quote: 'Quote', kickoff: 'Kick-off', material: 'Material', build: 'Build', review: 'Review', launch: 'Launch' } as Record<string, string>,
     paso: (n: number) => `Step ${n} of 6`, terminado: 'Completed',
     ahora: {
-      propuesta: ['Review and accept your quote', 'Everything that is included, the payments and the terms. Accept it here to get started.'],
+      propuesta: ['Your quote', 'Take a look and accept it to get started.'],
       anulado: ['This quote is no longer valid', 'Reply to my email and I will send you a new one.'],
       caducado: ['This quote has expired', 'Reply to my email and I will send you an updated one.'],
       factura: ['Quote accepted', 'Your first invoice is on its way. It will appear here.'],
@@ -32,13 +32,13 @@ const T = {
     enCamino: 'Invoice on its way', alPublicar: 'Invoiced at launch', vence: 'due', descargar: 'Download PDF',
     datos: 'Billing details', sinDatos: 'They will show here once I have them.', datosMal: 'Anything to change? Write to',
     presupuesto: 'Quote and terms', dudas: 'Questions?',
-    revisar: 'Review and accept', verPresupuesto: 'See the quote', precio: 'Price', plazo: 'Timing', valido: 'Valid until', sinIva: 'No VAT', masIva: '+ VAT',
+    revisar: 'See the quote', verPresupuesto: 'See the quote', precio: 'Price', plazo: 'Timing', valido: 'Valid until', sinIva: 'No VAT', masIva: '+ VAT',
   },
   es: {
     pasos: { quote: 'Presupuesto', kickoff: 'Arranque', material: 'Material', build: 'Construcción', review: 'Revisión', launch: 'Lanzamiento' } as Record<string, string>,
     paso: (n: number) => `Paso ${n} de 6`, terminado: 'Terminado',
     ahora: {
-      propuesta: ['Revisa y acepta tu presupuesto', 'Todo lo que incluye, los pagos y las condiciones. Acéptalo aquí para empezar.'],
+      propuesta: ['Tu presupuesto', 'Échale un vistazo y acéptalo para empezar.'],
       anulado: ['Este presupuesto ya no está vigente', 'Responde a mi email y te mando uno nuevo.'],
       caducado: ['Este presupuesto ha caducado', 'Responde a mi email y te mando uno actualizado.'],
       factura: ['Presupuesto aceptado', 'Tu primera factura está en camino. Aparecerá aquí.'],
@@ -58,7 +58,7 @@ const T = {
     enCamino: 'Factura en camino', alPublicar: 'Se factura al publicar', vence: 'vence el', descargar: 'Descargar PDF',
     datos: 'Datos de facturación', sinDatos: 'Aparecerán aquí cuando los tenga.', datosMal: '¿Algo que cambiar? Escribe a',
     presupuesto: 'Presupuesto y condiciones', dudas: '¿Dudas?',
-    revisar: 'Revisar y aceptar', verPresupuesto: 'Ver el presupuesto', precio: 'Precio', plazo: 'Plazo', valido: 'Válido hasta', sinIva: 'Sin IVA', masIva: '+ IVA',
+    revisar: 'Ver el presupuesto', verPresupuesto: 'Ver el presupuesto', precio: 'Precio', plazo: 'Plazo', valido: 'Válido hasta', sinIva: 'Sin IVA', masIva: '+ IVA',
   },
 }
 

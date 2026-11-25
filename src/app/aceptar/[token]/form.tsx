@@ -6,12 +6,14 @@ import { useRouter } from 'next/navigation'
 const T = {
   es: {
     nombre: 'Tu nombre y apellidos', casilla: (v: number) => `He leído y acepto el presupuesto y las condiciones del servicio (v${v}).`,
+    casillaCorta: (url: string, v: number) => <>Acepto el presupuesto y las <a href={url} target="_blank" rel="noopener noreferrer">condiciones del servicio</a> (v{v}).</>,
     particular: 'Si contratas como particular, pides que empecemos antes de que acaben los 14 días de desistimiento.',
     aceptar: 'Aceptar el presupuesto', enviando: 'Enviando…',
     errores: { nombre: 'Escribe tu nombre.', casilla: 'Marca la casilla para aceptar.', anulado: 'Este presupuesto ya no está vigente.', caducado: 'Este presupuesto ha caducado.', enlace: 'Este enlace no es válido.', otro: 'No se pudo enviar. Inténtalo otra vez en un momento.' },
   },
   en: {
     nombre: 'Your full name', casilla: (v: number) => `I have read and accept the quote and the terms of service (v${v}).`,
+    casillaCorta: (url: string, v: number) => <>I accept the quote and the <a href={url} target="_blank" rel="noopener noreferrer">terms of service</a> (v{v}).</>,
     particular: 'If you are hiring as an individual, you ask me to start before the 14-day withdrawal period ends.',
     aceptar: 'Accept the quote', enviando: 'Sending…',
     errores: { nombre: 'Please write your name.', casilla: 'Tick the box to accept.', anulado: 'This quote is no longer valid.', caducado: 'This quote has expired.', enlace: 'This link is not valid.', otro: "Couldn't send. Please try again in a moment." },
@@ -19,7 +21,8 @@ const T = {
 }
 
 // Nombre + casilla + botón. El botón no se activa sin la casilla; la página se recarga al aceptar y enseña la prueba.
-export default function FormAceptar({ token, idioma, nombre: inicial, version }: { token: string; idioma: 'es' | 'en'; nombre: string; version: number }) {
+// `terminos`: enlace a las condiciones; si viene, la casilla las enlaza (el dashboard no las enseña como sección).
+export default function FormAceptar({ token, idioma, nombre: inicial, version, terminos }: { token: string; idioma: 'es' | 'en'; nombre: string; version: number; terminos?: string }) {
   const t = T[idioma]
   const router = useRouter()
   const [nombre, setNombre] = useState(inicial)
@@ -45,7 +48,7 @@ export default function FormAceptar({ token, idioma, nombre: inicial, version }:
       </div>
       <label className="pz__casilla">
         <input type="checkbox" checked={acepto} onChange={e => setAcepto(e.target.checked)} />
-        <span>{t.casilla(version)}{t.particular && <small>{t.particular}</small>}</span>
+        <span>{terminos ? t.casillaCorta(terminos, version) : t.casilla(version)}{t.particular && <small>{t.particular}</small>}</span>
       </label>
       {error && <p className="pz__error" role="alert">{error}</p>}
       <button type="submit" className="pz__btn" disabled={enviando || !acepto || nombre.trim().length < 2}>{enviando ? t.enviando : t.aceptar}</button>

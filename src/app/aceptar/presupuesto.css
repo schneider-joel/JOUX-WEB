@@ -162,6 +162,23 @@ html:has(.pz[data-marca="custom"]), body:has(.pz[data-marca="custom"]) { backgro
 .dz__sumario { font-size: 15px; text-decoration: underline; text-underline-offset: 3px; }
 .dz__presupuesto-dentro { margin-top: 8px; }
 .dz__presupuesto-dentro > .pz__sec:first-child { border-top: 0; padding-top: 12px; }
+/* Presupuesto corto dentro del dashboard (PropuestaCorta en page.tsx) */
+.pc { display: flex; flex-direction: column; gap: 14px; padding-top: 4px; }
+.pc__cifras { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 18px 28px; margin: 0 0 14px; padding: 20px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.pc__cifras dt { font: var(--label); letter-spacing: var(--label-ls); text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+.pc__cifras dd { margin: 0; font-size: 15px; line-height: 1.45; font-variant-numeric: tabular-nums; }
+.pc__grande { font-family: var(--disp); font-weight: var(--disp-w); letter-spacing: var(--disp-ls); font-size: 30px !important; line-height: 1.05 !important; }
+.pc__peq { color: var(--muted); font-size: 13px !important; margin-top: 4px !important; }
+.pc .pz__label { margin: 0; }
+.pc__lista { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px 24px; }
+.pc__lista li.is-hecho > span:last-child { color: var(--ink); text-decoration: none; }
+.pc__mas { margin-top: 6px; }
+.pc__mas summary { font-size: 14.5px; color: var(--muted); }
+.pc__bloque { margin-top: 18px; }
+.pc__bloque .pz__label { margin-bottom: 8px; }
+.pc__bloque .pz__lista { font-size: 15px; gap: 6px; }
+.pc__aceptar { margin-top: 26px; padding-top: 22px; border-top: 1px solid var(--line); }
+.pz__casilla a { color: inherit; text-decoration: underline; text-underline-offset: 3px; }
 .dz__pagos { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .dz__pagos li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 8px 18px; padding: 14px 0; }
 .dz__pagos li:first-child { padding-top: 0; }

@@ -20,6 +20,7 @@ const T = {
     titulo: 'Presupuesto', proyecto: 'Proyecto', plan: 'Plan', precio: 'Precio', tarifa: 'Tarifa', dias: 'Días estimados', total: 'Total estimado',
     pagos: (a: string, b: string, cuando: string) => `50 % para empezar (${a}) y 50 % ${cuando} (${b}).`, entrega: 'Se factura todo a la entrega, por los días trabajados.',
     cuando: { cartela: 'al entregar la carta', otro: 'antes de publicar' } as Record<string, string>,
+    sinIva: 'Sin IVA', masIva: '+ IVA', detalles: 'Detalles', alEmpezar: (x: string) => `${x} para empezar`, alLanzar: (x: string) => `${x} al publicar`,
     incluye: 'Incluye', noIncluye: 'No incluye', despues: 'Después del lanzamiento', necesito: 'Qué necesito de ti', pago: 'Pago',
     plazo: 'Plazo', valido: 'Válido hasta', iva: 'Precios sin IVA.', dia: '/día',
     condiciones: 'Condiciones del servicio', leer: 'Leer las condiciones', abrir: 'Abrir en otra página',
@@ -48,6 +49,7 @@ const T = {
     titulo: 'Quote', proyecto: 'Project', plan: 'Plan', precio: 'Price', tarifa: 'Day rate', dias: 'Estimated days', total: 'Estimated total',
     pagos: (a: string, b: string, cuando: string) => `50% to start (${a}) and 50% ${cuando} (${b}).`, entrega: 'Invoiced once on delivery, for the days worked.',
     cuando: { cartela: 'on delivery of the menu', otro: 'before launch' } as Record<string, string>,
+    sinIva: 'No VAT', masIva: '+ VAT', detalles: 'Details', alEmpezar: (x: string) => `${x} to start`, alLanzar: (x: string) => `${x} at launch`,
     incluye: "What's included", noIncluye: 'Not included', despues: 'After launch', necesito: 'What I need from you', pago: 'Payment',
     plazo: 'Timing', valido: 'Valid until', iva: 'Prices exclude VAT.', dia: '/day',
     condiciones: 'Terms of service', leer: 'Read the terms', abrir: 'Open in a new page',
@@ -116,8 +118,8 @@ export default async function AceptarPage({ params, searchParams }: { params: { 
   const contacto = CONTACTO[p.marca] || CONTACTO.custom
   const aqui = params.token === 'demo' ? `?etapa=${etapa}` : '?'
   const presupuesto = etapa === 'propuesta' ? <>
-    <Propuesta d={d} t={t} fecha={fecha} />
-    {p.estado === 'enviado' && !d.caducado && <section className="pz__sec"><FormAceptar token={p.token} idioma={p.idioma} nombre={lead?.nombre || ''} version={d.cond.version} /></section>}
+    <PropuestaCorta d={d} t={t} fecha={fecha} />
+    {p.estado === 'enviado' && !d.caducado && <div className="pc__aceptar"><FormAceptar token={p.token} idioma={p.idioma} nombre={lead?.nombre || ''} version={d.cond.version} terminos={enlaceCondiciones(p.marca, d.cond.version, d.cond.idioma)} /></div>}
   </> : null
   if (searchParams.ver !== 'presupuesto' || etapa === 'propuesta') return (
     <Marco marca={p.marca} nombre={d.marca} ancho>
@@ -139,7 +141,45 @@ export default async function AceptarPage({ params, searchParams }: { params: { 
 type Textos = typeof T.es | typeof T.en
 type Fecha = (iso: string, hora?: boolean) => string
 
-// El presupuesto completo: cifras, alcance, pago y condiciones. Lo mismo antes y después de aceptar.
+// El presupuesto en corto, dentro del dashboard (decisión de Joel, 2026-11-25: que no parezca un contrato): precio,
+// cómo se paga y plazo; lo que incluye; y el resto (no incluye, después, qué necesito, la nota de pago entera) en
+// «Details», plegado. Las condiciones van enlazadas en la casilla de aceptar.
+function PropuestaCorta({ d, t, fecha }: { d: Portal; t: Textos; fecha: Fecha }) {
+  const { p } = d
+  const din = (n: number) => dinero(n, p.moneda, p.idioma)
+  const precio = Number(p.precio)
+  const mitad = p.modo === 'cerrado' && precio > 0 ? din(precio / 2) : null
+  const mas: [string, string[]][] = [
+    [t.noIncluye, lineas(p.no_incluye)], [t.despues, lineas(p.despues)], [t.necesito, lineas(p.necesito)],
+    [t.pago, lineas(p.nota_pago)], [t.valido, p.caduca && p.estado === 'enviado' ? [fecha(p.caduca)] : []],
+  ]
+  return (
+    <div className="pc">
+      <dl className="pc__cifras">
+        <div><dt>{t.precio}</dt><dd className="pc__grande">{p.modo === 'cerrado' ? din(precio) : `${din(Number(p.tarifa_dia))}${t.dia}`}</dd><dd className="pc__peq">{p.sin_iva ? t.sinIva : t.masIva}</dd></div>
+        {mitad && <div><dt>{t.pago}</dt><dd>{t.alEmpezar(mitad)}</dd><dd>{t.alLanzar(mitad)}</dd></div>}
+        {p.plazo && <div><dt>{t.plazo}</dt><dd>{p.plazo}</dd></div>}
+      </dl>
+      {lineas(p.incluye).length > 0 && <>
+        <span className="pz__label">{t.incluye}</span>
+        <ul className="pz__check pc__lista">{lineas(p.incluye).map((x, i) => <li key={i} className="is-hecho"><span className="pz__o" aria-hidden="true">✓</span><span>{x}</span></li>)}</ul>
+      </>}
+      {mas.some(([, l]) => l.length) && (
+        <details className="pc__mas">
+          <summary>{t.detalles}</summary>
+          {mas.filter(([, l]) => l.length).map(([titulo, l]) => (
+            <div key={titulo} className="pc__bloque">
+              <span className="pz__label">{titulo}</span>
+              {l.length === 1 ? <p className="pz__nota">{l[0]}</p> : <ul className="pz__lista">{l.map((x, i) => <li key={i}>{x}</li>)}</ul>}
+            </div>
+          ))}
+        </details>
+      )}
+    </div>
+  )
+}
+
+// El presupuesto completo: cifras, alcance, pago y condiciones (marcas sin portal, y lo aceptado con ?ver=presupuesto).
 function Propuesta({ d, t, fecha }: { d: Portal; t: Textos; fecha: Fecha }) {
   const { p, cond } = d
   const din = (n: number) => dinero(n, p.moneda, p.idioma)
