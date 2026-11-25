@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { waitUntil } from '@vercel/functions'
 import { aceptarPresupuesto } from '@/lib/presupuestos'
+import { htmlConfirmacionPortal } from '@/lib/email-portal'
 
 export const dynamic = 'force-dynamic'
 // supabase-js usa fetch: sin esto, Next guarda sus respuestas en el Data Cache.
@@ -18,4 +19,17 @@ export async function POST(req: Request, { params }: { params: { token: string }
   if ('error' in r) return NextResponse.json({ error: r.error }, { status: r.status })
   if (r.despues) waitUntil(r.despues())
   return NextResponse.json({ ok: true })
+}
+
+// Vista previa del email de confirmación del portal, con datos de ejemplo: /api/aceptar/demo-email (solo en local).
+// ?lang=es en español; ?sin=factura como sale si la factura aún no se ha podido emitir.
+export async function GET(req: Request, { params }: { params: { token: string } }) {
+  if (params.token !== 'demo-email' || process.env.NODE_ENV === 'production') return NextResponse.json({ error: 'enlace' }, { status: 404 })
+  const q = new URL(req.url).searchParams
+  const html = htmlConfirmacionPortal({
+    idioma: q.get('lang') === 'es' ? 'es' : 'en', nombre: 'Alex', concepto: 'Alex Rivera · director website', moneda: 'USD', precio: 3500, sinIva: true,
+    plazo: '3–4 weeks from the list of spots', portal: 'https://presupuesto.joelschneider.io/demo', condiciones: 'https://presupuesto.joelschneider.io/condiciones/2?lang=en', version: 2,
+    factura: q.get('sin') === 'factura' ? null : { numero: 'F-2026-91', total: 1750, url: 'https://presupuesto.joelschneider.io/invoice/91' },
+  })
+  return new NextResponse(html, { headers: { 'Content-Type': 'text/html; charset=utf-8' } })
 }

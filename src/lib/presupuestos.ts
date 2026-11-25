@@ -14,6 +14,8 @@ import type { Lead } from '@/lib/leads'
 import { DOMINIO_PRESUPUESTO } from '@/lib/dominios-presupuesto'
 import { dinero, esMoneda, type Moneda } from '@/lib/moneda'
 import { crearFacturaPago } from '@/lib/factura-pago'
+import { enlaceFactura } from '@/lib/factura-enlace'
+import { htmlConfirmacionPortal } from '@/lib/email-portal'
 
 // Marcas cuyo enlace de presupuesto sigue vivo como portal del cliente tras aceptar (src/lib/portal.ts). Custom
 // primero (Duncan Heger, 2026-11-25); Arkevo y Cartela, más adelante.
@@ -23,6 +25,8 @@ export const PUBLICA = 'https://joux-web.vercel.app'
 // Con el subdominio de la marca si tiene (presupuesto.arkevostudio.com/<token>); si no, el de Joux Hub.
 export const enlacePresupuesto = (token: string, marca: string) =>
   DOMINIO_PRESUPUESTO[marca] ? `https://${DOMINIO_PRESUPUESTO[marca]}/${token}` : `${PUBLICA}/aceptar/${token}`
+// Origen de lo que ve el cliente: el subdominio de la marca si tiene (allí también se abren sus facturas), si no Joux Hub.
+export const baseCliente = (marca: string) => DOMINIO_PRESUPUESTO[marca] ? `https://${DOMINIO_PRESUPUESTO[marca]}` : PUBLICA
 export const enlaceCondiciones = (marca: string, version: number, idioma: string) =>
   (DOMINIO_PRESUPUESTO[marca] ? `https://${DOMINIO_PRESUPUESTO[marca]}/condiciones/${version}` : `${PUBLICA}/condiciones/${marca}/${version}`) + (idioma === 'en' ? '?lang=en' : '')
 
@@ -144,7 +148,7 @@ export async function aceptarPresupuesto(token: string, a: Aceptacion): Promise<
   await sb.from('eventos').insert({ tipo: 'presupuesto.aceptado', fuente: 'aceptacion', lead_id: d.p.lead_id, datos: { presupuesto: d.p.id, nombre, condiciones: `v${d.cond.version}`, ip: a.ip || null } })
   const despues = async () => {
     const factura = await ganarPorAceptacion(d.p, nombre).catch(e => { console.error('aceptar/ganar', e?.message); return null })
-    await enviarConfirmacion(d.p, d.cond, nombre, !!factura).catch(e => console.error('aceptar/confirmacion', e?.message))
+    await enviarConfirmacion(d.p, d.cond, nombre, factura).catch(e => console.error('aceptar/confirmacion', e?.message))
   }
   return { ok: true, despues }
 }
@@ -152,9 +156,10 @@ export async function aceptarPresupuesto(token: string, a: Aceptacion): Promise<
 // Gana el lead con el mismo formulario que vería Joel en la ficha y el precio del presupuesto. Sin bienvenida.
 // Factura: en las marcas sin portal, nunca (decisión de Joel, 2026-11-03); en las marcas con portal (PORTAL_MARCAS),
 // la del pago 1 se emite sola al aceptar y aparece en el dashboard del cliente con su PDF y cómo pagar (decisión de
-// Joel, 2026-11-25). Si no se puede ganar o facturar solo, queda aceptado y se avisa. Devuelve el número de la
-// factura emitida, o null.
-async function ganarPorAceptacion(p: Presupuesto, nombre: string): Promise<string | null> {
+// Joel, 2026-11-25). Si no se puede ganar o facturar solo, queda aceptado y se avisa. Devuelve la factura emitida
+// (id, número y lo que paga el cliente), o null.
+type FacturaEmitida = { id: number; numero: string; total: number }
+async function ganarPorAceptacion(p: Presupuesto, nombre: string): Promise<FacturaEmitida | null> {
   const { data: lead } = await sb.from('leads').select('*').eq('id', p.lead_id).maybeSingle()
   const quien = lead?.empresa || lead?.nombre || nombre
   const aviso = (titulo: string, cuerpo: string, url: string) => notificar({ titulo, cuerpo, url, etiqueta: `lead-${p.lead_id}` }).catch(() => {})
@@ -193,7 +198,8 @@ async function ganarPorAceptacion(p: Presupuesto, nombre: string): Promise<strin
     }
     await sb.from('eventos').insert({ proyecto_id: r.proyecto_id, lead_id: lead.id, tipo: 'factura.emitida', fuente: 'aceptacion', datos: { factura_id: f.data.id, numero: f.data.numero, pago: 1, base: Number(f.data.importe), prueba: !!lead.prueba } })
     await aviso(`${quien} ha aceptado el presupuesto`, `Ganado y factura ${f.data.numero} emitida: ya la ve en su página, con cómo pagarla.`, `/proyectos/${r.proyecto_id}`)
-    return f.data.numero
+    const usd = f.data.moneda && f.data.moneda !== 'EUR'
+    return { id: f.data.id, numero: f.data.numero, total: Number(usd ? f.data.importe_moneda : f.data.importe) }
   }
   await aviso(`${quien} ha aceptado el presupuesto`, p.modo === 'cerrado' ? 'Ganado. Te toca la bienvenida con la factura del pago 1.' : 'Ganado. Te toca la bienvenida.', `/leads/${lead.id}`)
   return null
@@ -220,18 +226,25 @@ export function textoConfirmacion(p: Pick<Presupuesto, 'marca' | 'idioma' | 'mod
 
 // La confirmación sale sola por Gmail, en el hilo del lead y con el alias de la marca (mismo envío que la ficha).
 // Si falla, la aceptación ya está guardada: queda el mensaje en «error» en la ficha y se avisa a Joel.
-async function enviarConfirmacion(p: Presupuesto, cond: Condiciones, nombre: string, facturada: boolean) {
+async function enviarConfirmacion(p: Presupuesto, cond: Condiciones, nombre: string, factura: FacturaEmitida | null) {
   const { data: lead } = await sb.from('leads').select('id, email, marca, idioma, proyecto_id').eq('id', p.lead_id).maybeSingle()
   if (!lead?.email) return
   const remitente = remitenteLead(lead.marca, lead.idioma)
   if (!remitente) return
   const { data: marca } = await sb.from('marcas').select('nombre').eq('key', p.marca).maybeSingle()
-  const { asunto, cuerpo } = textoConfirmacion(p, cond, nombre, marca?.nombre || 'Joel Schneider', facturada)
+  const portal = PORTAL_MARCAS.includes(p.marca)
+  const { asunto, cuerpo } = textoConfirmacion(p, cond, nombre, portal ? 'Joel Schneider' : marca?.nombre || 'Joel Schneider', !!factura)
   const { data: m, error } = await sb.from('mensajes').insert({
     lead_id: lead.id, proyecto_id: lead.proyecto_id, direccion: 'saliente', estado: 'borrador', generado_por: 'plantilla', plantilla: 'presupuesto.aceptado',
     auto: true, canal: 'gmail', remitente, para: lead.email, asunto, cuerpo,
   }).select('id').single()
   if (error || !m) throw new Error(error?.message || 'No se pudo guardar la confirmación')
-  const r = await enviarMensajeLead(m.id, ['borrador'])
+  // Portal: el email en HTML, con botones a su página y a la factura (el texto plano va de alternativa).
+  const html = portal ? htmlConfirmacionPortal({
+    idioma: p.idioma, nombre: nombre.split(' ')[0], concepto: p.concepto, moneda: p.moneda, precio: p.modo === 'cerrado' ? Number(p.precio) : null,
+    sinIva: p.sin_iva, plazo: p.plazo, portal: enlacePresupuesto(p.token, p.marca), condiciones: enlaceCondiciones(cond.marca, cond.version, cond.idioma), version: cond.version,
+    factura: factura ? { numero: factura.numero, total: factura.total, url: `${baseCliente(p.marca)}${enlaceFactura(factura.id)}` } : null,
+  }) : undefined
+  const r = await enviarMensajeLead(m.id, ['borrador'], { html })
   if (!r.ok) await notificar({ titulo: 'La confirmación del presupuesto no salió', cuerpo: `${r.error}. Reenvíala desde la ficha.`, url: `/leads/${lead.id}`, etiqueta: `lead-${lead.id}` }).catch(() => {})
 }
