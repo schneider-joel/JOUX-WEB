@@ -4,9 +4,14 @@ import type { Compra, Factura } from './supabase'
 
 const IVA = 0.21
 const RETENCION = 0.15
-const IRPF_130 = 0.20
-const DIFICIL_JUSTIFICACION = 0.05
-const DIFICIL_MAX_ANUAL = 2000
+
+// RDL 43/2026 (BOE 25-11-2026): el pago fraccionado del 130 baja del 20 % al
+// 19 % desde los periodos de 2027 (cifra de negocios < 250.000 €), y los
+// gastos de difícil justificación de la estimación directa simplificada
+// pasan del 5 % (máx. 2.000 €) al 10 % (máx. 3.000 €) desde el ejercicio 2026.
+export const tipo130 = (anio: number) => anio >= 2027 ? 0.19 : 0.20
+export const dificilJustificacion = (anio: number) =>
+  anio >= 2026 ? { pct: 0.10, max: 3000 } : { pct: 0.05, max: 2000 }
 
 const sum = (xs: number[]) => xs.reduce((s, x) => s + x, 0)
 
@@ -31,6 +36,7 @@ export function calcular(anio: number, facturas: Factura[], compras: Compra[], c
   const hoy = new Date().toISOString().slice(0, 10)
   const out: Trimestre[] = []
   let pagosPrevios = 0
+  const tipo = tipo130(anio), dj = dificilJustificacion(anio)
   for (let q = 1; q <= 4; q++) {
     const ini = `${anio}-${String(q * 3 - 2).padStart(2, '0')}-01`
     const fin = `${anio}-${String(q * 3).padStart(2, '0')}-31`
@@ -44,10 +50,10 @@ export function calcular(anio: number, facturas: Factura[], compras: Compra[], c
     const gastosAcum = sum(compras.filter(acum).map(ded))
     const cuotaAcum = cuotaMensual * q * 3
     const neto = ingresosAcum - gastosAcum - cuotaAcum
-    const dificil = Math.min(Math.max(0, neto) * DIFICIL_JUSTIFICACION, DIFICIL_MAX_ANUAL)
+    const dificil = Math.min(Math.max(0, neto) * dj.pct, dj.max)
     const rendimientoAcum = neto - dificil
     const real = reales[`${anio}-${q}`] || {}
-    const irpf = real.irpf ?? Math.max(0, IRPF_130 * rendimientoAcum - retencionesAcum - pagosPrevios)
+    const irpf = real.irpf ?? Math.max(0, tipo * rendimientoAcum - retencionesAcum - pagosPrevios)
     pagosPrevios += irpf
 
     const ivaRep = sum(facturas.filter(delTrim).filter(esUe).map(f => Number(f.importe) * IVA))

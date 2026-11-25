@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import type { Compra, Factura } from '@/lib/supabase'
-import { calcular, proximoPago, type Reales, type Trimestre } from '@/lib/impuestos'
+import { calcular, proximoPago, tipo130, dificilJustificacion, type Reales, type Trimestre } from '@/lib/impuestos'
 import { cuotaAutonomo } from '@/lib/autonomo'
 import Link from 'next/link'
 export { calcular, proximoPago, claveReal, type Reales } from '@/lib/impuestos'
@@ -104,10 +104,10 @@ export default function ImpuestosTab({ facturas, compras, cuotaMensual, onSaveCu
             <Paso n="Ingresos del trimestre" v={`€${eur(t.ingresos)}`} />
             <Paso n="Gastos deducibles" s="Base deducible de las compras" v={`−€${eur(t.gastos)}`} />
             <Paso n="Cuota de autónomo" s="Tres meses" v={`−€${eur(t.cuota)}`} />
-            <Paso n="Rendimiento acumulado" s="Desde enero" v={`€${eur(t.rendimientoAcum)}`} tipo="sub" />
+            <Paso n="Rendimiento acumulado" s={`Desde enero, menos el ${Math.round(dificilJustificacion(anio).pct * 100)} % de difícil justificación`} v={`€${eur(t.rendimientoAcum)}`} tipo="sub" />
             <Paso n="Retenciones acumuladas" s="15 % de lo facturado en España" v={`€${eur(t.retencionesAcum)}`} />
             <Paso n="A ingresar" tipo="tot" v={`€${eur(t.irpf)}`}
-              s={real.irpf !== undefined ? <><i className="dot dot--ok" aria-hidden="true" />Del gestor</> : 'Estimación'} />
+              s={real.irpf !== undefined ? <><i className="dot dot--ok" aria-hidden="true" />Del gestor</> : `Estimación al ${Math.round(tipo130(anio) * 100)} %`} />
           </ul>
         </section>
       </>)}
@@ -194,7 +194,7 @@ export default function ImpuestosTab({ facturas, compras, cuotaMensual, onSaveCu
       </section>
 
       <p className="nota imp__nota">
-        Aproximación, no sustituye a tu gestor. Cuando el gestor te pase los importes de un trimestre, apúntalos en «Importes del gestor»: sustituyen a la estimación (también en la tarjeta del IRPF) y se descuentan del 130 de los trimestres siguientes. IRPF (130): 20% del rendimiento acumulado desde enero (ingresos − gastos deducibles − cuota de autónomo − 5% de gastos de difícil justificación, máx. 2.000€/año), menos las retenciones del 15% de clientes españoles y lo ya pagado en trimestres anteriores.
+        Aproximación, no sustituye a tu gestor. Cuando el gestor te pase los importes de un trimestre, apúntalos en «Importes del gestor»: sustituyen a la estimación (también en la tarjeta del IRPF) y se descuentan del 130 de los trimestres siguientes. IRPF (130) de {anio}: {Math.round(tipo130(anio) * 100)}% del rendimiento acumulado desde enero (ingresos − gastos deducibles − cuota de autónomo − {Math.round(dificilJustificacion(anio).pct * 100)}% de gastos de difícil justificación, máx. {new Intl.NumberFormat('es-ES', { useGrouping: 'always' } as unknown as Intl.NumberFormatOptions).format(dificilJustificacion(anio).max)}€/año), menos las retenciones del 15% de clientes españoles y lo ya pagado en trimestres anteriores.
         IVA (303): 21% de las facturas a clientes españoles menos el IVA deducible de tus compras. No incluye amortizaciones de compras grandes (más de 300€) ni la deducción por rendimientos bajos.
         El ZIP trae los PDF de las ventas (el original si es una factura ya declarada), los archivos de las compras y un resumen en CSV.
       </p>

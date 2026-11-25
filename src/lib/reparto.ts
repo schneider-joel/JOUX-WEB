@@ -12,10 +12,10 @@
 // traspasado está dentro, y lo que se apartó antes de que existieran (y se
 // gastó) no cuenta. Sin dependencias de servidor.
 import type { Cuenta, Factura } from './supabase'
+import { tipo130 } from './impuestos'
 
 export const IVA = 0.21
 export const RETENCION = 0.15
-export const IRPF_130 = 0.20
 
 export type Destino = 'impuestos' | 'autonomo' | 'regularizacion' | 'fijos' | 'variables' | 'resto'
 export type Linea = {
@@ -42,7 +42,7 @@ export type Cobro = {
   fecha: string
   importe: number
   concepto: string
-  facturas: Pick<Factura, 'importe' | 'tipo_factura' | 'numero'>[]
+  facturas: (Pick<Factura, 'importe' | 'tipo_factura' | 'numero'> & { fecha?: string })[]
   reparto_id?: number          // congelado (tiene filas en `repartos`)
   lineas?: Linea[]             // las guardadas si está congelado
 }
@@ -84,14 +84,16 @@ export const cuentasDelReparto = (cuentas: Cuenta[]) => ({
 
 // Impuestos de un cobro: IVA de las facturas de España y el IRPF del 130 sobre
 // el neto, menos la retención que ya hizo el cliente. Sin factura enlazada se
-// trata como un cobro de fuera de España (sin IVA ni retención).
-export function impuestosDe(c: Pick<Cobro, 'importe' | 'facturas'>, factorIrpf: number) {
-  const fs = c.facturas.length ? c.facturas : [{ importe: c.importe, tipo_factura: 'fuera_ue' as const }]
+// trata como un cobro de fuera de España (sin IVA ni retención). El tipo del
+// 130 es el del año de emisión de la factura (sin factura, el del cobro).
+export function impuestosDe(c: Pick<Cobro, 'importe' | 'facturas' | 'fecha'>, factorIrpf: number) {
+  const fs = c.facturas.length ? c.facturas : [{ importe: c.importe, tipo_factura: 'fuera_ue' as const, fecha: c.fecha }]
   let iva = 0, irpf = 0
   for (const f of fs) {
     const base = Number(f.importe), es = f.tipo_factura === 'dentro_ue'
+    const tipo = tipo130(Number((f.fecha || c.fecha).slice(0, 4)))
     if (es) iva += base * IVA
-    irpf += Math.max(0, base * IRPF_130 * factorIrpf - (es ? base * RETENCION : 0))
+    irpf += Math.max(0, base * tipo * factorIrpf - (es ? base * RETENCION : 0))
   }
   return { iva: r2(iva), irpf: r2(irpf) }
 }

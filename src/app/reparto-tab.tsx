@@ -8,7 +8,7 @@
 // automático a las huchas de esa cuenta (`huchas_movimientos`).
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase, batchQuery, type Compra, type Cuenta, type Factura, type PresupuestoItem } from '@/lib/supabase'
-import { calcular, type Reales } from '@/lib/impuestos'
+import { calcular, tipo130, type Reales } from '@/lib/impuestos'
 import { cuotaAutonomo } from '@/lib/autonomo'
 import {
   repartir, aportesAuto, asignadoPorHucha, huchaDeDestino, parseResto, esCuotaAutonomo, mesSiguiente, nombreMes,
@@ -93,7 +93,7 @@ export default function RepartoTab({ cuentas, facturas, compras, fijos, variable
   const fiscales = useMemo(() => facturas.filter(f => f.fiscal !== false), [facturas])
   const autonomo = useMemo(() => cuotaAutonomo(fiscales, compras, cuotaReal, hoy), [fiscales, compras, cuotaReal, hoy])
 
-  // El 130 va sobre el rendimiento (ingresos − gastos − cuota − 5 %), no sobre la base: factor del año.
+  // El 130 va sobre el rendimiento (ingresos − gastos − cuota − difícil justificación), no sobre la base: factor del año.
   const factorIrpf = useMemo(() => {
     const anio = Number(hoy.slice(0, 4)), q = Math.ceil(Number(hoy.slice(5, 7)) / 3)
     const t = calcular(anio, fiscales, compras, cuotaReal, reales)[q - 1]
@@ -326,7 +326,7 @@ export default function RepartoTab({ cuentas, facturas, compras, fijos, variable
         <details className="rp__como">
           <summary>¿Cómo se reparte cada cobro?</summary>
           <ol>
-            <li><i style={{ background: COLOR.impuestos }} /><b>Impuestos</b><span>IRPF ({Math.round(20 * factorIrpf)} % efectivo) y el IVA si el cliente es de España → hucha de impuestos</span></li>
+            <li><i style={{ background: COLOR.impuestos }} /><b>Impuestos</b><span>IRPF ({Math.round(tipo130(Number(hoy.slice(0, 4))) * 100 * factorIrpf)} % efectivo) y el IVA si el cliente es de España → hucha de impuestos</span></li>
             <li><i style={{ background: COLOR.regularizacion }} /><b>Regularización</b><span>hasta €{fmt(autonomo.diferencia)} al mes: tu tramo (€{fmt(autonomo.tramo.cuota)}) menos lo que pagas (€{fmt(cuotaReal)}) → BBVA Ahorros</span></li>
             <li><i style={{ background: COLOR.fijos }} /><b>Reserva del mes siguiente</b><span>fijos €{fmt(cuotaReal + fijosSinCuota)} (cuota de autónomo €{fmt(cuotaReal)} incluida) + variables €{fmt(variablesMes)} → huchas de fijos y variables; el día 1 pasas los variables a Revolut</span></li>
             <li><i style={{ background: 'var(--green)' }} /><b>El resto</b><span>{resto.filter(p => p.pct > 0).map(p => `${Math.round(p.pct)} % ${p.destino === 'crypto' ? 'crypto' : cuentas.find(c => c.id === p.cuenta_id)?.nombre || ''}`).join(' · ')}</span></li>
