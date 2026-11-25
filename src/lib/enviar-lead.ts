@@ -7,7 +7,8 @@ import { marcasJoel, remitenteLead } from '@/lib/remitentes'
 // ficha y el tick (mensajes «aprobado»). El mensaje se reserva con un cambio de estado condicional,
 // así dos llamadas a la vez no lo mandan dos veces.
 // `html`: el HTML del email si no vale el que sale del texto (p. ej. la confirmación del portal, con botones).
-export async function enviarMensajeLead(id: number, desde: ('borrador' | 'aprobado' | 'error')[], opciones: { html?: string } = {}): Promise<{ ok: true } | { ok: false; error: string; status: number }> {
+// `mismoAsunto`: en un hilo que ya existe, «Re: <asunto del hilo>», para que Gmail lo junte con la conversación.
+export async function enviarMensajeLead(id: number, desde: ('borrador' | 'aprobado' | 'error')[], opciones: { html?: string; mismoAsunto?: boolean } = {}): Promise<{ ok: true } | { ok: false; error: string; status: number }> {
   const { data: m } = await sb.from('mensajes').select('*').eq('id', id).maybeSingle()
   if (!m || !m.lead_id) return { ok: false, error: 'No existe el mensaje', status: 404 }
   if (!desde.includes(m.estado)) return { ok: false, error: 'Este mensaje ya no está pendiente', status: 409 }
@@ -26,9 +27,9 @@ export async function enviarMensajeLead(id: number, desde: ('borrador' | 'aproba
 
   const asunto = (lead.gmail_hilo && !/^re:/i.test(m.asunto || '') ? `Re: ${m.asunto}` : m.asunto) || '(sin asunto)'
   try {
-    const r = await enviarGmail({ de: remitente, para: m.para, asunto, texto: m.cuerpo, html: opciones.html || aHtml(m.cuerpo), hilo: lead.gmail_hilo })
+    const r = await enviarGmail({ de: remitente, para: m.para, asunto, texto: m.cuerpo, html: opciones.html || aHtml(m.cuerpo), hilo: lead.gmail_hilo, mismoAsunto: !!opciones.mismoAsunto && !!lead.gmail_hilo })
     const ahora = new Date().toISOString()
-    await sb.from('mensajes').update({ id_proveedor: r.id, enviado_en: ahora, asunto, error: null }).eq('id', id)
+    await sb.from('mensajes').update({ id_proveedor: r.id, enviado_en: ahora, asunto: r.asunto, error: null }).eq('id', id)
     const estado = ['nuevo', 'borrador', 'conversacion'].includes(lead.estado) ? 'respondido' : lead.estado
     await sb.from('leads').update({ gmail_hilo: lead.gmail_hilo || r.hilo, estado, ultimo_contacto: ahora, updated_at: ahora }).eq('id', lead.id)
     await sb.from('eventos').insert([

@@ -245,6 +245,7 @@ async function enviarConfirmacion(p: Presupuesto, cond: Condiciones, nombre: str
     sinIva: p.sin_iva, plazo: p.plazo, portal: enlacePresupuesto(p.token, p.marca), condiciones: enlaceCondiciones(cond.marca, cond.version, cond.idioma), version: cond.version,
     factura: factura ? { numero: factura.numero, total: factura.total, url: `${baseCliente(p.marca)}${enlaceFactura(factura.id)}` } : null,
   }) : undefined
-  const r = await enviarMensajeLead(m.id, ['borrador'], { html })
+  // Si el lead tiene hilo (la conversación con el cliente), va dentro, como respuesta con el mismo asunto.
+  const r = await enviarMensajeLead(m.id, ['borrador'], { html, mismoAsunto: true })
   if (!r.ok) await notificar({ titulo: 'La confirmación del presupuesto no salió', cuerpo: `${r.error}. Reenvíala desde la ficha.`, url: `/leads/${lead.id}`, etiqueta: `lead-${lead.id}` }).catch(() => {})
 }
