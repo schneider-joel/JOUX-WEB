@@ -140,6 +140,12 @@ export type Factura = {
   // false = registro interno (p. ej. timesheet) que no es la factura declarada.
   fiscal?: boolean
   movimiento_id?: string | null // el cobro del banco que la pagó
+  // Portal del cliente (2026-11-25): factura en USD. `importe` sigue siendo la base en EUR (impuestos);
+  // `importe_moneda` es lo que ve el cliente y `tipo_cambio`, USD por 1 EUR del BCE del día de emisión.
+  moneda?: 'EUR' | 'USD'
+  importe_moneda?: number | null
+  tipo_cambio?: number | null
+  nota_iva?: string | null       // mención legal del IVA si no vale la de por defecto
 }
 
 export type Compra = {

@@ -9,6 +9,8 @@ import { remitenteLead } from '@/lib/remitentes'
 import { textoEvento } from '@/lib/eventos-texto'
 import { enlaceCambios } from '@/lib/cartela-cambios'
 import { PIEZAS, rutaPieza, type Pieza } from '@/lib/cartela-piezas'
+import { enlacePresupuesto, PORTAL_MARCAS } from '@/lib/presupuestos'
+import { limpiarPendientes } from '@/lib/portal'
 import Ficha, { type DatosFicha, type ItemHilo } from './ficha'
 
 export const dynamic = 'force-dynamic'
@@ -90,7 +92,19 @@ export default async function ProyectoPage({ params }: { params: { id: string } 
     ...evs.filter(e => AVISOS.has(e.tipo) || e.tipo.startsWith('revision.')).map(e => ({ tipo: 'aviso' as const, clave: `e${e.id}`, fecha: e.created_at, texto: textoEvento(e) })),
   ].sort((a, b) => a.fecha.localeCompare(b.fecha))
 
+  // Portal del cliente (src/lib/portal.ts): el enlace es el del presupuesto aceptado que creó el proyecto.
+  const { data: pres } = PORTAL_MARCAS.includes(p.marca || '')
+    ? await sb.from('presupuestos').select('token, marca').eq('proyecto_id', id).eq('estado', 'aceptado').maybeSingle()
+    : { data: null }
+  const portal: DatosFicha['portal'] = PORTAL_MARCAS.includes(p.marca || '') ? {
+    enlace: pres ? enlacePresupuesto(pres.token, pres.marca) : null,
+    url_revision: p.url_revision ?? null, url_live: p.url_live ?? null, dominio: p.dominio ?? null,
+    dominio_estado: p.dominio_estado === 'conectado' || p.dominio_estado === 'pendiente' ? p.dominio_estado : null,
+    pendientes: limpiarPendientes(p.pendientes_cliente),
+  } : null
+
   const datos: DatosFicha = {
+    portal, moneda: p.moneda || 'EUR',
     p: {
       id: p.id, nombre: p.nombre, cliente: p.cliente, marca: p.marca, marcaNombre: marca?.nombre || p.marca || 'Sin marca', cerrado,
       web: p.web, plan: p.plan, status: p.status, prueba: !!p.prueba, fase: esFaseProyecto(p.fase) ? p.fase : null,

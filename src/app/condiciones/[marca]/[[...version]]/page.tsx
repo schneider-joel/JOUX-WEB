@@ -12,7 +12,7 @@ export const fetchCache = 'force-no-store'
 export const metadata = { title: 'Condiciones del servicio', robots: { index: false, follow: false } }
 
 // Condiciones públicas de una marca: /condiciones/<marca> (la vigente) o /condiciones/<marca>/<versión>.
-// ?lang=en elige el inglés si existe esa versión en inglés. ?borrador=1 (solo en local) enseña condiciones/<marca>-v1.md
+// ?lang=en elige el inglés si existe esa versión en inglés. ?borrador=<N> (solo en local) enseña condiciones/<marca>-v<N>[-en].md
 // tal cual, para ver una versión antes de insertarla.
 export default async function CondicionesPage({ params, searchParams }: { params: { marca: string; version?: string[] }; searchParams: { lang?: string; borrador?: string } }) {
   const idioma = searchParams.lang === 'en' ? 'en' : 'es'
@@ -25,7 +25,7 @@ export default async function CondicionesPage({ params, searchParams }: { params
   }
   const v = params.version?.[0]
   const c = !/^[a-z]+$/.test(params.marca) ? null
-    : searchParams.borrador && process.env.NODE_ENV !== 'production' ? await borrador(params.marca, idioma)
+    : searchParams.borrador && process.env.NODE_ENV !== 'production' ? await borrador(params.marca, idioma, Number(searchParams.borrador) > 1 ? Number(searchParams.borrador) : 1)
     : v ? (/^\d{1,4}$/.test(v) ? await condicionesVersion(params.marca, Number(v), idioma) : null)
     : await condicionesVigentes(params.marca, idioma)
   if (!c) return <Marco marca="otra" nombre=""><h1>No encontrado</h1><p className="pz__nota">Not found.</p></Marco>
@@ -40,7 +40,9 @@ export default async function CondicionesPage({ params, searchParams }: { params
   )
 }
 
-async function borrador(marca: string, idioma: string): Promise<Condiciones | null> {
-  const texto = await readFile(`${process.cwd()}/condiciones/${marca}-v1.md`, 'utf8').catch(() => null)
-  return texto ? { id: 0, marca, version: 1, idioma, titulo: idioma === 'en' ? 'Terms of service' : 'Condiciones del servicio', texto, created_at: new Date().toISOString() } : null
+// ?borrador=<N> lee condiciones/<marca>-v<N>-en.md (con ?lang=en) o <marca>-v<N>.md.
+async function borrador(marca: string, idioma: string, n: number): Promise<Condiciones | null> {
+  const leer = (f: string) => readFile(`${process.cwd()}/condiciones/${f}.md`, 'utf8').catch(() => null)
+  const texto = (idioma === 'en' ? await leer(`${marca}-v${n}-en`) : null) || await leer(`${marca}-v${n}`)
+  return texto ? { id: 0, marca, version: n, idioma, titulo: idioma === 'en' ? 'Terms of service' : 'Condiciones del servicio', texto, created_at: new Date().toISOString() } : null
 }

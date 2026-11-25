@@ -12,7 +12,7 @@ const T = {
   },
   en: {
     nombre: 'Your full name', casilla: (v: number) => `I have read and accept the quote and the terms of service (v${v}).`,
-    particular: '',
+    particular: 'If you are hiring as an individual, you ask me to start before the 14-day withdrawal period ends.',
     aceptar: 'Accept the quote', enviando: 'Sending…',
     errores: { nombre: 'Please write your name.', casilla: 'Tick the box to accept.', anulado: 'This quote is no longer valid.', caducado: 'This quote has expired.', enlace: 'This link is not valid.', otro: "Couldn't send. Please try again in a moment." },
   },

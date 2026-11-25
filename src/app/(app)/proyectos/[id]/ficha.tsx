@@ -15,6 +15,8 @@ import DriveCarpeta from '../../work/drive-carpeta'
 import RefEntrega from '../../work/ref-entrega'
 import Conversacion from './conversacion'
 import Bienvenida from '../../leads/[id]/bienvenida'
+import PortalCliente, { type DatosPortal } from './portal'
+import { dinero } from '@/lib/moneda'
 
 export type MensajeHilo = { id: number; entrante: boolean; estado: string; asunto: string | null; cuerpo: string; error: string | null; plantilla: string | null; auto: boolean; deProyecto: boolean; de: string | null; para: string | null; adjuntos?: { nombre: string; url: string | null }[] }
 export type ItemHilo = { tipo: 'msg'; clave: string; fecha: string; m: MensajeHilo } | { tipo: 'aviso'; clave: string; fecha: string; texto: string }
@@ -33,6 +35,8 @@ export type DatosFicha = {
   bienvenidaPendiente: boolean
   hilo: ItemHilo[]
   historial: { clave: number; tipo: string; fecha: string; texto: string; aviso: boolean }[]
+  portal: DatosPortal | null           // marcas con portal del cliente (PORTAL_MARCAS)
+  moneda: string                       // la del proyecto; en USD, los pagos se enseñan en dólares
 }
 
 const agrupar = { useGrouping: 'always' } as unknown as Intl.NumberFormatOptions
@@ -295,7 +299,7 @@ export default function Ficha({ d }: { d: DatosFicha }) {
                   <tr><td>Factura única{d.dinero.unica.numero ? ` · ${d.dinero.unica.numero}` : ''}</td><td><EstadoPago x={d.dinero.unica} /></td></tr>
                 ) : d.dinero.pagos.map(x => (
                   <tr key={x.n}>
-                    <td>{ETIQUETA_PAGO[x.n - 1]}{x.facturaId ? <> · <a href={`/invoice/${x.facturaId}`} target="_blank" rel="noreferrer">{x.numero}</a></> : null}<small className="dim"> · {eur(x.importe)}</small></td>
+                    <td>{ETIQUETA_PAGO[x.n - 1]}{x.facturaId ? <> · <a href={`/invoice/${x.facturaId}`} target="_blank" rel="noreferrer">{x.numero}</a></> : null}<small className="dim"> · {d.moneda === 'EUR' ? eur(x.importe) : dinero(x.importe, d.moneda)}</small></td>
                     <td><EstadoPago x={x} /></td>
                   </tr>
                 ))}
@@ -323,6 +327,13 @@ export default function Ficha({ d }: { d: DatosFicha }) {
               <details className="fx__notas"><summary className="copy caps">Notas del agente y material</summary><div className="fx__agente"><AgenteWeb p={s} detalle /></div></details>
             )}
           </section>
+
+          {d.portal && (
+            <section className="fx__card" aria-labelledby="fx-po">
+              <header><h2 id="fx-po">Portal del cliente</h2></header>
+              <PortalCliente proyectoId={p.id} d={d.portal} />
+            </section>
+          )}
 
           <section className="fx__card" aria-labelledby="fx-cl">
             <header><h2 id="fx-cl">Cliente</h2></header>

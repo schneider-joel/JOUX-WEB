@@ -46,7 +46,7 @@ export default async function LeadPage({ params }: { params: { id: string } }) {
     lead.proyecto_id ? sb.from('proyectos').select('id, nombre, cliente, marca, fase, precio_cerrado, prueba, drive_url, drive_error').eq('id', lead.proyecto_id).maybeSingle() : Promise.resolve({ data: null }),
     lead.proyecto_id ? sb.from('facturas').select('id, numero').eq('proyecto_id', lead.proyecto_id).eq('pago', 1).maybeSingle() : Promise.resolve({ data: null }),
     // El presupuesto vivo o el aceptado (los anulados no se enseñan), con la versión de sus condiciones.
-    sb.from('presupuestos').select('id, token, estado, concepto, precio, tarifa_dia, caduca, aceptado_at, aceptado_nombre, aceptado_ip, condiciones(version)').eq('lead_id', lead.id).neq('estado', 'anulado').order('created_at', { ascending: false }).limit(1),
+    sb.from('presupuestos').select('id, token, estado, concepto, precio, tarifa_dia, caduca, aceptado_at, aceptado_nombre, aceptado_ip, moneda, condiciones(version)').eq('lead_id', lead.id).neq('estado', 'anulado').order('created_at', { ascending: false }).limit(1),
   ])
   const interes = Object.entries(lead.interes || {}).filter(([, v]) => v != null && v !== '')
   const campos = Object.entries(lead.campos || {})

@@ -2,13 +2,14 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { dinero } from '@/lib/moneda'
 
 export type PresupuestoFicha = {
   id: number; token: string; estado: 'enviado' | 'aceptado' | 'anulado'; concepto: string; precio: number | null; tarifa_dia: number | null
   caduca: string | null; aceptado_at: string | null; aceptado_nombre: string | null; aceptado_ip: string | null; version: number | null
+  moneda?: string
 }
 
-const eur = (n: number) => new Intl.NumberFormat('es-ES', { maximumFractionDigits: 2, useGrouping: 'always' } as Intl.NumberFormatOptions).format(n) + ' €'
 const fecha = (iso: string) => new Date(iso).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid' })
 
 // Presupuesto con aceptación online: Joel lo prepara aquí y pega el enlace en su email de propuesta. El cliente
@@ -19,7 +20,8 @@ export default function Presupuesto({ leadId, modo, idioma, inicial, actual, enl
 }) {
   const router = useRouter()
   const [abierto, setAbierto] = useState(false)
-  const [f, setF] = useState({ concepto: inicial.concepto, plan: inicial.plan, precio: inicial.precio ? String(inicial.precio) : '', tarifa_dia: '', dias: '', incluye: '', plazo: '', caduca: '', idioma: idioma === 'en' ? 'en' : 'es' })
+  const [f, setF] = useState({ concepto: inicial.concepto, plan: inicial.plan, precio: inicial.precio ? String(inicial.precio) : '', tarifa_dia: '', dias: '', incluye: '', plazo: '', caduca: '', idioma: idioma === 'en' ? 'en' : 'es',
+    moneda: 'EUR', sin_iva: false, no_incluye: '', despues: '', necesito: '', nota_pago: '' })
   const [ocupado, setOcupado] = useState(false)
   const [error, setError] = useState('')
   const [copiado, setCopiado] = useState(false)
@@ -46,7 +48,7 @@ export default function Presupuesto({ leadId, modo, idioma, inicial, actual, enl
   if (actual?.estado === 'aceptado') return (
     <div className="block" style={{ gap: 6 }}>
       <p className="nota ok">Aceptado por {actual.aceptado_nombre} el {fecha(actual.aceptado_at!)}{actual.version ? ` · condiciones v${actual.version}` : ''}</p>
-      <p className="nota dim">{actual.concepto} · {actual.precio != null ? eur(Number(actual.precio)) : `${eur(Number(actual.tarifa_dia))}/día`}{actual.aceptado_ip ? ` · IP ${actual.aceptado_ip}` : ''}</p>
+      <p className="nota dim">{actual.concepto} · {actual.precio != null ? dinero(Number(actual.precio), actual.moneda) : `${dinero(Number(actual.tarifa_dia), actual.moneda)}/día`}{actual.aceptado_ip ? ` · IP ${actual.aceptado_ip}` : ''}</p>
       <a className="copy caps" href={enlace} target="_blank" rel="noopener noreferrer">Ver lo que aceptó ↗</a>
     </div>
   )
@@ -54,7 +56,7 @@ export default function Presupuesto({ leadId, modo, idioma, inicial, actual, enl
   if (!abierto) return (
     <div className="block" style={{ gap: 8 }}>
       {actual?.estado === 'enviado' && <>
-        <p className="nota">{actual.concepto} · {actual.precio != null ? eur(Number(actual.precio)) : `${eur(Number(actual.tarifa_dia))}/día`} · sin aceptar{actual.caduca ? ` · válido hasta el ${new Date(`${actual.caduca}T12:00:00`).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}` : ''}</p>
+        <p className="nota">{actual.concepto} · {actual.precio != null ? dinero(Number(actual.precio), actual.moneda) : `${dinero(Number(actual.tarifa_dia), actual.moneda)}/día`} · sin aceptar{actual.caduca ? ` · válido hasta el ${new Date(`${actual.caduca}T12:00:00`).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}` : ''}</p>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <button type="button" className="pill pill--sm" onClick={copiar}>{copiado ? 'Copiado' : 'Copiar enlace'}</button>
           <a className="ghost" href={enlace} target="_blank" rel="noopener noreferrer">Abrir</a>
@@ -69,23 +71,44 @@ export default function Presupuesto({ leadId, modo, idioma, inicial, actual, enl
     </div>
   )
 
-  const campo = (k: keyof typeof f, label: string, props: React.InputHTMLAttributes<HTMLInputElement> = {}) => (
+  type Texto = Exclude<keyof typeof f, 'sin_iva'>
+  const campo = (k: Texto, label: string, props: React.InputHTMLAttributes<HTMLInputElement> = {}) => (
     <div className="field">
       <label className="caps" htmlFor={`pr-${k}`}>{label}</label>
       <input id={`pr-${k}`} value={f[k]} onChange={e => setF({ ...f, [k]: e.target.value })} {...props} />
     </div>
   )
+  const area = (k: Texto, label: string, rows: number) => (
+    <div className="field">
+      <label className="caps" htmlFor={`pr-${k}`}>{label}</label>
+      <textarea id={`pr-${k}`} rows={rows} value={f[k]} onChange={e => setF({ ...f, [k]: e.target.value })} />
+    </div>
+  )
+  const simbolo = f.moneda === 'USD' ? '$' : '€'
   return (
     <div className="block" style={{ gap: 10 }}>
       {campo('concepto', 'Concepto', { placeholder: modo === 'cerrado' ? 'Web Estudio X · diseño Lino' : 'Treatment · spot', maxLength: 200 })}
       {campo('plan', 'Plan (opcional)', { maxLength: 80 })}
-      {modo === 'cerrado'
-        ? campo('precio', 'Precio total sin IVA (€)', { inputMode: 'decimal' })
-        : <>{campo('tarifa_dia', 'Tarifa por día sin IVA (€)', { inputMode: 'decimal' })}{campo('dias', 'Días estimados', { inputMode: 'decimal' })}</>}
       <div className="field">
-        <label className="caps" htmlFor="pr-incluye">Qué incluye (una línea por punto)</label>
-        <textarea id="pr-incluye" rows={4} value={f.incluye} onChange={e => setF({ ...f, incluye: e.target.value })} />
+        <label className="caps" htmlFor="pr-moneda">Moneda</label>
+        <span className="field__sel">
+          <select id="pr-moneda" value={f.moneda} onChange={e => setF({ ...f, moneda: e.target.value, sin_iva: e.target.value === 'USD' ? true : f.sin_iva })}>
+            <option value="EUR">EUR (€)</option><option value="USD">USD ($)</option>
+          </select>
+        </span>
       </div>
+      {modo === 'cerrado'
+        ? campo('precio', `Precio total sin IVA (${simbolo})`, { inputMode: 'decimal' })
+        : <>{campo('tarifa_dia', `Tarifa por día sin IVA (${simbolo})`, { inputMode: 'decimal' })}{campo('dias', 'Días estimados', { inputMode: 'decimal' })}</>}
+      <label className="nota" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <input type="checkbox" checked={f.sin_iva} onChange={e => setF({ ...f, sin_iva: e.target.checked })} />
+        Cliente de fuera de la UE: sin «+ IVA» en la página
+      </label>
+      {area('incluye', 'Qué incluye (una línea por punto)', 4)}
+      {area('no_incluye', 'Qué no incluye (opcional)', 2)}
+      {area('despues', 'Después del lanzamiento (opcional)', 2)}
+      {area('necesito', 'Qué necesito del cliente (opcional)', 3)}
+      {area('nota_pago', 'Cómo se paga (opcional; si no, «50 % para empezar y 50 % antes de publicar»)', 2)}
       {campo('plazo', 'Plazo (opcional)', { placeholder: '3 semanas desde que llega el material', maxLength: 120 })}
       {campo('caduca', 'Válido hasta (opcional)', { type: 'date' })}
       <div className="field">

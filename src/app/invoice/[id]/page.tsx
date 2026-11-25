@@ -86,6 +86,8 @@ export default async function InvoicePage({ params, searchParams }: Props) {
     telefono: cfgVal('emisor_telefono'),
     iban: cfgVal('emisor_iban'),
     swift: cfgVal('emisor_swift'),
+    // Facturas en otra moneda (USD): sus instrucciones de pago (Wise, PayPal…) en vez del IBAN de BBVA.
+    pago: factura.moneda && factura.moneda !== 'EUR' ? cfgVal(`pago_instrucciones_${factura.moneda}`) || null : null,
   }
 
   const ultimoNumero = maxNumeroActual > 0 ? `${prefijoActual}${maxNumeroActual}` : cfgVal('ultimo_numero_factura', 'F260000')

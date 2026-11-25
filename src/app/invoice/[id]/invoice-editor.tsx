@@ -15,6 +15,8 @@ const textos = {
     notaFueraUe: 'Operación no sujeta a IVA por el art. 69.Uno.1º LIVA',
     notaTransferencia: 'Pagar por transferencia bancaria al siguiente número de cuenta',
     horas: 'Horas trabajadas', standby: 'Standby',
+    equivalente: (eur: string, cambio: string, mon: string) => `Equivalente en euros: ${eur} € (cambio del BCE del día de emisión: 1 EUR = ${cambio} ${mon})`,
+    comoPagar: 'Cómo pagar',
   },
   en: {
     titulo: 'INVOICE', numero: 'Number', referencia: 'Reference', fecha: 'Date', vencimiento: 'Due date', para: 'To', de: 'From',
@@ -24,6 +26,8 @@ const textos = {
     notaFueraUe: 'Not subject to VAT under art. 69.One.1 of the Spanish VAT Law',
     notaTransferencia: 'Pay by bank transfer to the following account number',
     horas: 'Hours worked', standby: 'Standby',
+    equivalente: (eur: string, cambio: string, mon: string) => `Equivalent in euros: €${eur} (ECB rate on the issue date: 1 EUR = ${cambio} ${mon})`,
+    comoPagar: 'How to pay',
   },
 }
 
@@ -52,7 +56,7 @@ export default function InvoiceEditor({
   titulo = null,
 }: {
   factura: Factura
-  emisor: { nombre: string; nif: string; direccion: string; email: string; telefono: string; iban: string; swift?: string }
+  emisor: { nombre: string; nif: string; direccion: string; email: string; telefono: string; iban: string; swift?: string; pago?: string | null }
   clienteFiscalInicial: ClienteFiscal | null
   editable: boolean
   ultimoNumero: string
@@ -81,6 +85,12 @@ export default function InvoiceEditor({
   const ivaAmount = dentroUe ? base * (IVA_PCT / 100) : 0
   const retencionAmount = dentroUe ? base * (RETENCION_PCT / 100) : 0
   const total = base + ivaAmount - retencionAmount
+  // En USD el cliente ve dólares (fuera de la UE, sin IVA ni retención); la base fiscal en EUR (importe) va en
+  // una línea aparte con el cambio del BCE.
+  const usd = !!factura.moneda && factura.moneda !== 'EUR' && factura.importe_moneda != null
+  const baseV = usd ? Number(factura.importe_moneda) : base
+  const totalV = usd ? baseV : total
+  const m = (n: number) => usd ? `$${fmt2(n)}` : `${fmt2(n)}€`
 
   const usarSiguienteNumero = () => {
     const next = siguienteNumero(ultimoNumero)
@@ -313,13 +323,13 @@ export default function InvoiceEditor({
             {clienteFiscal.direccion && clienteFiscal.direccion.split('\n').map((l, i) => <div key={i}>{l}</div>)}
           </div>
           <div className="invoice-parties-right" style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: 28, fontWeight: 700 }}>{t.totalLabel} {fmt2(total)}€</div>
+            <div style={{ fontSize: 28, fontWeight: 700 }}>{t.totalLabel} {m(totalV)}</div>
           </div>
         </div>
 
         {!dentroUe && (
           <div style={{ fontSize: 12, color: '#444', background: '#f7f7f7', borderRadius: 6, padding: '10px 14px', marginBottom: 20 }}>
-            {t.notaFueraUe}
+            {factura.nota_iva || t.notaFueraUe}
           </div>
         )}
 
@@ -345,12 +355,12 @@ export default function InvoiceEditor({
                 </div>
                 {factura.concepto_detalle && <div style={{ color: '#888', fontSize: 12 }}>{factura.concepto_detalle}</div>}
               </td>
-              <td style={td}>{fmt2(base)}€</td>
+              <td style={td}>{m(baseV)}</td>
               <td style={td}>1</td>
-              <td style={td}>{fmt2(base)}€</td>
+              <td style={td}>{m(baseV)}</td>
               {dentroUe && <td style={td}>{IVA_PCT}%</td>}
               {dentroUe && <td style={td}>-{RETENCION_PCT}%</td>}
-              <td style={{ ...td, paddingRight: 0 }}>{fmt2(total)}€</td>
+              <td style={{ ...td, paddingRight: 0 }}>{m(totalV)}</td>
             </tr>
           </tbody>
         </table>
@@ -366,7 +376,7 @@ export default function InvoiceEditor({
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, marginTop: 20 }}>
           <div style={{ display: 'flex', gap: 24, fontSize: 12 }}>
             <span style={{ fontWeight: 600 }}>{t.baseImponible}</span>
-            <span>{fmt2(base)}€</span>
+            <span>{m(baseV)}</span>
           </div>
           {dentroUe && (
             <>
@@ -382,12 +392,22 @@ export default function InvoiceEditor({
           )}
           <div style={{ display: 'flex', gap: 24, fontSize: 13, fontWeight: 700 }}>
             <span>{t.total}</span>
-            <span>{fmt2(total)}€</span>
+            <span>{m(totalV)}</span>
           </div>
+          {usd && (
+            <div style={{ fontSize: 11, color: '#888', textAlign: 'right' }}>
+              {t.equivalente(fmt2(total), String(factura.tipo_cambio ?? ''), factura.moneda!)}
+            </div>
+          )}
         </div>
 
         {/* Datos de pago para todos (los emails de las webs remiten a la factura); el SWIFT solo fuera de España */}
-        {emisor.iban && factura.origen !== 'regularizacion' && (
+        {usd && emisor.pago && factura.origen !== 'regularizacion' && (
+          <div style={{ fontSize: 11, color: '#888', marginTop: 32, textAlign: 'center', whiteSpace: 'pre-line' }}>
+            <strong style={{ color: '#111' }}>{t.comoPagar}</strong>{'\n'}{emisor.pago}
+          </div>
+        )}
+        {!usd && emisor.iban && factura.origen !== 'regularizacion' && (
           <div style={{ fontSize: 11, color: '#888', marginTop: 32, textAlign: 'center' }}>
             {t.notaTransferencia} <strong style={{ color: '#111' }}>{emisor.iban}</strong>
             {!dentroUe && emisor.swift && <> · SWIFT/BIC: <strong style={{ color: '#111' }}>{emisor.swift}</strong></>}

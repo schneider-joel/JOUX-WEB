@@ -98,5 +98,34 @@ html:has(.pz[data-marca="custom"]), body:has(.pz[data-marca="custom"]) { backgro
 .pz__hecho { margin: 0; padding: 18px 20px; border: 1px solid var(--line); border-radius: 14px; }
 .pz__hecho strong { display: block; margin-bottom: 4px; color: var(--ok); font-weight: 600; }
 
+/* Portal del cliente (src/lib/portal.ts): estado, pasos, pendientes, facturas y cómo pagar */
+.pz__estado { display: flex; align-items: center; gap: 10px; margin: 0 0 6px; font-family: var(--disp); font-weight: var(--disp-w); font-stretch: var(--disp-st); letter-spacing: var(--disp-ls); font-size: 22px; line-height: 1.2; }
+.pz__punto { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+.pz__pasos, .pz__check, .pz__facturas { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.pz__pasos li, .pz__check li { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 14px; align-items: start; padding: 12px 0; color: var(--muted); }
+.pz__check li { grid-template-columns: 22px minmax(0, 1fr); padding: 8px 0; color: var(--ink); }
+.pz__pasos li + li { border-top: 1px solid var(--line); }
+.pz__pasos b { display: block; font-weight: 500; }
+.pz__pasos small { display: block; margin-top: 2px; font-size: 14px; color: var(--muted); }
+.pz__pasos li.is-ahora, .pz__pasos li.is-hecho { color: var(--ink); }
+.pz__pasos .pz__label { margin: 3px 0 0; }
+.pz__o { display: inline-grid; place-items: center; width: 22px; height: 22px; margin-top: 1px; border: 1px solid var(--line); border-radius: 99px; font-size: 12px; line-height: 1; color: var(--on-accent); }
+.is-hecho > .pz__o { background: var(--ok); border-color: var(--ok); }
+.is-ahora > .pz__o { border: 2px solid var(--ok); }
+.pz__check li.is-hecho > span:last-child { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--line); }
+.pz__facturas li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 16px; padding: 14px 0; }
+.pz__facturas li + li { border-top: 1px solid var(--line); }
+.pz__facturas b { display: block; font-weight: 500; }
+.pz__facturas small { color: var(--muted); font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.pz__facturas a { grid-column: 1 / -1; font-size: 14.5px; }
+.pz__cifra { display: flex; align-items: center; gap: 10px; font-variant-numeric: tabular-nums; }
+.pz__tag { display: inline-block; padding: 3px 8px; border: 1px solid var(--line); border-radius: 99px; font: var(--label); letter-spacing: var(--label-ls); text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+.pz__tag.ok { color: var(--ok); border-color: currentColor; }
+.pz__pago { margin-top: 20px; padding: 18px 20px; border: 1px solid var(--line); border-radius: 14px; }
+.pz__pago pre { margin: 0 0 12px; font: 400 14.5px/1.6 var(--body); white-space: pre-wrap; overflow-wrap: anywhere; }
+.pz__btn--link { display: inline-flex; align-items: center; margin-top: 16px; text-decoration: none; color: var(--on-accent) !important; }
+.pz__dentro { margin-top: 8px; }
+.pz__dentro > .pz__sec:first-child { border-top: 0; }
+
 .pz__pie { margin: 40px 0 0; color: var(--muted); font-size: 13px; }
 @media (prefers-reduced-motion: reduce) { .pz * { transition: none !important; } }

@@ -12,6 +12,11 @@ import { enviarMensajeLead } from '@/lib/enviar-lead'
 import { remitenteLead } from '@/lib/remitentes'
 import type { Lead } from '@/lib/leads'
 import { DOMINIO_PRESUPUESTO } from '@/lib/dominios-presupuesto'
+import { dinero, esMoneda, type Moneda } from '@/lib/moneda'
+
+// Marcas cuyo enlace de presupuesto sigue vivo como portal del cliente tras aceptar (src/lib/portal.ts). Custom
+// primero (Duncan Heger, 2026-11-25); Arkevo y Cartela, más adelante.
+export const PORTAL_MARCAS = ['custom']
 
 export const PUBLICA = 'https://joux-web.vercel.app'
 // Con el subdominio de la marca si tiene (presupuesto.arkevostudio.com/<token>); si no, el de Joux Hub.
@@ -25,6 +30,8 @@ export type Presupuesto = {
   id: number; lead_id: number; marca: string; token: string; idioma: 'es' | 'en'; modo: 'cerrado' | 'dia'
   concepto: string; plan: string | null; precio: number | null; tarifa_dia: number | null; dias: number | null
   incluye: string | null; plazo: string | null; caduca: string | null; condiciones_id: number
+  // Portal del cliente (2026-11-25): moneda, sin IVA (fuera de la UE) y el resto del alcance, una línea por punto.
+  moneda: Moneda; sin_iva: boolean; no_incluye: string | null; despues: string | null; necesito: string | null; nota_pago: string | null
   estado: 'enviado' | 'aceptado' | 'anulado'; aceptado_at: string | null; aceptado_nombre: string | null; aceptado_email: string | null
   aceptado_ip: string | null; aceptado_ua: string | null; condiciones_sha256: string | null; proyecto_id: number | null; created_at: string
 }
@@ -48,6 +55,7 @@ export async function condicionesVersion(marca: string, version: number, idioma:
 export type NuevoPresupuesto = {
   concepto: string; plan?: string | null; precio?: number | null; tarifa_dia?: number | null; dias?: number | null
   incluye?: string | null; plazo?: string | null; caduca?: string | null; idioma?: string | null
+  moneda?: string | null; sin_iva?: boolean; no_incluye?: string | null; despues?: string | null; necesito?: string | null; nota_pago?: string | null
 }
 
 // Crea el presupuesto del lead y anula los anteriores sin aceptar: solo hay un enlace vivo por lead.
@@ -73,10 +81,12 @@ export async function crearPresupuesto(leadId: number, e: NuevoPresupuesto): Pro
     plan: e.plan?.trim() || null, precio: modo === 'cerrado' ? Number(e.precio) : null,
     tarifa_dia: modo === 'dia' ? Number(e.tarifa_dia) : null, dias: modo === 'dia' && Number(e.dias) > 0 ? Number(e.dias) : null,
     incluye: e.incluye?.trim() || null, plazo: e.plazo?.trim() || null, caduca: e.caduca || null, condiciones_id: cond.id,
+    moneda: esMoneda(e.moneda) ? e.moneda : 'EUR', sin_iva: e.sin_iva === true,
+    no_incluye: e.no_incluye?.trim() || null, despues: e.despues?.trim() || null, necesito: e.necesito?.trim() || null, nota_pago: e.nota_pago?.trim() || null,
   }
   const { data: p, error } = await sb.from('presupuestos').insert(fila).select('*').single()
   if (error || !p) return { error: error?.message || 'No se pudo crear', status: 500 }
-  await sb.from('eventos').insert({ tipo: 'presupuesto.creado', fuente: 'joux-hub', lead_id: leadId, datos: { presupuesto: p.id, concepto, precio: fila.precio, tarifa_dia: fila.tarifa_dia, condiciones: `v${cond.version}` } })
+  await sb.from('eventos').insert({ tipo: 'presupuesto.creado', fuente: 'joux-hub', lead_id: leadId, datos: { presupuesto: p.id, concepto, precio: fila.precio, tarifa_dia: fila.tarifa_dia, moneda: fila.moneda, condiciones: `v${cond.version}` } })
   return { ok: true, p: p as Presupuesto }
 }
 
@@ -146,9 +156,10 @@ async function ganarPorAceptacion(p: Presupuesto, nombre: string) {
   const { data: marca } = await sb.from('marcas').select('key, nombre, modo').eq('key', lead.marca).maybeSingle()
   if (!marca) return
   const nif = (lead.para_empezar as Lead['para_empezar'])?.fiscales?.datos?.nif?.trim()
+  // Sin NIF (un particular de fuera de la UE no tiene): el cliente fiscal que Joel dio de alta con su nombre exacto.
   const { data: existente } = nif
     ? await sb.from('clientes_fiscales').select('cliente, identificador, direccion, pais').ilike('identificador', nif).maybeSingle()
-    : { data: null }
+    : await sb.from('clientes_fiscales').select('cliente, identificador, direccion, pais').eq('cliente', (lead.empresa || lead.nombre || '').trim()).maybeSingle()
   const form = formInicial(lead, marca, (existente as ClienteFiscal | null) || undefined,
     p.modo === 'cerrado' ? { precio: Number(p.precio), fuente: 'el presupuesto aceptado', diseno: p.plan } : null)
   if (p.plan) form.plan = p.plan
@@ -156,22 +167,27 @@ async function ganarPorAceptacion(p: Presupuesto, nombre: string) {
   const r = await ganarLead(lead.id, form, 'aceptacion', { bienvenida: false })
   if ('error' in r) return aviso(`${quien} ha aceptado el presupuesto`, `No se pudo marcar ganado solo: ${r.error}. Hazlo tú desde su ficha.`, `/leads/${lead.id}`)
   await sb.from('presupuestos').update({ proyecto_id: r.proyecto_id }).eq('id', p.id)
+  // La moneda del presupuesto pasa al proyecto: sus facturas salen en esa moneda (crearFacturaPago()).
+  if (p.moneda && p.moneda !== 'EUR') await sb.from('proyectos').update({ moneda: p.moneda }).eq('id', r.proyecto_id)
   return aviso(`${quien} ha aceptado el presupuesto`, p.modo === 'cerrado' ? 'Ganado. Te toca la bienvenida con la factura del pago 1.' : 'Ganado. Te toca la bienvenida.', `/leads/${lead.id}`)
 }
 
-const eur = (n: number, idioma: string) => new Intl.NumberFormat(idioma === 'en' ? 'en-GB' : 'es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: n % 1 ? 2 : 0, useGrouping: 'always' } as Intl.NumberFormatOptions).format(n)
 
 // Texto de la confirmación: qué ha aceptado, cómo se paga, con qué condiciones y dónde volver a verlo.
-export function textoConfirmacion(p: Pick<Presupuesto, 'marca' | 'idioma' | 'modo' | 'concepto' | 'precio' | 'tarifa_dia' | 'dias' | 'token'>, cond: Pick<Condiciones, 'marca' | 'version' | 'idioma'>, nombre: string, firma: string) {
+export function textoConfirmacion(p: Pick<Presupuesto, 'marca' | 'idioma' | 'modo' | 'concepto' | 'precio' | 'tarifa_dia' | 'dias' | 'token'> & Partial<Pick<Presupuesto, 'moneda' | 'sin_iva' | 'nota_pago'>>, cond: Pick<Condiciones, 'marca' | 'version' | 'idioma'>, nombre: string, firma: string) {
   const en = p.idioma === 'en'
   const pila = nombre.split(' ')[0]
   const precio = Number(p.precio), tarifa = Number(p.tarifa_dia)
-  const importe = p.modo === 'cerrado'
-    ? (en ? `${eur(precio, 'en')} + VAT, in two payments: 50% to start and 50% ${p.marca === 'cartela' ? 'on delivery' : 'before launch'}.` : `${eur(precio, 'es')} + IVA, en dos pagos: 50 % para empezar y 50 % ${p.marca === 'cartela' ? 'al entregar la carta' : 'antes de publicar'}.`)
-    : (en ? `${eur(tarifa, 'en')}/day + VAT${Number(p.dias) > 0 ? `, about ${p.dias} days` : ''}, invoiced on delivery.` : `${eur(tarifa, 'es')}/día + IVA${Number(p.dias) > 0 ? `, unos ${p.dias} días` : ''}, a la entrega.`)
+  const eur = (n: number, idioma: string) => dinero(n, p.moneda, idioma)
+  const portal = PORTAL_MARCAS.includes(p.marca)
+  const vat = p.sin_iva ? '' : en ? ' + VAT' : ' + IVA'
+  const importe = p.nota_pago ? `${p.modo === 'cerrado' ? eur(precio, p.idioma) : `${eur(tarifa, p.idioma)}${en ? '/day' : '/día'}`}${vat}. ${p.nota_pago}`
+    : p.modo === 'cerrado'
+    ? (en ? `${eur(precio, 'en')}${vat}, in two payments: 50% to start and 50% ${p.marca === 'cartela' ? 'on delivery' : 'before launch'}.` : `${eur(precio, 'es')}${vat}, en dos pagos: 50 % para empezar y 50 % ${p.marca === 'cartela' ? 'al entregar la carta' : 'antes de publicar'}.`)
+    : (en ? `${eur(tarifa, 'en')}/day${vat}${Number(p.dias) > 0 ? `, about ${p.dias} days` : ''}, invoiced on delivery.` : `${eur(tarifa, 'es')}/día${vat}${Number(p.dias) > 0 ? `, unos ${p.dias} días` : ''}, a la entrega.`)
   const cuerpo = en
-    ? `Hi ${pila},\n\nThis confirms you have accepted the quote "${p.concepto}":\n\n${importe}\n\nTerms of service (v${cond.version}): ${enlaceCondiciones(cond.marca, cond.version, cond.idioma)}\nYour quote: ${enlacePresupuesto(p.token, p.marca)}\n\nKeep this email as your copy. We will be in touch shortly with the next steps.\n\n${firma}`
-    : `Hola, ${pila}:\n\nTe confirmamos que has aceptado el presupuesto «${p.concepto}»:\n\n${importe}\n\nCondiciones del servicio (v${cond.version}): ${enlaceCondiciones(cond.marca, cond.version, cond.idioma)}\nTu presupuesto: ${enlacePresupuesto(p.token, p.marca)}\n\nGuarda este correo como copia. En breve te escribimos con los siguientes pasos.\n\n${firma}`
+    ? `Hi ${pila},\n\nThis confirms you have accepted the quote "${p.concepto}":\n\n${importe}\n\nTerms of service (v${cond.version}): ${enlaceCondiciones(cond.marca, cond.version, cond.idioma)}\n${portal ? `Your project page: ${enlacePresupuesto(p.token, p.marca)}\nYour first invoice and how to pay it will appear there shortly, and you can follow the whole project from the same link.\n\nKeep this email as your copy.` : `Your quote: ${enlacePresupuesto(p.token, p.marca)}\n\nKeep this email as your copy. We will be in touch shortly with the next steps.`}\n\n${firma}`
+    : `Hola, ${pila}:\n\nTe confirmamos que has aceptado el presupuesto «${p.concepto}»:\n\n${importe}\n\nCondiciones del servicio (v${cond.version}): ${enlaceCondiciones(cond.marca, cond.version, cond.idioma)}\n${portal ? `Tu proyecto: ${enlacePresupuesto(p.token, p.marca)}\nAhí verás en breve la primera factura y cómo pagarla, y podrás seguir el proyecto desde el mismo enlace.\n\nGuarda este correo como copia.` : `Tu presupuesto: ${enlacePresupuesto(p.token, p.marca)}\n\nGuarda este correo como copia. En breve te escribimos con los siguientes pasos.`}\n\n${firma}`
   return { asunto: en ? `Quote accepted · ${p.concepto}` : `Presupuesto aceptado · ${p.concepto}`, cuerpo }
 }
 

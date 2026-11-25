@@ -13,6 +13,9 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const r = await crearPresupuesto(Number(params.id), {
     concepto: String(b.concepto ?? ''), plan: b.plan ? String(b.plan) : null, precio: num(b.precio), tarifa_dia: num(b.tarifa_dia), dias: num(b.dias),
     incluye: b.incluye ? String(b.incluye) : null, plazo: b.plazo ? String(b.plazo) : null, caduca: b.caduca ? String(b.caduca) : null, idioma: b.idioma ? String(b.idioma) : null,
+    moneda: b.moneda ? String(b.moneda) : null, sin_iva: b.sin_iva === true,
+    no_incluye: b.no_incluye ? String(b.no_incluye) : null, despues: b.despues ? String(b.despues) : null,
+    necesito: b.necesito ? String(b.necesito) : null, nota_pago: b.nota_pago ? String(b.nota_pago) : null,
   })
   if ('error' in r) return NextResponse.json({ error: r.error }, { status: r.status })
   return NextResponse.json({ ok: true, id: r.p.id, token: r.p.token })

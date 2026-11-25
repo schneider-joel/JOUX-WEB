@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { ClaveInicio, VistaBienvenida } from '@/lib/bienvenida'
+import { dinero } from '@/lib/moneda'
 
 const eur = (n: number) => '€' + new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: 'always' } as unknown as Intl.NumberFormatOptions).format(n)
 
@@ -54,10 +55,10 @@ export default function Bienvenida({ proyectoId, clave = 'proyecto.bienvenida', 
               {f.prueba && <p className="nota aviso caps">Prueba · sin validez fiscal · no consume número</p>}
               <dl className="desg">
                 <div><dt>Número</dt><dd className="num mono">{f.numero}{f.id ? '' : ' (previsto)'}</dd></div>
-                <div><dt>Base</dt><dd className="num">{eur(f.base)}</dd></div>
-                {f.espana && <div><dt>IVA 21 %</dt><dd className="num">{eur(f.iva)}</dd></div>}
-                {f.espana && <div><dt>Retención 15 %</dt><dd className="num">{eur(-f.ret)}</dd></div>}
-                <div className="desg__t"><dt>A cobrar</dt><dd className="num">{eur(f.total)}</dd></div>
+                <div><dt>Base</dt><dd className="num">{f.moneda === 'USD' ? dinero(f.base, 'USD', 'es', true) : eur(f.base)}</dd></div>
+                {f.espana && <div><dt>IVA 21 %</dt><dd className="num">{f.moneda === 'USD' ? dinero(f.iva, 'USD', 'es', true) : eur(f.iva)}</dd></div>}
+                {f.espana && <div><dt>Retención 15 %</dt><dd className="num">{f.moneda === 'USD' ? dinero(-f.ret, 'USD', 'es', true) : eur(-f.ret)}</dd></div>}
+                <div className="desg__t"><dt>A cobrar</dt><dd className="num">{f.moneda === 'USD' ? dinero(f.total, 'USD', 'es', true) : eur(f.total)}</dd></div>
               </dl>
               {!f.espana && <p className="nota">Cliente fuera de España: sin IVA ni retención.</p>}
             </>

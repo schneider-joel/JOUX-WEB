@@ -24,6 +24,8 @@ import { adjuntosCartela } from '@/lib/emails-proyecto'
 import { pilotoActivo } from '@/lib/autonomia'
 import { encargarWeb } from '@/lib/primera-version'
 import { enlaceFactura } from '@/lib/factura-enlace'
+import { crearFacturaPago } from '@/lib/factura-pago'
+import { dinero as dineroMoneda } from '@/lib/moneda'
 
 export const CLAVES_INICIO = ['proyecto.bienvenida', 'factura.pago', 'entrega.final'] as const
 export type ClaveInicio = typeof CLAVES_INICIO[number]
@@ -40,6 +42,7 @@ export type FacturaBienvenida = {
   base: number; iva: number; ret: number; total: number
   espana: boolean                // dentro_ue: IVA 21 % y retención 15 %
   prueba: boolean
+  moneda?: string                // la del proyecto (USD: importes en dólares; la base fiscal en EUR va en la factura)
 }
 export type VistaBienvenida = {
   clave: ClaveInicio
@@ -62,7 +65,7 @@ async function numeroPrevisto() {
 }
 
 export async function vistaBienvenida(id: number, clave: ClaveInicio = 'proyecto.bienvenida'): Promise<VistaBienvenida | { error: string; status: number }> {
-  const { data: p } = await sb.from('proyectos').select('id, cliente, marca, idioma, precio_cerrado, prueba, contacto_email, drive_url, token_fiscal, lead_id').eq('id', id).maybeSingle()
+  const { data: p } = await sb.from('proyectos').select('*').eq('id', id).maybeSingle()
   if (!p) return { error: 'No existe el proyecto', status: 404 }
   const idioma = p.idioma === 'en' ? 'en' : 'es'
   const remitente = remitenteLead(p.marca || '', idioma)
@@ -75,7 +78,7 @@ export async function vistaBienvenida(id: number, clave: ClaveInicio = 'proyecto
   let factura: FacturaBienvenida | null = null, bloqueo: string | null = null, datos_url: string | null = null
   if (p.precio_cerrado != null) {
     const [{ data: f }, { data: cf }] = await Promise.all([
-      sb.from('facturas').select('id, numero, importe, tipo_factura').eq('proyecto_id', p.id).eq('pago', pago).maybeSingle(),
+      sb.from('facturas').select('*').eq('proyecto_id', p.id).eq('pago', pago).maybeSingle(),
       sb.from('clientes_fiscales').select('pais').eq('cliente', p.cliente).maybeSingle(),
     ])
     // Sin ficha fiscal y con formulario: la bienvenida pide los datos y la factura va después.
@@ -85,7 +88,8 @@ export async function vistaBienvenida(id: number, clave: ClaveInicio = 'proyecto
     if (!(!esFactura && porFormulario)) {
       let base: number, espana: boolean, numero: string
       if (f) {
-        base = Number(f.importe); espana = f.tipo_factura === 'dentro_ue'; numero = f.numero || ''
+        // En USD, lo que ve el cliente (la base en EUR es para los impuestos).
+        base = Number(f.moneda && f.moneda !== 'EUR' ? f.importe_moneda : f.importe); espana = f.tipo_factura === 'dentro_ue'; numero = f.numero || ''
       } else {
         // Los mismos bloqueos que crear_factura_pago(), para verlos antes de pulsar.
         if (!bloqueo && !cf?.pais) bloqueo = `Faltan los datos fiscales de ${p.cliente}`
@@ -95,7 +99,7 @@ export async function vistaBienvenida(id: number, clave: ClaveInicio = 'proyecto
         numero = p.prueba ? `PRUEBA-${p.id}-${pago}` : await numeroPrevisto()
       }
       const d = desglose(base, espana)
-      factura = { id: f?.id ?? null, numero, base, iva: d?.iva ?? 0, ret: d?.ret ?? 0, total: d?.total ?? base, espana, prueba: !!p.prueba }
+      factura = { id: f?.id ?? null, numero, base, iva: d?.iva ?? 0, ret: d?.ret ?? 0, total: d?.total ?? base, espana, prueba: !!p.prueba, moneda: p.moneda || 'EUR' }
     }
   } else if (esFactura) return { error: 'Este proyecto no es de precio cerrado', status: 400 }
   else if (p.token_fiscal) {
@@ -105,7 +109,7 @@ export async function vistaBienvenida(id: number, clave: ClaveInicio = 'proyecto
   }
 
   const t = await plantillaProyecto(id, clave, {
-    vars: { datos_url, ...(factura ? { factura_numero: factura.numero, factura_total: dinero(factura.total, idioma) } : {}) },
+    vars: { datos_url, ...(factura ? { factura_numero: factura.numero, factura_total: dineroMoneda(factura.total, factura.moneda, idioma, true) } : {}) },
   })
   if ('error' in t) return { error: String(t.error), status: Number(t.status) || 500 }
   const para = p.contacto_email?.trim() || ''
@@ -154,14 +158,14 @@ export async function enviarBienvenida(id: number, origen: string, clave: ClaveI
     return { error, status }
   }
 
-  let factura: { id: number; numero: string; importe: number; tipo_factura: string } | null = null
+  let factura: { id: number; numero: string; importe: number; tipo_factura: string; moneda?: string; importe_moneda?: number | null } | null = null
   if (v.factura) {
     if (v.factura.id) {
-      const { data } = await sb.from('facturas').select('id, numero, importe, tipo_factura').eq('id', v.factura.id).single()
+      const { data } = await sb.from('facturas').select('id, numero, importe, tipo_factura, moneda, importe_moneda').eq('id', v.factura.id).single()
       factura = data
     } else {
       const pago = clave === 'entrega.final' ? 2 : 1
-      const { data, error } = await sb.rpc('crear_factura_pago', { p_proyecto: id, p_pago: pago })
+      const { data, error } = await crearFacturaPago(id, pago)
       if (error || !data) { await sb.from('mensajes').delete().eq('id', fila.id); return { error: error?.message || 'No se pudo crear la factura', status: 400 } }
       factura = data
       await sb.from('eventos').insert({ proyecto_id: id, lead_id: p.lead_id, tipo: 'factura.emitida', fuente: 'joux-hub', datos: { factura_id: data.id, numero: data.numero, pago, base: Number(data.importe), prueba: !!p.prueba } })
@@ -176,7 +180,8 @@ export async function enviarBienvenida(id: number, origen: string, clave: ClaveI
     vars: {
       datos_url: v.datos_url,
       ...(factura ? {
-        factura_numero: factura.numero, factura_total: dinero(d?.total ?? Number(factura.importe), idioma),
+        factura_numero: factura.numero,
+        factura_total: factura.moneda && factura.moneda !== 'EUR' ? dineroMoneda(Number(factura.importe_moneda), factura.moneda, idioma, true) : dinero(d?.total ?? Number(factura.importe), idioma),
         factura_url: pdf ? null : `${PUBLICA}${enlaceFactura(factura.id)}`,
       } : {}),
     },
