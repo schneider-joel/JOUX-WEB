@@ -2059,3 +2059,38 @@ BEGIN
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
+
+-- =============================================================================================
+-- portal_cliente (2026-11-25). Aplicada en producción con OK de Joel.
+-- Portal del cliente: el enlace del presupuesto (presupuesto.<dominio>/<token>) crece a portal y
+-- acompaña al cliente de la propuesta al lanzamiento. Moneda por presupuesto, proyecto y factura (USD además de EUR).
+-- `facturas.importe` sigue siendo la base en EUR (impuestos, gráficas, reparto); en una factura en USD,
+-- `importe_moneda` es lo que ve el cliente y `tipo_cambio` el del BCE de la fecha de emisión (USD por 1 EUR).
+
+ALTER TABLE presupuestos
+  ADD COLUMN moneda TEXT NOT NULL DEFAULT 'EUR' CHECK (moneda IN ('EUR', 'USD')),
+  ADD COLUMN sin_iva BOOLEAN NOT NULL DEFAULT false,      -- cliente de fuera de la UE: sin «+ VAT»
+  ADD COLUMN no_incluye TEXT,                              -- una línea por punto
+  ADD COLUMN despues TEXT,                                 -- después del lanzamiento, una línea por punto
+  ADD COLUMN necesito TEXT,                                -- qué necesito del cliente, una línea por punto
+  ADD COLUMN nota_pago TEXT;                               -- cómo y cuándo se paga, si no vale el texto por defecto
+
+ALTER TABLE proyectos
+  ADD COLUMN moneda TEXT NOT NULL DEFAULT 'EUR' CHECK (moneda IN ('EUR', 'USD')),
+  ADD COLUMN url_revision TEXT,                            -- review mode que ve el cliente en su portal
+  ADD COLUMN url_live TEXT,                                -- la web publicada
+  ADD COLUMN dominio TEXT,
+  ADD COLUMN dominio_estado TEXT CHECK (dominio_estado IN ('pendiente', 'conectado')),
+  ADD COLUMN pendientes_cliente JSONB NOT NULL DEFAULT '[]'::jsonb;   -- [{ "texto": "...", "hecho": false }]
+
+ALTER TABLE facturas
+  ADD COLUMN moneda TEXT NOT NULL DEFAULT 'EUR' CHECK (moneda IN ('EUR', 'USD')),
+  ADD COLUMN importe_moneda NUMERIC(10,2),
+  ADD COLUMN tipo_cambio NUMERIC(12,6),
+  ADD COLUMN nota_iva TEXT;                                -- mención legal del IVA si no vale la de por defecto
+
+-- Condiciones v2 de Custom en inglés (id 4): el texto está en condiciones/insertar-custom-v2-en.sql. Aplicado con OK de Joel.
+-- Duncan Heger, particular de EE. UU. (sin NIF): cliente fiscal antes de aceptar, para que ganarPorAceptacion() lo encuentre por nombre.
+INSERT INTO clientes_fiscales (cliente, identificador, direccion, pais) VALUES ('Duncan Heger', NULL, E'1809 7th St. APT 7
+Santa Monica, CA 90401
+United States', 'EXT');
