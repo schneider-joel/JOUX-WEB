@@ -119,9 +119,9 @@ html:has(.pz[data-marca="custom"]), body:has(.pz[data-marca="custom"]) { backgro
 .dz { display: flex; flex-direction: column; gap: 14px; }
 .pz h1.dz__titulo { margin: 0 0 18px; font-size: clamp(28px, 5vw, 40px); }
 
-/* Progreso: cinco segmentos con su nombre debajo; en el móvil, solo «Paso 3 de 5 · Construcción» */
+/* Progreso: seis segmentos con su nombre debajo; en el móvil, solo «Paso 3 de 5 · Construcción» */
 .dz__progreso { margin-bottom: 14px; }
-.dz__progreso ol { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.dz__progreso ol { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
 .dz__progreso li { display: flex; flex-direction: column; gap: 10px; color: var(--muted); }
 .dz__seg { height: 4px; border-radius: 99px; background: var(--line); transition: background-color .5s var(--ease); }
 .dz__progreso li.is-hecho .dz__seg { background: var(--ok); }
@@ -147,6 +147,21 @@ html:has(.pz[data-marca="custom"]), body:has(.pz[data-marca="custom"]) { backgro
 /* Debajo: lo que le toca al cliente; y pagos y facturas (PDF, cómo pagar y datos de facturación) */
 .dz__card { min-width: 0; padding: 22px; border: 1px solid var(--line); border-radius: 14px; }
 .dz__card h3.pz__label, .dz__card h4.pz__label { margin: 0 0 14px; font-weight: inherit; }
+.dz__datos { display: flex; flex-wrap: wrap; gap: 14px 36px; margin: 0; }
+.dz__datos dt { font: var(--label); letter-spacing: var(--label-ls); text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+.dz__datos dd { margin: 0; font-size: 15px; font-variant-numeric: tabular-nums; }
+.dz__datos--arriba { margin: 22px 0 0; padding: 0; border: 0; }
+.dz__ahora:has(.dz__presupuesto[open]) .dz__datos--arriba { display: none; }
+.dz__datos dd small { color: var(--muted); font-size: 12.5px; }
+.dz__presupuesto { margin-top: 26px; }
+.dz__presupuesto > summary { list-style: none; cursor: pointer; }
+.dz__presupuesto > summary::-webkit-details-marker { display: none; }
+.dz__presupuesto > summary.pz__btn { display: inline-flex; align-items: center; }
+.pz .dz__presupuesto > summary::before { content: none; }
+.dz__presupuesto[open] > summary.pz__btn { display: none; }
+.dz__sumario { font-size: 15px; text-decoration: underline; text-underline-offset: 3px; }
+.dz__presupuesto-dentro { margin-top: 8px; }
+.dz__presupuesto-dentro > .pz__sec:first-child { border-top: 0; padding-top: 12px; }
 .dz__pagos { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .dz__pagos li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 8px 18px; padding: 14px 0; }
 .dz__pagos li:first-child { padding-top: 0; }

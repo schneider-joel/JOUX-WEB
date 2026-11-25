@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { pasoDeFase, PASOS_PORTAL, type Portal } from '@/lib/portal'
 import { dinero } from '@/lib/moneda'
 import Refrescar from './refrescar'
@@ -8,9 +9,12 @@ import Refrescar from './refrescar'
 // src/lib/portal.ts; se refresca solo (router.refresh, sin recargar la página).
 const T = {
   en: {
-    pasos: { kickoff: 'Kick-off', material: 'Material', build: 'Build', review: 'Review', launch: 'Launch' } as Record<string, string>,
-    paso: (n: number) => `Step ${n} of 5`, terminado: 'Completed',
+    pasos: { quote: 'Quote', kickoff: 'Kick-off', material: 'Material', build: 'Build', review: 'Review', launch: 'Launch' } as Record<string, string>,
+    paso: (n: number) => `Step ${n} of 6`, terminado: 'Completed',
     ahora: {
+      propuesta: ['Review and accept your quote', 'Everything that is included, the payments and the terms. Accept it here to get started.'],
+      anulado: ['This quote is no longer valid', 'Reply to my email and I will send you a new one.'],
+      caducado: ['This quote has expired', 'Reply to my email and I will send you an updated one.'],
       factura: ['Quote accepted', 'Your first invoice is on its way. It will appear here.'],
       pago: ['Pay the first invoice to start', 'The project starts as soon as the payment comes in.'],
       confirmado: ['Payment received, thank you', "I'm getting the project ready."],
@@ -28,11 +32,15 @@ const T = {
     enCamino: 'Invoice on its way', alPublicar: 'Invoiced at launch', vence: 'due', descargar: 'Download PDF',
     datos: 'Billing details', sinDatos: 'They will show here once I have them.', datosMal: 'Anything to change? Write to',
     presupuesto: 'Quote and terms', dudas: 'Questions?',
+    revisar: 'Review and accept', verPresupuesto: 'See the quote', precio: 'Price', plazo: 'Timing', valido: 'Valid until', sinIva: 'No VAT', masIva: '+ VAT',
   },
   es: {
-    pasos: { kickoff: 'Arranque', material: 'Material', build: 'Construcción', review: 'Revisión', launch: 'Lanzamiento' } as Record<string, string>,
-    paso: (n: number) => `Paso ${n} de 5`, terminado: 'Terminado',
+    pasos: { quote: 'Presupuesto', kickoff: 'Arranque', material: 'Material', build: 'Construcción', review: 'Revisión', launch: 'Lanzamiento' } as Record<string, string>,
+    paso: (n: number) => `Paso ${n} de 6`, terminado: 'Terminado',
     ahora: {
+      propuesta: ['Revisa y acepta tu presupuesto', 'Todo lo que incluye, los pagos y las condiciones. Acéptalo aquí para empezar.'],
+      anulado: ['Este presupuesto ya no está vigente', 'Responde a mi email y te mando uno nuevo.'],
+      caducado: ['Este presupuesto ha caducado', 'Responde a mi email y te mando uno actualizado.'],
       factura: ['Presupuesto aceptado', 'Tu primera factura está en camino. Aparecerá aquí.'],
       pago: ['Paga la primera factura para empezar', 'El proyecto empieza en cuanto llega el pago.'],
       confirmado: ['Pago recibido, gracias', 'Estoy preparando el proyecto.'],
@@ -50,21 +58,25 @@ const T = {
     enCamino: 'Factura en camino', alPublicar: 'Se factura al publicar', vence: 'vence el', descargar: 'Descargar PDF',
     datos: 'Datos de facturación', sinDatos: 'Aparecerán aquí cuando los tenga.', datosMal: '¿Algo que cambiar? Escribe a',
     presupuesto: 'Presupuesto y condiciones', dudas: '¿Dudas?',
+    revisar: 'Revisar y aceptar', verPresupuesto: 'Ver el presupuesto', precio: 'Precio', plazo: 'Plazo', valido: 'Válido hasta', sinIva: 'Sin IVA', masIva: '+ IVA',
   },
 }
 
-export default function Dashboard({ d, contacto, enlacePresupuesto }: { d: Portal; contacto: string; enlacePresupuesto: string }) {
+// `presupuesto`: antes de aceptar, el presupuesto completo y «Accept» (los pinta page.tsx), plegados en la tarjeta grande.
+export default function Dashboard({ d, contacto, enlacePresupuesto, presupuesto }: { d: Portal; contacto: string; enlacePresupuesto: string; presupuesto?: ReactNode }) {
   const { p, etapa, proyecto: pr, facturas } = d
   const t = T[p.idioma]
   const fase = pr?.fase ?? null
   const paso = pasoDeFase(fase, etapa)
   const din = (n: number) => dinero(n, p.moneda, p.idioma, n % 1 !== 0)
 
-  const clave = etapa === 'factura' || etapa === 'pago' ? etapa : fase === 'cambios' ? 'revision' : fase || 'confirmado'
+  const propuesta = etapa === 'propuesta'
+  const clave = propuesta ? (p.estado === 'anulado' ? 'anulado' : d.caducado ? 'caducado' : 'propuesta')
+    : etapa === 'factura' || etapa === 'pago' ? etapa : fase === 'cambios' ? 'revision' : fase || 'confirmado'
   // Lo que hay que pagar ahora: el primer pago antes de empezar y el final al publicar (no durante la obra).
   const debe = etapa !== 'proyecto' ? facturas.find(f => !f.cobrada) || null : null
   const [titulo, texto] = t.ahora[clave === 'entregado' && debe ? 'final' : clave] || t.ahora.confirmado
-  const revision = etapa === 'proyecto' && paso >= 2 && paso <= 3 && pr?.url_revision ? pr.url_revision : null
+  const revision = etapa === 'proyecto' && paso >= 3 && paso <= 4 && pr?.url_revision ? pr.url_revision : null
   const web = etapa === 'lanzamiento' ? pr?.url_live || null : null
 
   // Un botón: pagar si hay algo por pagar; si no, el modo revisión o la web. Lo otro, como enlace pequeño.
@@ -79,7 +91,7 @@ export default function Dashboard({ d, contacto, enlacePresupuesto }: { d: Porta
       <Refrescar />
       <h1 className="dz__titulo">{p.concepto}</h1>
 
-      <section className="dz__progreso" aria-label={paso > 4 ? t.terminado : t.paso(paso + 1)}>
+      <section className="dz__progreso" aria-label={paso > 5 ? t.terminado : t.paso(paso + 1)}>
         <ol>
           {PASOS_PORTAL.map((k, i) => (
             <li key={k} className={i < paso ? 'is-hecho' : i === paso ? 'is-ahora' : undefined} aria-current={i === paso ? 'step' : undefined}>
@@ -88,7 +100,7 @@ export default function Dashboard({ d, contacto, enlacePresupuesto }: { d: Porta
             </li>
           ))}
         </ol>
-        <p className="dz__movil">{paso > 4 ? t.terminado : `${t.paso(paso + 1)} · ${t.pasos[PASOS_PORTAL[paso]]}`}</p>
+        <p className="dz__movil">{paso > 5 ? t.terminado : `${t.paso(paso + 1)} · ${t.pasos[PASOS_PORTAL[paso]]}`}</p>
       </section>
 
       <section className="dz__ahora" aria-live="polite">
@@ -97,6 +109,19 @@ export default function Dashboard({ d, contacto, enlacePresupuesto }: { d: Porta
         {debe && <p className="dz__importe">{dinero(debe.total, debe.moneda, p.idioma, debe.total % 1 !== 0)}</p>}
         {etapa === 'lanzamiento' && pr?.dominio && (
           <p className="dz__dominio"><span className={`pz__punto${pr.dominio_estado === 'conectado' ? '' : ' is-espera'}`} aria-hidden="true" />{pr.dominio} · {pr.dominio_estado === 'conectado' ? t.conectado : t.pendienteDominio}</p>
+        )}
+        {propuesta && (
+          <dl className="dz__datos dz__datos--arriba">
+            {p.modo === 'cerrado' && Number(p.precio) > 0 && <div><dt>{t.precio}</dt><dd>{din(Number(p.precio))} <small>{p.sin_iva ? t.sinIva : t.masIva}</small></dd></div>}
+            {p.plazo && <div><dt>{t.plazo}</dt><dd>{p.plazo}</dd></div>}
+            {p.caduca && p.estado === 'enviado' && !d.caducado && <div><dt>{t.valido}</dt><dd>{fecha(p.caduca)}</dd></div>}
+          </dl>
+        )}
+        {propuesta && presupuesto && (
+          <details className="dz__presupuesto">
+            <summary className={p.estado === 'enviado' && !d.caducado ? 'pz__btn' : 'dz__sumario'}>{p.estado === 'enviado' && !d.caducado ? t.revisar : t.verPresupuesto}</summary>
+            <div className="dz__presupuesto-dentro">{presupuesto}</div>
+          </details>
         )}
         {(boton || secundario) && (
           <div className="dz__acciones">
@@ -114,7 +139,7 @@ export default function Dashboard({ d, contacto, enlacePresupuesto }: { d: Porta
         </section>
       )}
 
-      <section className="dz__card" id="pagos" aria-labelledby="dz-pagos">
+      <section className={`dz__card${propuesta ? ' is-bloq' : ''}`} id="pagos" aria-labelledby="dz-pagos">
         <h3 className="pz__label" id="dz-pagos">{t.pagos}</h3>
         <ul className="dz__pagos">
           {([1, 2] as const).map(n => {
@@ -133,7 +158,7 @@ export default function Dashboard({ d, contacto, enlacePresupuesto }: { d: Porta
             )
           })}
         </ul>
-        <div className="dz__cols">
+        {!propuesta && <div className="dz__cols">
           {d.pago && (
             <div>
               <h4 className="pz__label">{t.comoPagar}</h4>
@@ -148,10 +173,10 @@ export default function Dashboard({ d, contacto, enlacePresupuesto }: { d: Porta
             ) : <p className="pz__nota">{t.sinDatos}</p>}
             <p className="pz__nota dz__peq">{t.datosMal} <a href={`mailto:${contacto}`}>{contacto}</a></p>
           </div>
-        </div>
+        </div>}
       </section>
 
-      <p className="pz__pie dz__pie"><a href={enlacePresupuesto}>{t.presupuesto}</a><span>{t.dudas} <a href={`mailto:${contacto}`}>{contacto}</a></span></p>
+      <p className="pz__pie dz__pie">{propuesta ? <span /> : <a href={enlacePresupuesto}>{t.presupuesto}</a>}<span>{t.dudas} <a href={`mailto:${contacto}`}>{contacto}</a></span></p>
     </div>
   )
 }

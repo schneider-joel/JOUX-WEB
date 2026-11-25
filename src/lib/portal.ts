@@ -27,11 +27,13 @@ export type ProyectoPortal = {
   dominio: string | null; dominio_estado: 'pendiente' | 'conectado' | null; pendientes: Pendiente[]
 }
 
-// Los cinco pasos que ve el cliente y en cuál está cada fase del hub (las 7 fases plegadas).
-export const PASOS_PORTAL = ['kickoff', 'material', 'build', 'review', 'launch'] as const
+// Los seis pasos que ve el cliente (el presupuesto es el primero: presupuesto y dashboard son la misma página desde
+// el primer día, decisión de Joel, 2026-11-25) y en cuál está cada fase del hub (las 7 fases plegadas).
+export const PASOS_PORTAL = ['quote', 'kickoff', 'material', 'build', 'review', 'launch'] as const
 export function pasoDeFase(fase: FaseProyecto | null, etapa: EtapaPortal): number {
-  if (etapa === 'factura' || etapa === 'pago' || !fase) return 0
-  return ({ confirmado: 0, material: 1, comenzado: 2, revision: 3, cambios: 3, entregado: 4, cerrado: 5 } as Record<FaseProyecto, number>)[fase]
+  if (etapa === 'propuesta') return 0
+  if (etapa === 'factura' || etapa === 'pago' || !fase) return 1
+  return ({ confirmado: 1, material: 2, comenzado: 3, revision: 4, cambios: 4, entregado: 5, cerrado: 6 } as Record<FaseProyecto, number>)[fase]
 }
 
 // La lista de pendientes tal como se guarda (jsonb): se limpia por si acaso, el cliente la ve tal cual.

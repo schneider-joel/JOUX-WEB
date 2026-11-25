@@ -2,7 +2,7 @@ import { readFile } from 'fs/promises'
 import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { DOMINIO_PRESUPUESTO, marcaDeHost } from '@/lib/dominios-presupuesto'
-import { enlaceCondiciones, enlacePresupuesto, type Presupuesto } from '@/lib/presupuestos'
+import { enlaceCondiciones, enlacePresupuesto, PORTAL_MARCAS, type Presupuesto } from '@/lib/presupuestos'
 import { portalDeToken, type EtapaPortal, type Portal, type FacturaPortal, type ProyectoPortal } from '@/lib/portal'
 import { dinero } from '@/lib/moneda'
 import TextoCondiciones from '../../condiciones/texto'
@@ -94,7 +94,8 @@ export default async function AceptarPage({ params, searchParams }: { params: { 
   const fecha = (iso: string, hora = false) => new Date(iso.length === 10 ? `${iso}T12:00:00` : iso).toLocaleString(loc, { day: 'numeric', month: 'long', year: 'numeric', ...(hora ? { hour: '2-digit', minute: '2-digit' } : {}), timeZone: 'Europe/Madrid' })
   const quien = lead?.empresa || lead?.nombre || ''
 
-  if (etapa === 'propuesta') return (
+  // Marcas sin portal: el presupuesto de siempre.
+  if (etapa === 'propuesta' && !PORTAL_MARCAS.includes(p.marca)) return (
     <Marco marca={p.marca} nombre={d.marca}>
       <span className="pz__label">{t.titulo}{quien ? ` · ${quien}` : ''}</span>
       <h1>{p.concepto}</h1>
@@ -109,13 +110,18 @@ export default async function AceptarPage({ params, searchParams }: { params: { 
     </Marco>
   )
 
-  // Aceptado en una marca con portal: el dashboard (siempre las mismas tarjetas, que se van completando).
+  // Marcas con portal: el dashboard desde el primer día (siempre las mismas tarjetas, que se van completando). Antes
+  // de aceptar, el presupuesto y «Accept» se despliegan dentro de su tarjeta grande. Tras aceptar,
   // ?ver=presupuesto enseña lo aceptado, con la vuelta al dashboard.
   const contacto = CONTACTO[p.marca] || CONTACTO.custom
   const aqui = params.token === 'demo' ? `?etapa=${etapa}` : '?'
-  if (searchParams.ver !== 'presupuesto') return (
+  const presupuesto = etapa === 'propuesta' ? <>
+    <Propuesta d={d} t={t} fecha={fecha} />
+    {p.estado === 'enviado' && !d.caducado && <section className="pz__sec"><FormAceptar token={p.token} idioma={p.idioma} nombre={lead?.nombre || ''} version={d.cond.version} /></section>}
+  </> : null
+  if (searchParams.ver !== 'presupuesto' || etapa === 'propuesta') return (
     <Marco marca={p.marca} nombre={d.marca} ancho>
-      <Dashboard d={d} contacto={contacto} enlacePresupuesto={`${aqui}${aqui.length > 1 ? '&' : ''}ver=presupuesto`} />
+      <Dashboard d={d} contacto={contacto} enlacePresupuesto={`${aqui}${aqui.length > 1 ? '&' : ''}ver=presupuesto`} presupuesto={presupuesto} />
     </Marco>
   )
   return (
